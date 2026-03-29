@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@/lib/firebase/config";
 import { v4 as uuidv4 } from "uuid";
 
 interface Category {
@@ -31,6 +32,8 @@ export default function AdminCategories() {
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<Partial<Category>>({});
     const [error, setError] = useState<string | null>(null);
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
         const unsub = onSnapshot(collection(db, "categories"), (snapshot) => {
@@ -47,11 +50,13 @@ export default function AdminCategories() {
 
     const handleAddNew = () => {
         setFormData({ id: uuidv4(), name: "", description: "", image: "", showOnHome: false, order: categories.length });
+        setImageFile(null);
         setIsEditing(true);
     };
 
     const handleEdit = (cat: Category) => {
         setFormData({ ...cat });
+        setImageFile(null);
         setIsEditing(true);
     };
 
@@ -63,21 +68,33 @@ export default function AdminCategories() {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name) { alert("Name is required."); return; }
+        setUploading(true);
         try {
             const id = formData.id || uuidv4();
+            let imageUrl = formData.image || "";
+
+            if (imageFile) {
+                const storageRef = ref(storage, `categories/${id}/${Date.now()}_${imageFile.name}`);
+                const uploadTask = await uploadBytesResumable(storageRef, imageFile);
+                imageUrl = await getDownloadURL(uploadTask.ref);
+            }
+
             await setDoc(doc(db, "categories", id), {
                 id,
                 name: formData.name,
                 description: formData.description || "",
-                image: formData.image || "",
+                image: imageUrl,
                 showOnHome: formData.showOnHome || false,
                 order: formData.order ?? categories.length,
             });
             setIsEditing(false);
             setFormData({});
+            setImageFile(null);
         } catch (err) {
             console.error(err);
             alert("Failed to save category.");
+        } finally {
+            setUploading(false);
         }
     };
 
@@ -119,8 +136,46 @@ export default function AdminCategories() {
                             <input type="text" style={inputStyle} value={formData.description || ""} onChange={e => setFormData({ ...formData, description: e.target.value })} placeholder="Short description for the category" />
                         </div>
                         <div style={{ marginBottom: '16px' }}>
-                            <label style={labelStyle}>Image URL</label>
-                            <input type="text" style={inputStyle} value={formData.image || ""} onChange={e => setFormData({ ...formData, image: e.target.value })} placeholder="https://..." />
+                            <label style={labelStyle}>Category Image</label>
+
+                            <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', marginBottom: '12px' }}>
+                                {(imageFile || formData.image) && (
+                                    <div style={{ width: '100px', height: '100px', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)' }}>
+                                        <img
+                                            src={imageFile ? URL.createObjectURL(imageFile) : formData.image}
+                                            alt="Category"
+                                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                        />
+                                    </div>
+                                )}
+                                <div style={{ flex: 1 }}>
+                                    <label style={{
+                                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                        padding: '12px 20px', borderRadius: '12px',
+                                        border: '1px solid var(--border-color)',
+                                        backgroundColor: 'var(--bg-primary)',
+                                        cursor: 'pointer', transition: 'all 0.2s',
+                                        color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 600,
+                                        gap: '8px',
+                                    }}>
+                                        Upload Image File
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            style={{ display: 'none' }}
+                                            onChange={e => {
+                                                if (e.target.files?.[0]) {
+                                                    setImageFile(e.target.files[0]);
+                                                }
+                                            }}
+                                        />
+                                    </label>
+                                    <div style={{ marginTop: '8px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                        Or enter a URL:
+                                    </div>
+                                    <input type="text" style={{ ...inputStyle, marginTop: '4px' }} value={formData.image || ""} onChange={e => { setFormData({ ...formData, image: e.target.value }); setImageFile(null); }} placeholder="https://..." />
+                                </div>
+                            </div>
                         </div>
                         <div style={{ marginBottom: '24px' }}>
                             <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-primary)' }}>
@@ -129,8 +184,10 @@ export default function AdminCategories() {
                             </label>
                         </div>
                         <div style={{ display: 'flex', gap: '12px' }}>
-                            <button type="submit" style={{ padding: '10px 28px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Save</button>
-                            <button type="button" onClick={() => setIsEditing(false)} style={{ padding: '10px 28px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+                            <button type="submit" disabled={uploading} style={{ padding: '10px 28px', borderRadius: '12px', border: 'none', backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 700, cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: uploading ? 0.7 : 1 }}>
+                                {uploading ? "Saving..." : "Save"}
+                            </button>
+                            <button type="button" onClick={() => setIsEditing(false)} disabled={uploading} style={{ padding: '10px 28px', borderRadius: '12px', border: '1px solid var(--border-color)', backgroundColor: 'transparent', color: 'var(--text-primary)', fontWeight: 600, cursor: uploading ? 'not-allowed' : 'pointer', fontFamily: 'inherit', opacity: uploading ? 0.7 : 1 }}>Cancel</button>
                         </div>
                     </form>
                 </div>

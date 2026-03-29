@@ -12,22 +12,25 @@ export const dynamic = "force-dynamic";
 async function getProducts(category?: string) {
     if (!adminDb) return [];
     try {
-        let q = adminDb
+        const q = adminDb
             .collection("products")
-            .where("isVisible", "==", true);
+            .where("isVisible", "==", true)
+            .orderBy("createdAt", "desc");
 
-        if (category) {
-            q = q.where("category", "==", category);
-        }
-
-        const snapshot = await q.orderBy("createdAt", "desc").get();
+        const snapshot = await q.get();
 
         if (snapshot.empty) return [];
 
-        return snapshot.docs.map(doc => ({
+        let products = snapshot.docs.map(doc => ({
             id: doc.id,
             ...doc.data()
         })) as any[];
+
+        if (category) {
+            products = products.filter(p => p.category === category);
+        }
+
+        return products;
     } catch (error) {
         console.error("Error fetching products:", error);
         return [];

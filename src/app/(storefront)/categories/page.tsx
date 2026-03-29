@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, query } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
 interface Category {
@@ -16,13 +16,15 @@ interface Category {
 export default function CategoriesPage() {
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);
-
     useEffect(() => {
         const fetchCategories = async () => {
             try {
-                const q = query(collection(db, "categories"), orderBy("order", "asc"));
+                // Fetch all categories without orderBy to include those missing "order" field
+                const q = query(collection(db, "categories"));
                 const snap = await getDocs(q);
-                setCategories(snap.docs.map(d => ({ id: d.id, ...d.data() } as Category)));
+                const fetched = snap.docs.map(d => ({ id: d.id, ...d.data() } as Category));
+                fetched.sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || a.name.localeCompare(b.name));
+                setCategories(fetched);
             } catch (err) {
                 console.error("Failed to fetch categories", err);
             } finally {

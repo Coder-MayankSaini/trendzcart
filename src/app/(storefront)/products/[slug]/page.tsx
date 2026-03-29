@@ -1,6 +1,7 @@
 import { adminDb } from "@/lib/firebase/admin";
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import ProductCustomizer from "@/components/storefront/ProductCustomizer";
 import ProductImageGallery from "@/components/storefront/ProductImageGallery";
 
@@ -67,7 +68,15 @@ export default async function ProductDetailsPage({ params }: Props) {
         <div className="pdp-info-col">
           {/* Category tag */}
           {product.category && (
-            <span className="pdp-category">{product.category}</span>
+            <Link
+              href={`/products?category=${encodeURIComponent(product.category)}`}
+              className="pdp-category"
+              style={{ display: 'inline-block', textDecoration: 'none', cursor: 'pointer', transition: 'opacity 0.2s' }}
+              onMouseOver={(e) => e.currentTarget.style.opacity = '0.8'}
+              onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+            >
+              {product.category}
+            </Link>
           )}
 
           {product.isCustomized && (

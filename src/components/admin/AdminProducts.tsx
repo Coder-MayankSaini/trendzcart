@@ -50,6 +50,8 @@ export default function AdminProducts() {
     const [newFilePreviews, setNewFilePreviews] = useState<string[]>([]);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState("");
 
     useEffect(() => {
         try {
@@ -87,6 +89,8 @@ export default function AdminProducts() {
         setImageFiles([]);
         setNewFilePreviews([]);
         setHeroIndex(0);
+        setIsAddingNewCategory(false);
+        setNewCategoryName("");
         setIsEditing(true);
     };
 
@@ -95,6 +99,8 @@ export default function AdminProducts() {
         setImageFiles([]);
         setNewFilePreviews([]);
         setHeroIndex(0); // hero is always images[0]
+        setIsAddingNewCategory(false);
+        setNewCategoryName("");
         setIsEditing(true);
     };
 
@@ -161,8 +167,19 @@ export default function AdminProducts() {
                 allImages.unshift(hero);
             }
 
+            let finalCategory = formData.category;
+            if (isAddingNewCategory && newCategoryName.trim()) {
+                finalCategory = newCategoryName.trim();
+                const newCatRef = doc(collection(db, "categories"));
+                await setDoc(newCatRef, {
+                    name: finalCategory,
+                    createdAt: Date.now()
+                });
+            }
+
             const payload = {
                 ...formData, images: allImages,
+                category: finalCategory,
                 slug: formData.slug || formData.name?.toLowerCase().replace(/\s+/g, '-'),
                 updatedAt: Date.now(),
             };
@@ -224,13 +241,33 @@ export default function AdminProducts() {
                         </div>
                     </div>
                     <div>
-                        <label style={labelStyle}>Category</label>
-                        <select style={inputStyle} value={formData.category || ""} onChange={e => setFormData({ ...formData, category: e.target.value })}>
-                            <option value="">— Select Category —</option>
-                            {categories.map(cat => (
-                                <option key={cat.id} value={cat.name}>{cat.name}</option>
-                            ))}
-                        </select>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <label style={{ ...labelStyle, marginBottom: 0 }}>Category</label>
+                            <button
+                                type="button"
+                                onClick={() => setIsAddingNewCategory(!isAddingNewCategory)}
+                                style={{ fontSize: '0.75rem', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                            >
+                                {isAddingNewCategory ? "Select Existing" : "+ New Category"}
+                            </button>
+                        </div>
+                        {isAddingNewCategory ? (
+                            <input
+                                type="text"
+                                style={inputStyle}
+                                value={newCategoryName}
+                                onChange={e => setNewCategoryName(e.target.value)}
+                                placeholder="Enter new category name..."
+                                required={isAddingNewCategory}
+                            />
+                        ) : (
+                            <select style={inputStyle} value={formData.category || ""} onChange={e => setFormData({ ...formData, category: e.target.value })} required={!isAddingNewCategory}>
+                                <option value="">— Select Category —</option>
+                                {categories.map(cat => (
+                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                ))}
+                            </select>
+                        )}
                     </div>
                     <div>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-primary)', marginTop: '8px' }}>
