@@ -60,24 +60,27 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 </div>
             ) : (
                 <div className="product-grid">
-                    {products.map((product) => (
-                        <Link href={`/products/${product.slug}`} key={product.id} className="product-card">
-                            <div className="product-image-container">
-                                {product.images && product.images.length > 0 ? (
-                                    <img src={product.images[0]} alt={product.name} className="product-image" />
-                                ) : (
-                                    <div className="placeholder-image">No Image</div>
-                                )}
-                                {product.isCustomized && (
-                                    <span className="pdp-badge-custom" style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 2 }}>Customizable</span>
-                                )}
-                            </div>
-                            <div className="product-info" style={{ padding: '8px 0' }}>
-                                <h3 className="product-name" style={{ fontSize: '1rem' }}>{product.name}</h3>
-                                <p className="product-price">₹{Number(product.price).toLocaleString("en-IN")}</p>
-                            </div>
-                        </Link>
-                    ))}
+                    {products.map((product) => {
+                        const thumbImage = product.thumbnails?.[0] || (product.images && product.images.length > 0 ? product.images[0] : null);
+                        return (
+                            <Link href={`/products/${product.slug}`} key={product.id} className="product-card">
+                                <div className="product-image-container">
+                                    {thumbImage ? (
+                                        <img src={thumbImage} alt={product.name} className="product-image" />
+                                    ) : (
+                                        <div className="placeholder-image">No Image</div>
+                                    )}
+                                    {product.isCustomized && (
+                                        <span className="pdp-badge-custom" style={{ position: 'absolute', top: '12px', left: '12px', zIndex: 2 }}>Customizable</span>
+                                    )}
+                                </div>
+                                <div className="product-info" style={{ padding: '8px 0' }}>
+                                    <h3 className="product-name" style={{ fontSize: '1rem' }}>{product.name}</h3>
+                                    <p className="product-price">₹{Number(product.price).toLocaleString("en-IN")}</p>
+                                </div>
+                            </Link>
+                        );
+                    })}
                 </div>
             )}
         </div>

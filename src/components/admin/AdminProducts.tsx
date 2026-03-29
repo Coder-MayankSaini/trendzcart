@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase/config";
+import imageCompression from "browser-image-compression";
 
 interface Product {
     id: string;
@@ -12,6 +13,7 @@ interface Product {
     description: string;
     price: number;
     images: string[];
+    thumbnails?: string[];
     category: string;
     tags: string[];
     inventory: number;
@@ -81,7 +83,7 @@ export default function AdminProducts() {
     const handleAddNew = () => {
         setFormData({
             id: crypto.randomUUID(), name: "", slug: "", description: "",
-            price: 0, images: [], category: "", tags: [],
+            price: 0, images: [], thumbnails: [], category: "", tags: [],
             inventory: 10, isVisible: true, isCustomized: false,
             isFeatured: false,
             customizationType: null, createdAt: Date.now(),
@@ -123,7 +125,13 @@ export default function AdminProducts() {
     const removeExistingImage = (idx: number) => {
         const updated = [...(formData.images || [])];
         updated.splice(idx, 1);
-        setFormData({ ...formData, images: updated });
+
+        const upThumb = formData.thumbnails ? [...formData.thumbnails] : undefined;
+        if (upThumb && upThumb.length > idx) {
+            upThumb.splice(idx, 1);
+        }
+
+        setFormData({ ...formData, images: updated, thumbnails: upThumb });
         // Adjust hero index if needed
         const totalExisting = updated.length;
         if (heroIndex >= totalExisting + newFilePreviews.length) {
@@ -151,20 +159,41 @@ export default function AdminProducts() {
         try {
             // Upload all new files
             const newUrls: string[] = [];
+            const newThumbUrls: string[] = [];
             for (const file of imageFiles) {
+                // Compress full image
+                const optionsFull = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
+                const compressedFile = await imageCompression(file, optionsFull);
+
+                // Compress thumbnail
+                const optionsThumb = { maxSizeMB: 0.1, maxWidthOrHeight: 600, useWebWorker: true };
+                const thumbFile = await imageCompression(file, optionsThumb);
+
+                // Upload high quality
                 const storageRef = ref(storage, `products/${formData.id}/${Date.now()}_${file.name}`);
-                const uploadTask = await uploadBytesResumable(storageRef, file);
+                const uploadTask = await uploadBytesResumable(storageRef, compressedFile);
                 const url = await getDownloadURL(uploadTask.ref);
                 newUrls.push(url);
+
+                // Upload thumbnail
+                const thumbRef = ref(storage, `products/${formData.id}/thumb_${Date.now()}_${file.name}`);
+                const thumbTask = await uploadBytesResumable(thumbRef, thumbFile);
+                const thumbUrl = await getDownloadURL(thumbTask.ref);
+                newThumbUrls.push(thumbUrl);
             }
 
             // Combine existing images + newly uploaded
             const allImages = [...(formData.images || []), ...newUrls];
+            const allThumbnails = [...(formData.thumbnails || []), ...newThumbUrls];
 
             // Reorder: move hero image to index 0
             if (heroIndex > 0 && heroIndex < allImages.length) {
                 const [hero] = allImages.splice(heroIndex, 1);
                 allImages.unshift(hero);
+            }
+            if (heroIndex > 0 && heroIndex < allThumbnails.length) {
+                const [heroThumb] = allThumbnails.splice(heroIndex, 1);
+                allThumbnails.unshift(heroThumb);
             }
 
             let finalCategory = formData.category;
@@ -178,7 +207,9 @@ export default function AdminProducts() {
             }
 
             const payload = {
-                ...formData, images: allImages,
+                ...formData,
+                images: allImages,
+                thumbnails: allThumbnails,
                 category: finalCategory,
                 slug: formData.slug || formData.name?.toLowerCase().replace(/\s+/g, '-'),
                 updatedAt: Date.now(),

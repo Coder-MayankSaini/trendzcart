@@ -161,8 +161,8 @@ export default function Home() {
               </Link>
             </div>
             <div className="hp-trending-grid">
-              {featuredProducts.map((product) => {
-                const mainImage = product.images?.[0] || product.image || "";
+              {featuredProducts.map((product: any) => {
+                const mainImage = product.thumbnails?.[0] || product.images?.[0] || product.image || "";
                 return (
                   <Link href={`/products/${product.slug}`} key={product.id} className="hp-product-card">
                     <div className="hp-product-img-wrap">
