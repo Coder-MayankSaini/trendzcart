@@ -72,8 +72,6 @@ export default async function ProductDetailsPage({ params }: Props) {
               href={`/products?category=${encodeURIComponent(product.category)}`}
               className="pdp-category"
               style={{ display: 'inline-block', textDecoration: 'none', cursor: 'pointer', transition: 'opacity 0.2s' }}
-              onMouseOver={(e) => e.currentTarget.style.opacity = '0.8'}
-              onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
             >
               {product.category}
             </Link>

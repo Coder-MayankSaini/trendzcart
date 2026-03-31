@@ -89,7 +89,11 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 handleClose(); // Success
             }
         } catch (err: any) {
-            setError(err.message || "Authentication failed. Please check your credentials.");
+            let errorMsg = err.message || "Authentication failed. Please check your credentials.";
+            if (err.code === "auth/invalid-credential" || errorMsg.includes("auth/invalid-credential")) {
+                errorMsg = "Invalid credentials. Please try again.";
+            }
+            setError(errorMsg);
         } finally {
             setLoading(false);
         }
