@@ -5,6 +5,7 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firesto
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase/config";
 import { v4 as uuidv4 } from "uuid";
+import imageCompression from "browser-image-compression";
 
 interface Category {
     id: string;
@@ -74,8 +75,15 @@ export default function AdminCategories() {
             let imageUrl = formData.image || "";
 
             if (imageFile) {
-                const storageRef = ref(storage, `categories/${id}/${Date.now()}_${imageFile.name}`);
-                const uploadTask = await uploadBytesResumable(storageRef, imageFile);
+                const options = {
+                    maxSizeMB: 0.5,
+                    maxWidthOrHeight: 800,
+                    useWebWorker: true,
+                };
+                const compressedFile = await imageCompression(imageFile, options);
+
+                const storageRef = ref(storage, `categories/${id}/${Date.now()}_${compressedFile.name}`);
+                const uploadTask = await uploadBytesResumable(storageRef, compressedFile);
                 imageUrl = await getDownloadURL(uploadTask.ref);
             }
 

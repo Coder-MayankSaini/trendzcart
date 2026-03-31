@@ -48,8 +48,8 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 <h1>{category || "All Products"}</h1>
                 <p>Premium essentials for every occasion.</p>
                 {category && (
-                    <Link href="/products" style={{ display: 'inline-block', marginTop: '12px', fontSize: '0.9rem', color: 'var(--accent)', textDecoration: 'none' }}>
-                        ← View All Products
+                    <Link href="/categories" style={{ display: 'inline-block', marginTop: '12px', fontSize: '0.9rem', color: 'var(--accent)', textDecoration: 'none' }}>
+                        ← View All Categories
                     </Link>
                 )}
             </div>
