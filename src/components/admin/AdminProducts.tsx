@@ -15,6 +15,7 @@ interface Product {
     images: string[];
     thumbnails?: string[];
     category: string;
+    categories?: string[];
     tags: string[];
     inventory: number;
     isVisible: boolean;
@@ -55,6 +56,11 @@ export default function AdminProducts() {
     const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState("");
 
+    const [addingReviewForProduct, setAddingReviewForProduct] = useState<string | null>(null);
+    const [fakeReviewForm, setFakeReviewForm] = useState({ userName: "", rating: 5, comment: "" });
+    const [fakeReviewImages, setFakeReviewImages] = useState<File[]>([]);
+    const [fakeReviewUploading, setFakeReviewUploading] = useState(false);
+
     useEffect(() => {
         try {
             const unsub = onSnapshot(collection(db, "products"), (snapshot) => {
@@ -83,7 +89,7 @@ export default function AdminProducts() {
     const handleAddNew = () => {
         setFormData({
             id: crypto.randomUUID(), name: "", slug: "", description: "",
-            price: 0, images: [], thumbnails: [], category: "", tags: [],
+            price: 0, images: [], thumbnails: [], category: "", categories: [], tags: [],
             inventory: 10, isVisible: true, isCustomized: false,
             isFeatured: false,
             customizationType: null, createdAt: Date.now(),
@@ -196,14 +202,26 @@ export default function AdminProducts() {
                 allThumbnails.unshift(heroThumb);
             }
 
-            let finalCategory = formData.category;
+            let finalCategory = formData.category || "";
+            let finalCategories = formData.categories ? [...formData.categories] : [];
+
+            // Re-sync single category into categories array if it exists but wasn't in the array
+            if (finalCategory && !finalCategories.includes(finalCategory)) {
+                finalCategories.push(finalCategory);
+            }
+
             if (isAddingNewCategory && newCategoryName.trim()) {
                 finalCategory = newCategoryName.trim();
+                if (!finalCategories.includes(finalCategory)) {
+                    finalCategories.push(finalCategory);
+                }
                 const newCatRef = doc(collection(db, "categories"));
                 await setDoc(newCatRef, {
                     name: finalCategory,
                     createdAt: Date.now()
                 });
+            } else if (finalCategories.length > 0 && !finalCategory) {
+                finalCategory = finalCategories[0];
             }
 
             const payload = {
@@ -211,6 +229,7 @@ export default function AdminProducts() {
                 images: allImages,
                 thumbnails: allThumbnails,
                 category: finalCategory,
+                categories: finalCategories,
                 slug: formData.slug || formData.name?.toLowerCase().replace(/\s+/g, '-'),
                 updatedAt: Date.now(),
             };
@@ -237,6 +256,44 @@ export default function AdminProducts() {
             src: url, isExisting: false, index: i
         }));
         return [...existing, ...newPrev];
+    };
+
+    const handleFakeReviewSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!addingReviewForProduct) return;
+        setFakeReviewUploading(true);
+        try {
+            const uploadedUrls: string[] = [];
+            for (const file of fakeReviewImages) {
+                const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
+                const compressedFile = await imageCompression(file, options);
+                const storageRef = ref(storage, `reviews/${addingReviewForProduct}/fake_${Date.now()}_${file.name}`);
+                const uploadTask = await uploadBytesResumable(storageRef, compressedFile);
+                const url = await getDownloadURL(uploadTask.ref);
+                uploadedUrls.push(url);
+            }
+            const reviewId = crypto.randomUUID();
+            await setDoc(doc(db, "reviews", reviewId), {
+                id: reviewId,
+                productId: addingReviewForProduct,
+                userId: null,
+                userName: fakeReviewForm.userName || "Verified Buyer",
+                rating: fakeReviewForm.rating,
+                comment: fakeReviewForm.comment,
+                images: uploadedUrls,
+                createdAt: Date.now(),
+                isFake: true
+            });
+            setAddingReviewForProduct(null);
+            setFakeReviewForm({ userName: "", rating: 5, comment: "" });
+            setFakeReviewImages([]);
+            alert("Fake review added successfully!");
+        } catch (err) {
+            console.error(err);
+            alert("Failed to add fake review.");
+        } finally {
+            setFakeReviewUploading(false);
+        }
     };
 
     // ====================== EDIT / ADD FORM ======================
@@ -292,12 +349,32 @@ export default function AdminProducts() {
                                 required={isAddingNewCategory}
                             />
                         ) : (
-                            <select style={inputStyle} value={formData.category || ""} onChange={e => setFormData({ ...formData, category: e.target.value })} required={!isAddingNewCategory}>
-                                <option value="">— Select Category —</option>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'var(--bg-primary)' }}>
+                                {categories.length === 0 && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>No categories found</span>}
                                 {categories.map(cat => (
-                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                    <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={(formData.categories || []).includes(cat.name) || formData.category === cat.name}
+                                            onChange={(e) => {
+                                                const current = new Set([...(formData.categories || [])]);
+                                                if (formData.category) current.add(formData.category);
+
+                                                if (e.target.checked) {
+                                                    current.add(cat.name);
+                                                    setFormData({ ...formData, categories: Array.from(current), category: formData.category || cat.name });
+                                                } else {
+                                                    current.delete(cat.name);
+                                                    const newArr = Array.from(current);
+                                                    setFormData({ ...formData, categories: newArr, category: newArr.length > 0 ? newArr[0] : "" });
+                                                }
+                                            }}
+                                            style={{ accentColor: 'var(--accent)' }}
+                                        />
+                                        {cat.name}
+                                    </label>
                                 ))}
-                            </select>
+                            </div>
                         )}
                     </div>
                     <div>
@@ -441,7 +518,38 @@ export default function AdminProducts() {
 
     // ====================== PRODUCT LIST ======================
     return (
-        <div className="animate-fade-in">
+        <div className="animate-fade-in" style={{ position: 'relative' }}>
+            {addingReviewForProduct && (
+                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ backgroundColor: 'var(--bg-primary)', padding: '24px', borderRadius: '16px', width: '90%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px' }}>Add Fake Review</h3>
+                        <form onSubmit={handleFakeReviewSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            <div>
+                                <label style={labelStyle}>Reviewer Name</label>
+                                <input type="text" style={inputStyle} value={fakeReviewForm.userName} onChange={e => setFakeReviewForm({ ...fakeReviewForm, userName: e.target.value })} placeholder="e.g. John Doe" />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Rating (1-5)</label>
+                                <input type="number" min="1" max="5" style={inputStyle} value={fakeReviewForm.rating} onChange={e => setFakeReviewForm({ ...fakeReviewForm, rating: Number(e.target.value) })} />
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Comment</label>
+                                <textarea style={{ ...inputStyle, resize: 'vertical' }} rows={3} value={fakeReviewForm.comment} onChange={e => setFakeReviewForm({ ...fakeReviewForm, comment: e.target.value })}></textarea>
+                            </div>
+                            <div>
+                                <label style={labelStyle}>Images (Optional)</label>
+                                <input type="file" multiple accept="image/*" onChange={e => setFakeReviewImages(Array.from(e.target.files || []))} />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
+                                <button type="button" onClick={() => setAddingReviewForProduct(null)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+                                <button type="submit" disabled={fakeReviewUploading} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 600, cursor: 'pointer' }}>
+                                    {fakeReviewUploading ? 'Uploading...' : 'Submit'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
                 <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Products</h1>
                 <button onClick={handleAddNew} style={{ padding: '12px 24px', borderRadius: '999px', backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: 'none', transition: 'all 0.2s ease' }}>
@@ -497,6 +605,7 @@ export default function AdminProducts() {
                                         </span>
                                     </td>
                                     <td style={{ padding: '16px 24px', textAlign: 'right' }}>
+                                        <button onClick={() => setAddingReviewForProduct(product.id)} style={{ color: '#10b981', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginRight: '16px', fontFamily: 'inherit' }}>+ Review</button>
                                         <button onClick={() => handleEdit(product)} style={{ color: 'var(--accent)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginRight: '16px', fontFamily: 'inherit' }}>Edit</button>
                                         <button onClick={() => handleDelete(product.id)} style={{ color: '#ef4444', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
                                     </td>

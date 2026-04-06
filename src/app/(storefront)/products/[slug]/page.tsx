@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import ProductCustomizer from "@/components/storefront/ProductCustomizer";
 import ProductImageGallery from "@/components/storefront/ProductImageGallery";
+import ProductReviews from "@/components/storefront/ProductReviews";
 
 export const dynamic = "force-dynamic";
 
@@ -66,16 +67,19 @@ export default async function ProductDetailsPage({ params }: Props) {
 
         {/* Right: Product Info */}
         <div className="pdp-info-col">
-          {/* Category tag */}
-          {product.category && (
-            <Link
-              href={`/products?category=${encodeURIComponent(product.category)}`}
-              className="pdp-category"
-              style={{ display: 'inline-block', textDecoration: 'none', cursor: 'pointer', transition: 'opacity 0.2s' }}
-            >
-              {product.category}
-            </Link>
-          )}
+          {/* Category tags */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {(product.categories && product.categories.length > 0 ? product.categories : (product.category ? [product.category] : [])).map((cat: string) => (
+              <Link
+                key={cat}
+                href={`/products?category=${encodeURIComponent(cat)}`}
+                className="pdp-category"
+                style={{ display: 'inline-block', textDecoration: 'none', cursor: 'pointer', transition: 'opacity 0.2s' }}
+              >
+                {cat}
+              </Link>
+            ))}
+          </div>
 
           {product.isCustomized && (
             <span className="pdp-badge-custom">Customizable</span>
@@ -129,6 +133,12 @@ export default async function ProductDetailsPage({ params }: Props) {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="pdp-layout" style={{ marginTop: '24px' }}>
+        <div style={{ width: '100%' }}>
+          <ProductReviews productId={product.id} />
         </div>
       </div>
     </div>

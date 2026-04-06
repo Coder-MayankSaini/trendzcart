@@ -27,7 +27,7 @@ async function getProducts(category?: string) {
         })) as any[];
 
         if (category) {
-            products = products.filter(p => p.category === category);
+            products = products.filter(p => p.category === category || (p.categories && p.categories.includes(category)));
         }
 
         return products;

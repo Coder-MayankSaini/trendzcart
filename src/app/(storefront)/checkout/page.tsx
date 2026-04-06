@@ -6,7 +6,7 @@ import { useCart } from "@/context/CartContext";
 import AuthModal from "@/components/storefront/AuthModal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, updateDoc, increment } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { v4 as uuidv4 } from "uuid";
 
@@ -70,8 +70,9 @@ export default function CheckoutPage() {
         : 0;
 
     const onlinePaymentDiscount = paymentMethod === "RAZORPAY" ? 50 : 0;
+    const codExtraCharge = paymentMethod === "COD" ? 50 : 0;
     const totalDiscount = discountFromCoupon + onlinePaymentDiscount;
-    const finalTotal = Math.max(0, cartTotal - totalDiscount);
+    const finalTotal = Math.max(0, cartTotal - totalDiscount + codExtraCharge);
 
     const saveOrder = async (
         orderId: string,
@@ -88,6 +89,8 @@ export default function CheckoutPage() {
             items: cleanItems,
             subtotal: cartTotal,
             discount: totalDiscount,
+            codExtraCharge,
+            couponDiscount: discountFromCoupon,
             total: finalTotal,
             couponCode: coupon ? coupon.code : null,
             paymentMethod,
@@ -98,6 +101,15 @@ export default function CheckoutPage() {
             createdAt: new Date(),
             updatedAt: new Date(),
         });
+
+        if (coupon && payStatus !== "FAILED") {
+            try {
+                const couponRef = doc(db, "coupons", coupon.code.toUpperCase());
+                await updateDoc(couponRef, { timesUsed: increment(1) });
+            } catch (err) {
+                console.error("Failed to increment coupon usage:", err);
+            }
+        }
     };
 
     const processPayment = async () => {
@@ -275,7 +287,7 @@ export default function CheckoutPage() {
 
                         <div className="co-discount-banner">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></svg>
-                            Save ₹50 instantly by choosing Pay Online!
+                            Save ₹50 instantly by choosing Pay Online! COD orders have a ₹50 extra charge.
                         </div>
 
                         <div className="co-payment-options">
@@ -294,6 +306,7 @@ export default function CheckoutPage() {
                                     <span className="co-payment-name">Cash on Delivery</span>
                                     <span className="co-payment-desc">Pay when your order arrives</span>
                                 </div>
+                                <span className="co-payment-badge" style={{ backgroundColor: 'transparent', color: '#ef4444', border: '1px solid currentColor' }}>EXTRA ₹50</span>
                             </label>
                         </div>
                     </div>
@@ -339,6 +352,13 @@ export default function CheckoutPage() {
                                 <div className="co-total-row co-discount-row">
                                     <span>Online Discount</span>
                                     <span>-₹50</span>
+                                </div>
+                            )}
+
+                            {paymentMethod === "COD" && (
+                                <div className="co-total-row">
+                                    <span>COD Charge</span>
+                                    <span>+₹50</span>
                                 </div>
                             )}
 

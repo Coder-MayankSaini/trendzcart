@@ -116,6 +116,11 @@ export default function AdminOrders() {
                                     <td style={{ padding: '16px 24px', verticalAlign: 'top' }}>
                                         <p style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.1rem', marginBottom: '4px' }}>₹{order.total?.toLocaleString("en-IN")}</p>
                                         <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>{order.paymentMethod}</p>
+                                        {order.couponCode && (
+                                            <p style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600, marginBottom: '6px' }}>
+                                                Coupon: {order.couponCode} (-₹{order.couponDiscount?.toLocaleString("en-IN") || order.discount?.toLocaleString("en-IN")})
+                                            </p>
+                                        )}
                                         <span style={{
                                             padding: '3px 10px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700,
                                             backgroundColor: order.paymentStatus === 'PAID' ? 'rgba(34, 197, 94, 0.1)' : order.paymentStatus === 'PENDING' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)',

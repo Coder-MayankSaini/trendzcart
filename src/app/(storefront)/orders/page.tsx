@@ -149,9 +149,16 @@ export default function MyOrdersPage() {
                                             {order.paymentStatus}
                                         </span>
                                     </div>
-                                    <div className="mo-footer-total">
-                                        <span className="mo-total-label">Total</span>
-                                        <span className="mo-total-value">₹{order.total?.toLocaleString("en-IN")}</span>
+                                    <div className="mo-footer-total" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                        {order.couponCode && (
+                                            <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>
+                                                Coupon {order.couponCode}: -₹{order.couponDiscount?.toLocaleString("en-IN") || order.discount?.toLocaleString("en-IN")}
+                                            </span>
+                                        )}
+                                        <div>
+                                            <span className="mo-total-label" style={{ marginRight: '8px' }}>Total</span>
+                                            <span className="mo-total-value">₹{order.total?.toLocaleString("en-IN")}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
