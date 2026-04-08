@@ -5,7 +5,7 @@ import { adminDb } from "@/lib/firebase/admin";
 export const revalidate = 60;
 
 const marqueeItems = [
-  "FREE SHIPPING ON ₹999+",
+  "FREE SHIPPING ON ALL PRODUCTS",
   "NEW ARRIVALS WEEKLY",
   "TRENDING NOW",
   "100% PREMIUM QUALITY",
@@ -14,8 +14,8 @@ const marqueeItems = [
 ];
 
 const features = [
-  { icon: "shipping", title: "Free Shipping", desc: "On orders above ₹999" },
-  { icon: "returns", title: "Easy Returns", desc: "30-day return policy" },
+  { icon: "shipping", title: "Free Shipping", desc: "On all products" },
+  { icon: "returns", title: "Easy Returns", desc: "7-day return policy" },
   { icon: "secure", title: "Secure Payment", desc: "100% protected checkout" },
   { icon: "support", title: "24/7 Support", desc: "We're here to help" },
 ];

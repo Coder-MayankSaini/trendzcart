@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from "uuid";
 
 interface ShippingAddress {
     fullName: string;
+    email: string;
     addressLine1: string;
     city: string;
     state: string;
@@ -27,6 +28,7 @@ export default function CheckoutPage() {
 
     const [shipping, setShipping] = useState<ShippingAddress>({
         fullName: "",
+        email: "",
         addressLine1: "",
         city: "",
         state: "",
@@ -69,10 +71,8 @@ export default function CheckoutPage() {
             : coupon.value
         : 0;
 
-    const onlinePaymentDiscount = paymentMethod === "RAZORPAY" ? 50 : 0;
-    const codExtraCharge = paymentMethod === "COD" ? 50 : 0;
-    const totalDiscount = discountFromCoupon + onlinePaymentDiscount;
-    const finalTotal = Math.max(0, cartTotal - totalDiscount + codExtraCharge);
+    const totalDiscount = discountFromCoupon;
+    const finalTotal = Math.max(0, cartTotal - totalDiscount);
 
     const saveOrder = async (
         orderId: string,
@@ -89,7 +89,6 @@ export default function CheckoutPage() {
             items: cleanItems,
             subtotal: cartTotal,
             discount: totalDiscount,
-            codExtraCharge,
             couponDiscount: discountFromCoupon,
             total: finalTotal,
             couponCode: coupon ? coupon.code : null,
@@ -113,9 +112,8 @@ export default function CheckoutPage() {
     };
 
     const processPayment = async () => {
-        if (!user) { alert("Please sign in"); return; }
-        if (!shipping.fullName || !shipping.addressLine1 || !shipping.pincode || !shipping.phone) {
-            alert("Please fill in all required shipping details.");
+        if (!shipping.fullName || !shipping.email || !shipping.addressLine1 || !shipping.pincode || !shipping.phone) {
+            alert("Please fill in all required shipping details including email.");
             return;
         }
 
@@ -177,7 +175,7 @@ export default function CheckoutPage() {
                 },
                 prefill: {
                     name: shipping.fullName,
-                    email: user.email,
+                    email: shipping.email || (user?.email || ""),
                     contact: shipping.phone,
                 },
                 theme: { color: "#0f172a" },
@@ -208,18 +206,7 @@ export default function CheckoutPage() {
         );
     }
 
-    // Not logged in
-    if (!user && !isProcessing) {
-        return (
-            <div className="co-empty">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-                <h2>Sign in to continue</h2>
-                <p>You need to be logged in to complete your purchase.</p>
-                <button onClick={() => setIsAuthModalOpen(true)} className="co-empty-link">Sign In</button>
-                <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-            </div>
-        );
-    }
+
 
     return (
         <div className="co-container">
@@ -260,6 +247,10 @@ export default function CheckoutPage() {
                                 <input type="text" name="phone" placeholder="10-digit mobile number" value={shipping.phone} onChange={handleInputChange} className="co-input" required />
                             </div>
                             <div className="co-field co-field-full">
+                                <label className="co-label">Email Address</label>
+                                <input type="email" name="email" placeholder="Updates will be sent here" value={shipping.email} onChange={handleInputChange} className="co-input" required />
+                            </div>
+                            <div className="co-field co-field-full">
                                 <label className="co-label">Address</label>
                                 <input type="text" name="addressLine1" placeholder="Flat, House no., Building, Street" value={shipping.addressLine1} onChange={handleInputChange} className="co-input" required />
                             </div>
@@ -285,11 +276,6 @@ export default function CheckoutPage() {
                             <h2>Payment Method</h2>
                         </div>
 
-                        <div className="co-discount-banner">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></svg>
-                            Save ₹50 instantly by choosing Pay Online! COD orders have a ₹50 extra charge.
-                        </div>
-
                         <div className="co-payment-options">
                             <label className={`co-payment-card ${paymentMethod === "RAZORPAY" ? "co-payment-selected" : ""}`}>
                                 <input type="radio" name="payment" value="RAZORPAY" checked={paymentMethod === "RAZORPAY"} onChange={() => setPaymentMethod("RAZORPAY")} className="co-radio" />
@@ -297,7 +283,6 @@ export default function CheckoutPage() {
                                     <span className="co-payment-name">Pay Online</span>
                                     <span className="co-payment-desc">UPI, Credit Card, NetBanking</span>
                                 </div>
-                                <span className="co-payment-badge">SAVE ₹50</span>
                             </label>
 
                             <label className={`co-payment-card ${paymentMethod === "COD" ? "co-payment-selected" : ""}`}>
@@ -306,7 +291,6 @@ export default function CheckoutPage() {
                                     <span className="co-payment-name">Cash on Delivery</span>
                                     <span className="co-payment-desc">Pay when your order arrives</span>
                                 </div>
-                                <span className="co-payment-badge" style={{ backgroundColor: 'transparent', color: '#ef4444', border: '1px solid currentColor' }}>EXTRA ₹50</span>
                             </label>
                         </div>
                     </div>
@@ -345,20 +329,6 @@ export default function CheckoutPage() {
                                 <div className="co-total-row co-discount-row">
                                     <span>Coupon ({coupon.code})</span>
                                     <span>-₹{discountFromCoupon.toLocaleString("en-IN")}</span>
-                                </div>
-                            )}
-
-                            {paymentMethod === "RAZORPAY" && (
-                                <div className="co-total-row co-discount-row">
-                                    <span>Online Discount</span>
-                                    <span>-₹50</span>
-                                </div>
-                            )}
-
-                            {paymentMethod === "COD" && (
-                                <div className="co-total-row">
-                                    <span>COD Charge</span>
-                                    <span>+₹50</span>
                                 </div>
                             )}
 
