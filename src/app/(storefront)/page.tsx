@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { adminDb } from "@/lib/firebase/admin";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const marqueeItems = [
   "FREE SHIPPING ON ₹999+",
@@ -77,10 +77,11 @@ export default async function Home() {
       {/* ===== HERO ===== */}
       <section className="hp-hero" style={{ position: 'relative' }}>
         <Image
-          src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&w=2070&auto=format&fit=crop"
+          src="https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?q=80&auto=format&fit=crop"
           alt="Curated premium clothing collections"
           fill
           priority
+          sizes="100vw"
           style={{ objectFit: 'cover', zIndex: 0 }}
         />
         <div className="hp-hero-overlay" style={{ zIndex: 1, position: 'absolute', inset: 0 }} />
