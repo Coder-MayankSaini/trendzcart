@@ -44,11 +44,11 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
     useEffect(() => {
         const q = query(
             collection(db, "reviews"),
-            where("productId", "==", productId),
-            orderBy("createdAt", "desc")
+            where("productId", "==", productId)
         );
         const unsub = onSnapshot(q, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Review[];
+            data.sort((a, b) => b.createdAt - a.createdAt);
             setReviews(data);
             setLoading(false);
         }, (err) => {
