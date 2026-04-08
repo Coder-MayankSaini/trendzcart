@@ -2039,13 +2039,13 @@ button {
 
 .co-layout {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 40px;
 }
 
 @media (min-width: 1024px) {
   .co-layout {
-    grid-template-columns: 1.3fr 1fr;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
     gap: 48px;
   }
 }
@@ -2441,6 +2441,10 @@ button {
 
 /* Mobile checkout */
 @media (max-width: 768px) {
+  .co-container {
+    padding: 20px 16px 60px;
+  }
+
   .co-form-grid {
     grid-template-columns: 1fr;
   }
