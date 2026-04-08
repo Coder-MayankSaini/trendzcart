@@ -6,8 +6,6 @@ import { useCart } from "@/context/CartContext";
 import AuthModal from "@/components/storefront/AuthModal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { doc, setDoc, updateDoc, increment } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
 import { v4 as uuidv4 } from "uuid";
 
 interface ShippingAddress {
@@ -95,10 +93,12 @@ export default function CheckoutPage() {
         payStatus: string,
         rzpOrderId?: string
     ) => {
-        const orderRef = doc(db, "orders", orderId);
-        // Clean items to remove undefined values (Firestore rejects undefined)
+        // Clean items to remove undefined values before sending to API.
         const cleanItems = JSON.parse(JSON.stringify(items));
-        await setDoc(orderRef, {
+        const response = await fetch("/api/orders/create", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
             id: orderId,
             userId: user?.uid || null,
             items: cleanItems,
@@ -112,17 +112,12 @@ export default function CheckoutPage() {
             orderStatus: status,
             razorpayOrderId: rzpOrderId || null,
             shippingAddress: shipping,
-            createdAt: new Date(),
-            updatedAt: new Date(),
+            }),
         });
 
-        if (coupon && payStatus !== "FAILED") {
-            try {
-                const couponRef = doc(db, "coupons", coupon.code.toUpperCase());
-                await updateDoc(couponRef, { timesUsed: increment(1) });
-            } catch (err) {
-                console.error("Failed to increment coupon usage:", err);
-            }
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data?.error || "Failed to save order");
         }
     };
 
