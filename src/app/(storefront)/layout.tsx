@@ -1,5 +1,6 @@
 import Navbar from "@/components/storefront/Navbar";
 import Link from "next/link";
+import WhatsAppFloat from "@/components/storefront/WhatsAppFloat";
 
 export default function StorefrontLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -35,6 +36,7 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
                             <li><Link href="/terms" className="hp-footer-link">Shipping &amp; Returns</Link></li>
                             <li><Link href="/terms" className="hp-footer-link">Size Guide</Link></li>
                             <li><Link href="/privacy" className="hp-footer-link">FAQ</Link></li>
+                            <li><Link href="/contact" className="hp-footer-link">Contact Us</Link></li>
                         </ul>
                     </div>
 
@@ -42,7 +44,7 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
                     <div>
                         <h4 className="hp-footer-col-title">Connect</h4>
                         <ul className="hp-footer-links">
-                            <li><a href="mailto:support@trendkartz.com" className="hp-footer-link">support@trendkartz.com</a></li>
+                            <li><a href="mailto:ofctrendkartz@gmail.com" className="hp-footer-link">ofctrendkartz@gmail.com</a></li>
                         </ul>
                     </div>
                 </div>
@@ -51,6 +53,7 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
                     <p className="hp-footer-copy">&copy; {new Date().getFullYear()} TrendKartz. All rights reserved.</p>
                 </div>
             </footer>
+            <WhatsAppFloat />
         </div>
     );
 }
