@@ -1,14 +1,22 @@
+import 'server-only';
 import * as admin from 'firebase-admin';
+
+const getServerEnv = (key: string): string | undefined => process.env[key];
 
 if (!admin.apps.length) {
     try {
+        const projectId = getServerEnv("FIREBASE_PROJECT_ID") || getServerEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
+        const clientEmail = getServerEnv("FIREBASE_CLIENT_EMAIL");
+        const privateKey = getServerEnv("FIREBASE_PRIVATE_KEY")?.replace(/\\n/g, '\n');
+        const storageBucket = getServerEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET");
+
         admin.initializeApp({
             credential: admin.credential.cert({
-                projectId: process.env.FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+                projectId,
+                clientEmail,
+                privateKey,
             }),
-            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+            storageBucket,
         });
     } catch (error) {
         console.error('Firebase admin initialization error', error);

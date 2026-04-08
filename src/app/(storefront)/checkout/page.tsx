@@ -39,6 +39,7 @@ export default function CheckoutPage() {
     const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "COD">("RAZORPAY");
     const [coupon, setCoupon] = useState<{ code: string; type: string; value: number } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [razorpayKeyId, setRazorpayKeyId] = useState("");
 
     useEffect(() => {
         const script = document.createElement("script");
@@ -52,6 +53,20 @@ export default function CheckoutPage() {
                 setCoupon(JSON.parse(savedCoupon));
             }
         }
+
+        const loadRazorpayConfig = async () => {
+            try {
+                const response = await fetch("/api/razorpay/public-config");
+                if (!response.ok) return;
+                const data = await response.json();
+                if (data.keyId) {
+                    setRazorpayKeyId(data.keyId);
+                }
+            } catch (error) {
+                console.error("Failed to load Razorpay config", error);
+            }
+        };
+        loadRazorpayConfig();
 
         return () => {
             if (document.body.contains(script)) {
@@ -135,6 +150,12 @@ export default function CheckoutPage() {
         }
 
         try {
+            if (!razorpayKeyId) {
+                alert("Payment gateway is not configured. Please try again shortly.");
+                setIsProcessing(false);
+                return;
+            }
+
             const res = await fetch("/api/razorpay/create-order", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -144,7 +165,7 @@ export default function CheckoutPage() {
             if (error) throw new Error(error);
 
             const options = {
-                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+                key: razorpayKeyId,
                 amount: amount.toString(),
                 currency: currency,
                 name: "TrendKartz",
