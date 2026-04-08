@@ -230,7 +230,7 @@ export default function AdminProducts() {
                 thumbnails: allThumbnails,
                 category: finalCategory,
                 categories: finalCategories,
-                slug: formData.slug || formData.name?.toLowerCase().replace(/\s+/g, '-'),
+                slug: formData.slug || formData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
                 updatedAt: Date.now(),
             };
             if (!payload.id) return;

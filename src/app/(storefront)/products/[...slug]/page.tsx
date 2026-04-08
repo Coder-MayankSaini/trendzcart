@@ -9,7 +9,7 @@ import ProductReviews from "@/components/storefront/ProductReviews";
 export const dynamic = "force-dynamic";
 
 interface Props {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ slug: string | string[] }>;
 }
 
 async function getProductBySlug(slug: string) {
@@ -28,8 +28,10 @@ async function getProductBySlug(slug: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const resolvedParams = await params;
+  const slugArray = resolvedParams.slug;
+  const slugStr = Array.isArray(slugArray) ? slugArray.map(decodeURIComponent).join('/') : decodeURIComponent(slugArray);
+  const product = await getProductBySlug(slugStr);
 
   if (!product) return { title: "Product Not Found" };
 
@@ -43,8 +45,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductDetailsPage({ params }: Props) {
-  const { slug } = await params;
-  const product = await getProductBySlug(slug);
+  const resolvedParams = await params;
+  const slugArray = resolvedParams.slug;
+  const slugStr = Array.isArray(slugArray) ? slugArray.map(decodeURIComponent).join('/') : decodeURIComponent(slugArray);
+  const product = await getProductBySlug(slugStr);
 
   if (!product) {
     notFound();
