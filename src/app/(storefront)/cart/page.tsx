@@ -70,10 +70,6 @@ export default function CartPage() {
     const finalTotal = Math.max(0, cartTotal - discountAmount);
 
     const handleCheckout = () => {
-        if (!user) {
-            alert("Please sign in to continue to checkout.");
-            return;
-        }
         sessionStorage.setItem("trendkartz_checkout_coupon", JSON.stringify(appliedCoupon));
         router.push("/checkout");
     };
