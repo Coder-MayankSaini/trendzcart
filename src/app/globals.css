@@ -1733,8 +1733,8 @@ button {
 
 /* Enhanced Footer — Dark Minimal */
 .hp-footer {
-  background: #1a1a1a;
-  border-top: none;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
   padding: 72px 24px 0 24px;
 }
 
@@ -1751,7 +1751,7 @@ button {
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0 0 12px 0;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .hp-footer-brand-name span {
@@ -1800,7 +1800,7 @@ button {
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #ffffff;
+  color: var(--text-primary);
   margin: 0 0 20px 0;
 }
 
@@ -1814,7 +1814,7 @@ button {
 }
 
 .hp-footer-link {
-  color: #9ca3af;
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.9rem;
   font-weight: 500;
@@ -1822,14 +1822,14 @@ button {
 }
 
 .hp-footer-link:hover {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .hp-footer-bottom {
   max-width: 1280px;
   margin: 48px auto 0 auto;
   padding: 24px 0;
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border-color);
   display: flex;
   justify-content: center;
   align-items: center;

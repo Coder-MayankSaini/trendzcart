@@ -207,26 +207,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ===== NEWSLETTER ===== */}
-      <section className="hp-section hp-newsletter">
-        <div className="hp-container">
-          <h2 className="hp-newsletter-title">Stay in the Loop</h2>
-          <p className="hp-newsletter-desc">
-            Subscribe to get early access to new drops, exclusive deals, and style inspiration.
-          </p>
-          <form className="hp-newsletter-form" action="#">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="hp-newsletter-input"
-              required
-            />
-            <button type="submit" className="hp-newsletter-btn">
-              Subscribe
-            </button>
-          </form>
-        </div>
-      </section>
+
     </div>
   );
 }
