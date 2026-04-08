@@ -320,6 +320,12 @@ button {
   font-size: 1.125rem;
   font-weight: 600;
   margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .product-price {
@@ -1585,6 +1591,12 @@ button {
   color: var(--text-primary);
   margin: 0;
   line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .hp-product-price-row {
@@ -1902,6 +1914,14 @@ button {
   .hp-trending-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 16px;
+  }
+
+  .hp-product-details {
+    padding: 12px;
+  }
+
+  .hp-product-name {
+    font-size: 0.9rem;
   }
 
   .hp-features-grid {
