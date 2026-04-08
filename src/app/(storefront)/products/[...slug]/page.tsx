@@ -116,7 +116,8 @@ export default async function ProductDetailsPage({ params }: Props) {
             price: product.price,
             image: mainImage || "",
             isCustomized: product.isCustomized,
-            customizationType: product.customizationType || null
+            customizationType: product.customizationType || null,
+            sizes: product.sizes || []
           }} />
 
           {/* Trust Badges */}

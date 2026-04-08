@@ -9,6 +9,7 @@ export interface CartItem {
     price: number;
     quantity: number;
     image: string;
+    size?: string; // T-shirt sizes etc.
     isCustomized: boolean;
     customizationData?: {
         name?: string;
@@ -57,9 +58,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     const addToCart = (newItem: CartItem) => {
         setItems(current => {
-            // Check if exact same item exists (including custom data)
+            // Check if exact same item exists (including custom data and size)
             const existingIndex = current.findIndex(
                 i => i.productId === newItem.productId &&
+                    i.size === newItem.size &&
                     JSON.stringify(i.customizationData) === JSON.stringify(newItem.customizationData)
             );
 

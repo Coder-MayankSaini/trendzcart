@@ -22,6 +22,7 @@ interface Product {
     isCustomized: boolean;
     isFeatured: boolean;
     customizationType: "requires_name" | "requires_picture" | null;
+    sizes?: string[]; // Array of sizes e.g. ["S", "M", "L", "XL"]
     createdAt: number;
 }
 
@@ -92,6 +93,7 @@ export default function AdminProducts() {
             price: 0, images: [], thumbnails: [], category: "", categories: [], tags: [],
             inventory: 10, isVisible: true, isCustomized: false,
             isFeatured: false,
+            sizes: [],
             customizationType: null, createdAt: Date.now(),
         });
         setImageFiles([]);
@@ -317,6 +319,14 @@ export default function AdminProducts() {
                     <div>
                         <label style={labelStyle}>Description</label>
                         <textarea rows={4} style={{ ...inputStyle, resize: 'vertical' }} value={formData.description || ""} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+                    </div>
+                    <div>
+                        <label style={labelStyle}>Sizes (Comma separated e.g. S, M, L, XL)</label>
+                        <input type="text" style={inputStyle} value={(formData.sizes || []).join(", ")} onChange={e => {
+                            const val = e.target.value;
+                            const newSizes = val.split(",").map(s => s.trim()).filter(s => s !== "");
+                            setFormData({ ...formData, sizes: newSizes });
+                        }} placeholder="S, M, L, XL" />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                         <div>

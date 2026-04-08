@@ -13,26 +13,33 @@ interface ProductProps {
     image: string;
     isCustomized: boolean;
     customizationType: "requires_name" | "requires_picture" | null;
+    sizes?: string[];
 }
 
 export default function ProductCustomizer({ product }: { product: ProductProps }) {
     const { addToCart } = useCart();
     const [quantity, setQuantity] = useState(1);
+    const [selectedSize, setSelectedSize] = useState("");
     const [customName, setCustomName] = useState("");
     const [customFile, setCustomFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [addedToCart, setAddedToCart] = useState(false);
 
-    const handleAddToCart = async () => {
+    const handleAddToCart = async (isBuyNow = false) => {
+        if (product.sizes && product.sizes.length > 0 && !selectedSize) {
+            alert("Please select a size.");
+            return false;
+        }
+
         if (product.isCustomized) {
             if (product.customizationType === "requires_name" && !customName.trim()) {
                 alert("Please provide the custom name before adding to cart.");
-                return;
+                return false;
             }
             if (product.customizationType === "requires_picture" && !customFile) {
                 alert("Please upload a picture before adding to cart.");
-                return;
+                return false;
             }
         }
 
@@ -64,7 +71,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                 console.error("Upload failed", error);
                 alert("Failed to upload image. Please try again.");
                 setIsUploading(false);
-                return;
+                return false;
             }
             setIsUploading(false);
         }
@@ -81,19 +88,65 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
             price: product.price,
             quantity,
             image: product.image,
+            size: selectedSize || undefined,
             isCustomized: product.isCustomized,
             customizationData
         });
+
+        if (isBuyNow) {
+            // Handled by the caller
+            return true;
+        }
 
         setAddedToCart(true);
         setTimeout(() => setAddedToCart(false), 2000);
         setCustomName("");
         setCustomFile(null);
+        setSelectedSize("");
         setUploadProgress(0);
+        return true;
+    };
+
+    const handleBuyNow = async () => {
+        const success = await handleAddToCart(true);
+        if (success) {
+            window.location.href = "/cart"; // redirect to cart page seamlessly
+        }
     };
 
     return (
         <div className="pc-container">
+            {/* Size Selector */}
+            {product.sizes && product.sizes.length > 0 && (
+                <div className="pc-custom-section" style={{ marginBottom: '24px' }}>
+                    <h4 className="pc-custom-title">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></svg>
+                        Size
+                    </h4>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                        {product.sizes.map((s, index) => (
+                            <button
+                                key={index}
+                                onClick={() => setSelectedSize(s)}
+                                style={{
+                                    padding: '8px 16px',
+                                    borderRadius: '8px',
+                                    border: `1px solid ${selectedSize === s ? 'var(--text-primary)' : 'var(--border-color)'}`,
+                                    backgroundColor: selectedSize === s ? 'var(--text-primary)' : 'var(--bg-primary)',
+                                    color: selectedSize === s ? 'var(--bg-primary)' : 'var(--text-primary)',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease',
+                                    fontFamily: 'inherit'
+                                }}
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Customization Options */}
             {product.isCustomized && (
                 <div className="pc-custom-section">
@@ -160,25 +213,37 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                     </button>
                 </div>
 
-                <button
-                    onClick={handleAddToCart}
-                    disabled={isUploading}
-                    className={`pc-add-btn ${addedToCart ? 'pc-added' : ''}`}
-                >
-                    {isUploading ? (
-                        "Uploading..."
-                    ) : addedToCart ? (
-                        <>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                            Added to Cart
-                        </>
-                    ) : (
-                        <>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
-                            Add to Cart
-                        </>
-                    )}
-                </button>
+                <div style={{ display: 'flex', gap: '12px', flex: 1 }}>
+                    <button
+                        onClick={() => handleAddToCart(false)}
+                        disabled={isUploading}
+                        className={`pc-add-btn ${addedToCart ? 'pc-added' : ''}`}
+                        style={{ flex: 1, backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)' }}
+                    >
+                        {isUploading ? (
+                            "Uploading..."
+                        ) : addedToCart ? (
+                            <>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                Added to Cart
+                            </>
+                        ) : (
+                            <>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
+                                Add to Cart
+                            </>
+                        )}
+                    </button>
+
+                    <button
+                        onClick={handleBuyNow}
+                        disabled={isUploading || addedToCart}
+                        className="pc-add-btn"
+                        style={{ flex: 1, border: '1px solid var(--text-primary)' }}
+                    >
+                        {isUploading ? "..." : "Buy Now"}
+                    </button>
+                </div>
             </div>
         </div>
     );
