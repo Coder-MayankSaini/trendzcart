@@ -187,25 +187,7 @@ export default async function Home() {
         </section>
       )}
 
-      {/* ===== FEATURES ===== */}
-      <section className="hp-section hp-features">
-        <div className="hp-container">
-          <div className="hp-features-grid">
-            {features.map((f) => (
-              <div className="hp-feature" key={f.title}>
-                <div className="hp-feature-icon">
-                  {f.icon === "shipping" && <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13" /><polygon points="16 8 20 8 23 11 23 16 16 16 16 8" /><circle cx="5.5" cy="18.5" r="2.5" /><circle cx="18.5" cy="18.5" r="2.5" /></svg>}
-                  {f.icon === "returns" && <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>}
-                  {f.icon === "secure" && <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>}
-                  {f.icon === "support" && <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>}
-                </div>
-                <h4 className="hp-feature-title">{f.title}</h4>
-                <p className="hp-feature-desc">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+
 
 
     </div>

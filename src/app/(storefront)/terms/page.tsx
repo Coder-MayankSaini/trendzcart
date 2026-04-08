@@ -35,15 +35,14 @@ export default function TermsPage() {
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>3. Pricing & Payments</h2>
                     <p>
                         All prices are listed in Indian Rupees (INR). We offer both online payments (via Razorpay) and Cash on Delivery (COD).
-                        A handling fee of ₹50 is applied to all COD orders. We highly encourage online payments to enjoy a seamless experience
-                        and avoid additional fees.
+                        We highly encourage online payments to enjoy a seamless experience and faster out-for-delivery times.
                     </p>
                 </section>
 
                 <section>
                     <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>4. Returns & Refunds</h2>
                     <p>
-                        We accept returns within 30 days for defective items. Please note that customized products are made specifically
+                        We accept returns within 7 days for defective items. Please note that customized products are made specifically
                         for you and are therefore non-refundable unless they arrive damaged.
                     </p>
                 </section>

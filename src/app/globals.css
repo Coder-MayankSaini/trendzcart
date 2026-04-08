@@ -1740,7 +1740,7 @@ button {
 
 /* Enhanced Footer — Dark Minimal */
 .hp-footer {
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   border-top: 1px solid var(--border-color);
   padding: 72px 24px 0 24px;
 }
