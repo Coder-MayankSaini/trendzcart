@@ -86,6 +86,18 @@ export default function CheckoutPage() {
 
     const totalDiscount = discountFromCoupon;
     const finalTotal = Math.max(0, cartTotal - totalDiscount);
+    const ORDER_HISTORY_KEY = "trendkartz_order_ids";
+
+    const rememberOrderLocally = (orderId: string) => {
+        if (typeof window === "undefined") return;
+        try {
+            const existing = JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY) || "[]") as string[];
+            const next = [orderId, ...existing.filter((id) => id !== orderId)].slice(0, 25);
+            localStorage.setItem(ORDER_HISTORY_KEY, JSON.stringify(next));
+        } catch (error) {
+            console.error("Could not persist order history locally", error);
+        }
+    };
 
     const saveOrder = async (
         orderId: string,
@@ -133,6 +145,7 @@ export default function CheckoutPage() {
         if (paymentMethod === "COD") {
             try {
                 await saveOrder(orderId, "Processing", "PENDING");
+                rememberOrderLocally(orderId);
                 clearCart();
                 sessionStorage.removeItem("trendkartz_checkout_coupon");
                 router.push("/orders");
@@ -180,12 +193,14 @@ export default function CheckoutPage() {
 
                     if (verifyData.success) {
                         await saveOrder(orderId, "Processing", "PAID", rzpOrderId);
+                        rememberOrderLocally(orderId);
                         clearCart();
                         sessionStorage.removeItem("trendkartz_checkout_coupon");
                         router.push("/orders");
                     } else {
                         alert("Payment verification failed. Please contact support.");
                         await saveOrder(orderId, "Payment_Failed", "FAILED", rzpOrderId);
+                        rememberOrderLocally(orderId);
                         setIsProcessing(false);
                     }
                 },

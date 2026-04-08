@@ -5,17 +5,44 @@ import { useAuth } from "@/context/AuthContext";
 import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import Link from "next/link";
-import AuthModal from "@/components/storefront/AuthModal";
 
 export default function MyOrdersPage() {
     const { user } = useAuth();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const ORDER_HISTORY_KEY = "trendkartz_order_ids";
 
     useEffect(() => {
+        const fetchGuestOrders = async () => {
+            try {
+                const localOrderIds = JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY) || "[]") as string[];
+                if (!localOrderIds.length) {
+                    setOrders([]);
+                    setLoading(false);
+                    return;
+                }
+
+                const response = await fetch("/api/orders/by-ids", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ ids: localOrderIds }),
+                });
+                if (!response.ok) {
+                    throw new Error("Failed to fetch guest orders");
+                }
+
+                const data = await response.json();
+                setOrders(data?.orders || []);
+            } catch (err) {
+                console.error("Failed to load guest orders", err);
+                setOrders([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
         if (!user) {
-            setLoading(false);
+            fetchGuestOrders();
             return;
         }
 
@@ -31,7 +58,7 @@ export default function MyOrdersPage() {
             setLoading(false);
         }, (err) => {
             console.error("Failed to load orders", err);
-            setLoading(false);
+            fetchGuestOrders();
         });
 
         return () => unsub();
@@ -66,19 +93,6 @@ export default function MyOrdersPage() {
             return "—";
         }
     };
-
-    // Not logged in
-    if (!user && !loading) {
-        return (
-            <div className="co-empty">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
-                <h2>Sign in to view your orders</h2>
-                <p>Track your purchases and order status.</p>
-                <button onClick={() => setIsAuthModalOpen(true)} className="co-empty-link">Sign In</button>
-                <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-            </div>
-        );
-    }
 
     if (loading) {
         return (
