@@ -285,10 +285,9 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
                                         {review.userName.charAt(0).toUpperCase()}
                                     </div>
                                     <div>
-                                        <div style={{ fontWeight: 600 }}>{review.userName} {review.isFake && <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>(admin)</span>}
+                                        <div style={{ fontWeight: 600 }}>{review.userName}
                                             {!review.isFake && <span style={{ marginLeft: '8px', fontSize: '0.7rem', padding: '2px 6px', background: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', borderRadius: '4px', fontWeight: 700 }}>Verified</span>}
                                         </div>
-                                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{new Date(review.createdAt).toLocaleDateString()}</div>
                                     </div>
                                 </div>
                                 <div style={{ color: '#f59e0b', fontSize: '1.1rem' }}>{'★'.repeat(review.rating)}{'☆'.repeat(5 - review.rating)}</div>
