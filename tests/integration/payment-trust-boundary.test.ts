@@ -19,9 +19,9 @@ import { seedEmulatorDatabase, clearCollection, createJsonPostRequest } from "./
 import { SYNTHETIC_SHIPPING_ADDRESS } from "../fixtures/orders.ts";
 
 describe("TRUST-001 to TRUST-020: Payment Trust Boundary & Integrity Verification (Firestore Emulator)", () => {
-    const mockKeyId = "rzp_test_trust_key_101";
-    const mockKeySecret = "trust_secret_mock_202";
-    const mockWebhookSecret = "trust_webhook_secret_mock_303";
+    const mockKeyId = "rzp_mock_trust_key_101";
+    const mockKeySecret = "trust_mock_key_202";
+    const mockWebhookSecret = "trust_mock_whsec_303";
 
     let mockGatewayPaymentResponse: any = null;
     let mockPaymentFetchError: Error | null = null;
@@ -33,7 +33,7 @@ describe("TRUST-001 to TRUST-020: Payment Trust Boundary & Integrity Verificatio
         process.env.RAZORPAY_WEBHOOK_SECRET = mockWebhookSecret;
 
         // Intercept Razorpay SDK prototype to safely mock server-to-server gateway calls
-        const dummy = new Razorpay({ key_id: "rzp_test_mock", key_secret: "mock" });
+        const dummy = new Razorpay({ key_id: "rzp_mock_client", key_secret: "mock" });
         const apiProto = Object.getPrototypeOf(dummy.api);
 
         apiProto.get = async function (params: any) {
