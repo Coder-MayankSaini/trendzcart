@@ -2,9 +2,40 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase/config";
+import { auth, db } from "@/lib/firebase/config";
 import imageCompression from "browser-image-compression";
+
+async function uploadFileToR2(file: File, folder: string, subId?: string): Promise<string> {
+    const user = auth.currentUser;
+    const idToken = user ? await user.getIdToken() : "";
+    const authRes = await fetch("/api/uploads/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({
+            folder,
+            subId,
+            contentType: file.type || "image/jpeg",
+            sizeBytes: file.size,
+            originalName: file.name,
+        }),
+    });
+    if (!authRes.ok) {
+        const err = await authRes.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to authorize upload");
+    }
+    const { uploadUrl, key, sessionId, publicUrl } = await authRes.json();
+    await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+    });
+    await fetch("/api/uploads/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+        body: JSON.stringify({ sessionId, key }),
+    });
+    return publicUrl || `/api/media/public?key=${encodeURIComponent(key)}`;
+}
 
 interface Product {
     id: string;
@@ -177,16 +208,12 @@ export default function AdminProducts() {
                 const optionsThumb = { maxSizeMB: 0.1, maxWidthOrHeight: 600, useWebWorker: true };
                 const thumbFile = await imageCompression(file, optionsThumb);
 
-                // Upload high quality
-                const storageRef = ref(storage, `products/${formData.id}/${Date.now()}_${file.name}`);
-                const uploadTask = await uploadBytesResumable(storageRef, compressedFile);
-                const url = await getDownloadURL(uploadTask.ref);
+                // Upload high quality to R2
+                const url = await uploadFileToR2(compressedFile, "products", formData.id);
                 newUrls.push(url);
 
-                // Upload thumbnail
-                const thumbRef = ref(storage, `products/${formData.id}/thumb_${Date.now()}_${file.name}`);
-                const thumbTask = await uploadBytesResumable(thumbRef, thumbFile);
-                const thumbUrl = await getDownloadURL(thumbTask.ref);
+                // Upload thumbnail to R2
+                const thumbUrl = await uploadFileToR2(thumbFile, "products", formData.id);
                 newThumbUrls.push(thumbUrl);
             }
 
@@ -269,9 +296,7 @@ export default function AdminProducts() {
             for (const file of fakeReviewImages) {
                 const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
                 const compressedFile = await imageCompression(file, options);
-                const storageRef = ref(storage, `reviews/${addingReviewForProduct}/fake_${Date.now()}_${file.name}`);
-                const uploadTask = await uploadBytesResumable(storageRef, compressedFile);
-                const url = await getDownloadURL(uploadTask.ref);
+                const url = await uploadFileToR2(compressedFile, "reviews", addingReviewForProduct);
                 uploadedUrls.push(url);
             }
             const reviewId = crypto.randomUUID();

@@ -112,7 +112,12 @@ export default function CartPage() {
                             onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
                         >
                             <div className="item-image-wrapper" style={{ width: '140px', height: '180px', flexShrink: 0, borderRadius: '12px', overflow: 'hidden', backgroundColor: 'var(--bg-primary)' }}>
-                                <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                <img
+                                    src={item.image}
+                                    alt={item.name}
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
+                                />
                             </div>
 
                             <div className="item-details" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>

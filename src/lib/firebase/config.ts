@@ -27,7 +27,13 @@ const isValid = firebaseConfig.apiKey !== "dummy";
 
 export const auth = isValid ? getAuth(app) : {} as any;
 export const db = isValid ? getFirestore(app) : {} as any;
-export const storage = isValid ? getStorage(app) : {} as any;
+let legacyStorage: any = {};
+try {
+  legacyStorage = isValid ? getStorage(app) : {};
+} catch {
+  // Gracefully bypassed when Firebase Cloud Storage is disabled or moved to Cloudflare R2
+}
+export const storage = legacyStorage;
 
 // Connect to emulators if in emulator mode (avoid duplicate connection during hot reloads)
 const g = globalThis as any;

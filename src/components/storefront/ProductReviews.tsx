@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase/config";
+import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import imageCompression from "browser-image-compression";
 import AuthModal from "./AuthModal";
@@ -123,18 +122,51 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
         setSubmitting(true);
         setError(null);
         try {
+            const idToken = await user.getIdToken();
             const uploadedUrls: string[] = [];
             for (const file of imageFiles) {
                 const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
                 const compressedFile = await imageCompression(file, options);
 
-                const storageRef = ref(storage, `reviews/${productId}/${user.uid}_${Date.now()}_${file.name}`);
-                const uploadTask = await uploadBytesResumable(storageRef, compressedFile);
-                const url = await getDownloadURL(uploadTask.ref);
-                uploadedUrls.push(url);
+                const authRes = await fetch("/api/uploads/authorize", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({
+                        folder: "reviews",
+                        subId: productId,
+                        contentType: compressedFile.type || "image/jpeg",
+                        sizeBytes: compressedFile.size,
+                        originalName: file.name,
+                    }),
+                });
+
+                if (!authRes.ok) {
+                    const err = await authRes.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to authorize review image upload");
+                }
+
+                const { uploadUrl, key, sessionId, publicUrl } = await authRes.json();
+                await fetch(uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": compressedFile.type || "image/jpeg" },
+                    body: compressedFile,
+                });
+
+                await fetch("/api/uploads/complete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({ sessionId, key }),
+                });
+
+                uploadedUrls.push(publicUrl || `/api/media/public?key=${encodeURIComponent(key)}`);
             }
 
-            const idToken = await user.getIdToken();
             const res = await fetch("/api/reviews/submit", {
                 method: "POST",
                 headers: {

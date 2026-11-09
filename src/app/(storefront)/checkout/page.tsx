@@ -376,7 +376,11 @@ export default function CheckoutPage() {
                                 <div key={item.id} className="co-item">
                                     {item.image && (
                                         <div className="co-item-img">
-                                            <img src={item.image} alt={item.name} />
+                                            <img
+                                                src={item.image}
+                                                alt={item.name}
+                                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
+                                            />
                                             <span className="co-item-qty">{item.quantity}</span>
                                         </div>
                                     )}

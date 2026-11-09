@@ -1,5 +1,6 @@
 import * as adminModule from "firebase-admin";
 import type { OrderItemInput } from "./pricing";
+import { verifyObject, extractStorageKey } from "@/lib/storage/r2";
 
 export const ALLOWED_CUSTOMIZATION_MIME_TYPES = [
     "image/jpeg",
@@ -21,7 +22,7 @@ export interface CustomizationValidationResult {
 }
 
 /**
- * Extracts a normalized Cloud Storage object path from a storage reference or download URL.
+ * Extracts a normalized storage object key/path from a storage reference, download URL, or R2 path.
  */
 export function extractStoragePath(input: string): string | null {
     if (!input || typeof input !== "string") return null;
@@ -31,6 +32,21 @@ export function extractStoragePath(input: string): string | null {
     // Direct path: customizations/{ownerUid}/{fileName}
     if (trimmed.startsWith("customizations/")) {
         return trimmed.split("?")[0];
+    }
+
+    // Media endpoint URL: /api/media/(public|download)?key=customizations%2F...
+    const mediaMatch = trimmed.match(/\/api\/media\/(?:public|download)\?key=([^&#]+)/i);
+    if (mediaMatch && mediaMatch[1]) {
+        const decoded = decodeURIComponent(mediaMatch[1]);
+        if (decoded.startsWith("customizations/")) {
+            return decoded.split("?")[0];
+        }
+    }
+
+    // Try generic R2 storage key extractor
+    const r2Key = extractStorageKey(trimmed);
+    if (r2Key && r2Key.startsWith("customizations/")) {
+        return r2Key;
     }
 
     // Firebase Storage URL format:
@@ -49,7 +65,7 @@ export function extractStoragePath(input: string): string | null {
  * Guarantees:
  * 1. Storage path conforms strictly to the scoped customer namespace.
  * 2. Path owner matches the verified caller UID.
- * 3. File exists in storage (when adminStorage is active).
+ * 3. File exists in Cloudflare R2 storage (or fallback Firebase Storage in emulator).
  * 4. Content-type is strictly restricted to supported image formats (no SVG/HTML/executable).
  * 5. File size does not exceed 10MB.
  * 6. File has not been claimed by a different existing order (preventing upload hijacking).
@@ -118,58 +134,75 @@ export async function validateOrderCustomizations(
             };
         }
 
-        // 3. Cloud Storage object existence, MIME type, and size validation
-        if (storage) {
+        // 3. Storage existence, MIME type, and size validation
+        // Evaluated when storage verification is requested (options.storage is provided)
+        if (storage !== undefined) {
+            let exists = false;
+            let contentType = "";
+            let sizeBytes = 0;
+
+            // Check Cloudflare R2 first
             try {
-                let bucket = storage.bucket();
-                let file = bucket.file(extractedPath);
-                let [exists] = await file.exists();
-
-                // If not found in default bucket name in emulator mode, check demo-trendkartz bucket
-                if (!exists && bucket.name !== "demo-trendkartz") {
-                    try {
-                        const fallbackBucket = storage.bucket("demo-trendkartz");
-                        const [fallbackExists] = await fallbackBucket.file(extractedPath).exists();
-                        if (fallbackExists) {
-                            bucket = fallbackBucket;
-                            file = bucket.file(extractedPath);
-                            exists = true;
-                        }
-                    } catch {}
+                const r2Check = await verifyObject(extractedPath);
+                if (r2Check.exists) {
+                    exists = true;
+                    contentType = (r2Check.contentType || "").toLowerCase();
+                    sizeBytes = r2Check.size;
                 }
+            } catch (r2Err) {
+                console.warn("[Customization Auth] R2 check encountered error, checking fallback:", r2Err);
+            }
 
-                if (!exists) {
-                    return {
-                        isValid: false,
-                        error: `Item '${item.name || i}': Customization file '${extractedPath}' was not found in storage.`,
-                    };
+            // Fallback to Firebase Storage (for emulator integration tests)
+            if (!exists && storage) {
+                try {
+                    let bucket = storage.bucket();
+                    let file = bucket.file(extractedPath);
+                    let [fbExists] = await file.exists();
+
+                    if (!fbExists && bucket.name !== "demo-trendkartz") {
+                        try {
+                            const fallbackBucket = storage.bucket("demo-trendkartz");
+                            const [fallbackExists] = await fallbackBucket.file(extractedPath).exists();
+                            if (fallbackExists) {
+                                bucket = fallbackBucket;
+                                file = bucket.file(extractedPath);
+                                fbExists = true;
+                            }
+                        } catch {}
+                    }
+
+                    if (fbExists) {
+                        exists = true;
+                        const [metadata] = await file.getMetadata();
+                        contentType = (metadata.contentType || "").toLowerCase();
+                        sizeBytes = Number(metadata.size) || 0;
+                    }
+                } catch (storageErr: any) {
+                    console.error("[Customization Auth] Storage check error:", storageErr?.message);
                 }
+            }
 
-                const [metadata] = await file.getMetadata();
-
-                // Validate Content Type
-                const contentType = (metadata.contentType || "").toLowerCase();
-                if (!ALLOWED_CUSTOMIZATION_MIME_TYPES.includes(contentType)) {
-                    return {
-                        isValid: false,
-                        error: `Item '${item.name || i}': Unsupported customization image type '${contentType}'. Only JPEG, PNG, and WebP are accepted.`,
-                    };
-                }
-
-                // Validate Size Limit
-                const sizeBytes = Number(metadata.size) || 0;
-                if (sizeBytes > MAX_CUSTOMIZATION_SIZE_BYTES) {
-                    return {
-                        isValid: false,
-                        error: `Item '${item.name || i}': Customization image size (${Math.round(sizeBytes / 1024 / 1024)}MB) exceeds maximum limit of 10MB.`,
-                    };
-                }
-            } catch (storageErr: any) {
-                // If storage check encounters an error, report validation failure
-                console.error("[Customization Auth] Storage check error:", storageErr?.message);
+            if (!exists) {
                 return {
                     isValid: false,
-                    error: `Item '${item.name || i}': Could not verify customization storage metadata: ${storageErr?.message || "Storage error"}`,
+                    error: `Item '${item.name || i}': Customization file '${extractedPath}' was not found in storage.`,
+                };
+            }
+
+            // Validate Content Type
+            if (!ALLOWED_CUSTOMIZATION_MIME_TYPES.includes(contentType)) {
+                return {
+                    isValid: false,
+                    error: `Item '${item.name || i}': Unsupported customization image type '${contentType}'. Only JPEG, PNG, and WebP are accepted.`,
+                };
+            }
+
+            // Validate Size Limit
+            if (sizeBytes > MAX_CUSTOMIZATION_SIZE_BYTES) {
+                return {
+                    isValid: false,
+                    error: `Item '${item.name || i}': Customization image size (${Math.round(sizeBytes / 1024 / 1024)}MB) exceeds maximum limit of 10MB.`,
                 };
             }
         }

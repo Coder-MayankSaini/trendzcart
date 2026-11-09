@@ -15,6 +15,7 @@ export interface OrderItemInput {
         storagePath?: string;
         ownerUid?: string;
         fileId?: string;
+        sessionId?: string;
     };
 }
 
@@ -34,6 +35,7 @@ export interface ValidatedOrderItem {
         storagePath?: string;
         ownerUid?: string;
         fileId?: string;
+        sessionId?: string;
     };
 }
 

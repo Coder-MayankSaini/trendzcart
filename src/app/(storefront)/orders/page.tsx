@@ -261,7 +261,11 @@ export default function MyOrdersPage() {
                                             <div key={idx} className="mo-item">
                                                 {item.image && (
                                                     <div className="mo-item-img">
-                                                        <img src={item.image} alt={item.name} />
+                                                        <img
+                                                            src={item.image}
+                                                            alt={item.name}
+                                                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
+                                                        />
                                                     </div>
                                                 )}
                                                 <div className="mo-item-info">

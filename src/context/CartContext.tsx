@@ -13,10 +13,11 @@ export interface CartItem {
     isCustomized: boolean;
     customizationData?: {
         name?: string;
-        pictureUrl?: string; // Firebase Storage URL
+        pictureUrl?: string; // Media URL or download endpoint
         storagePath?: string;
         ownerUid?: string;
         fileId?: string;
+        sessionId?: string;
     };
 }
 

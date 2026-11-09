@@ -1,6 +1,10 @@
 import { adminAuth } from "@/lib/firebase/admin";
 import { NextRequest } from "next/server";
 
+export function isCustomClaimAdmin(decoded: any): boolean {
+    return Boolean(decoded && decoded.admin === true);
+}
+
 export interface AdminAuthResult {
     isAdmin: boolean;
     uid?: string;

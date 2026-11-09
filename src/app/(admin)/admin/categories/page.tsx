@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase/config";
+import { auth, db } from "@/lib/firebase/config";
 import { v4 as uuidv4 } from "uuid";
 import imageCompression from "browser-image-compression";
 
@@ -82,9 +81,39 @@ export default function AdminCategories() {
                 };
                 const compressedFile = await imageCompression(imageFile, options);
 
-                const storageRef = ref(storage, `categories/${id}/${Date.now()}_${compressedFile.name}`);
-                const uploadTask = await uploadBytesResumable(storageRef, compressedFile);
-                imageUrl = await getDownloadURL(uploadTask.ref);
+                const user = auth.currentUser;
+                const idToken = user ? await user.getIdToken() : "";
+                const authRes = await fetch("/api/uploads/authorize", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+                    body: JSON.stringify({
+                        folder: "categories",
+                        subId: id,
+                        contentType: compressedFile.type || "image/jpeg",
+                        sizeBytes: compressedFile.size,
+                        originalName: compressedFile.name,
+                    }),
+                });
+
+                if (!authRes.ok) {
+                    const err = await authRes.json().catch(() => ({}));
+                    throw new Error(err.error || "Failed to authorize category upload");
+                }
+
+                const { uploadUrl, key, sessionId, publicUrl } = await authRes.json();
+                await fetch(uploadUrl, {
+                    method: "PUT",
+                    headers: { "Content-Type": compressedFile.type || "image/jpeg" },
+                    body: compressedFile,
+                });
+
+                await fetch("/api/uploads/complete", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
+                    body: JSON.stringify({ sessionId, key }),
+                });
+
+                imageUrl = publicUrl || `/api/media/public?key=${encodeURIComponent(key)}`;
             }
 
             await setDoc(doc(db, "categories", id), {

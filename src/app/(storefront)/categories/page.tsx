@@ -64,6 +64,7 @@ export default function CategoriesPage() {
                                         style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
                                         onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
                                         onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
                                     />
                                 ) : (
                                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No Image</div>

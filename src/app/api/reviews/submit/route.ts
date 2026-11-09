@@ -131,7 +131,7 @@ export async function POST(req: NextRequest) {
                 );
             }
             for (const img of images) {
-                if (typeof img !== "string" || !img.trim() || (!img.startsWith("http://") && !img.startsWith("https://"))) {
+                if (typeof img !== "string" || !img.trim() || (!img.startsWith("http://") && !img.startsWith("https://") && !img.startsWith("/api/media/"))) {
                     return NextResponse.json(
                         { error: "Invalid image URL in review images" },
                         { status: 400, headers }

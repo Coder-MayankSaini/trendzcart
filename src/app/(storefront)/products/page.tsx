@@ -66,7 +66,12 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                             <Link href={`/products/${product.slug}`} key={product.id} className="product-card">
                                 <div className="product-image-container">
                                     {thumbImage ? (
-                                        <img src={thumbImage} alt={product.name} className="product-image" />
+                                        <img
+                                            src={thumbImage}
+                                            alt={product.name}
+                                            className="product-image"
+                                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
+                                        />
                                     ) : (
                                         <div className="placeholder-image">No Image</div>
                                     )}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, doc, updateDoc, orderBy, query } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
+import { auth, db } from "@/lib/firebase/config";
 
 export default function AdminOrders() {
     const [orders, setOrders] = useState<any[]>([]);
@@ -43,6 +43,54 @@ export default function AdminOrders() {
         } catch (err) {
             console.error("Failed to update status", err);
             alert("Failed to update order status. Check your Firestore permissions.");
+        }
+    };
+
+    const handleViewCustomization = async (cust: any) => {
+        try {
+            const key = cust.storagePath || cust.pictureUrl;
+            if (!key) return;
+
+            // If it's a legacy Firebase URL, handle gracefully
+            if (typeof key === "string" && key.includes("firebasestorage.googleapis.com")) {
+                window.open(key, "_blank");
+                return;
+            }
+
+            const user = auth.currentUser;
+            if (!user) {
+                alert("Please sign in as admin to access private customization files.");
+                return;
+            }
+
+            const token = await user.getIdToken();
+            const res = await fetch(`/api/media/download?key=${encodeURIComponent(key)}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert(`Cannot view customer file: ${err.error || res.statusText}`);
+                return;
+            }
+
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+                const data = await res.json();
+                if (data.downloadUrl) {
+                    window.open(data.downloadUrl, "_blank");
+                    return;
+                }
+            }
+
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            window.open(blobUrl, "_blank");
+        } catch (err: any) {
+            console.error("Failed to view customization image", err);
+            alert("Failed to load customer image.");
         }
     };
 
@@ -104,8 +152,24 @@ export default function AdminOrders() {
                                                         <div style={{ fontSize: '0.75rem', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#ca8a04', padding: '4px 8px', marginTop: '4px', borderRadius: '8px', border: '1px solid rgba(234, 179, 8, 0.2)' }}>
                                                             <strong>Custom: </strong>
                                                             {item.customizationData.name && <span>Name: {item.customizationData.name} </span>}
-                                                            {item.customizationData.pictureUrl && (
-                                                                <a href={item.customizationData.pictureUrl} target="_blank" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>View Image</a>
+                                                            {(item.customizationData.pictureUrl || item.customizationData.storagePath) && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleViewCustomization(item.customizationData)}
+                                                                    style={{
+                                                                        color: 'var(--accent)',
+                                                                        textDecoration: 'underline',
+                                                                        background: 'none',
+                                                                        border: 'none',
+                                                                        padding: 0,
+                                                                        cursor: 'pointer',
+                                                                        fontSize: 'inherit',
+                                                                        fontFamily: 'inherit',
+                                                                        marginLeft: '4px',
+                                                                    }}
+                                                                >
+                                                                    View Image
+                                                                </button>
                                                             )}
                                                         </div>
                                                     )}

@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { storage } from "@/lib/firebase/config";
 import { ensureAuthenticatedUser } from "@/lib/auth/guestAuth";
 import { v4 as uuidv4 } from "uuid";
 
@@ -103,6 +101,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                 // 1. Establish verified authenticated session (registered or transparent anonymous)
                 const activeUser = await ensureAuthenticatedUser();
                 ownerUid = activeUser.uid;
+                const idToken = await activeUser.getIdToken();
 
                 // 2. Perform client-side image compression for files > 1MB
                 let fileToUpload: File = customFile;
@@ -120,39 +119,76 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                     }
                 }
 
-                // 3. Construct scoped path: customizations/{ownerUid}/{fileId}.{ext}
-                const ext = customFile.type === "image/png" ? "png" : customFile.type === "image/webp" ? "webp" : "jpg";
-                fileId = uuidv4();
-                storagePath = `customizations/${ownerUid}/${fileId}.${ext}`;
-                const storageRef = ref(storage, storagePath);
-
-                // 4. Upload with metadata enforcing per-customer ownership
-                const metadata = {
-                    contentType: fileToUpload.type || "image/jpeg",
-                    customMetadata: {
-                        ownerUid,
-                        originalName: customFile.name.substring(0, 50),
+                // 3. Request upload authorization from Next.js API
+                const authRes = await fetch("/api/uploads/authorize", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${idToken}`,
                     },
-                };
-
-                const uploadTask = uploadBytesResumable(storageRef, fileToUpload, metadata);
-
-                await new Promise((resolve, reject) => {
-                    uploadTask.on(
-                        "state_changed",
-                        (snapshot) => {
-                            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                            setUploadProgress(Math.round(progress));
-                        },
-                        (error) => reject(error),
-                        () => resolve(uploadTask.snapshot.ref)
-                    );
+                    body: JSON.stringify({
+                        folder: "customizations",
+                        contentType: fileToUpload.type || "image/jpeg",
+                        sizeBytes: fileToUpload.size,
+                        originalName: customFile.name.substring(0, 50),
+                    }),
                 });
 
-                pictureUrl = await getDownloadURL(storageRef);
+                if (!authRes.ok) {
+                    const authErr = await authRes.json().catch(() => ({}));
+                    throw new Error(authErr.error || "Failed to authorize upload");
+                }
+
+                const { uploadUrl, key, sessionId } = await authRes.json();
+                storagePath = key;
+                fileId = key.split("/").pop() || uuidv4();
+
+                // 4. Upload file directly to Cloudflare R2 via presigned PUT
+                await new Promise<void>((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open("PUT", uploadUrl);
+                    xhr.setRequestHeader("Content-Type", fileToUpload.type || "image/jpeg");
+                    xhr.upload.onprogress = (evt) => {
+                        if (evt.lengthComputable) {
+                            const percent = Math.round((evt.loaded / evt.total) * 80);
+                            setUploadProgress(10 + percent);
+                        }
+                    };
+                    xhr.onload = () => {
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            setUploadProgress(95);
+                            resolve();
+                        } else {
+                            reject(new Error(`Upload to storage failed with status ${xhr.status}`));
+                        }
+                    };
+                    xhr.onerror = () => reject(new Error("Network error during direct storage upload"));
+                    xhr.send(fileToUpload);
+                });
+
+                // 5. Notify server of upload completion and verification
+                const completeRes = await fetch("/api/uploads/complete", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${idToken}`,
+                    },
+                    body: JSON.stringify({
+                        sessionId,
+                        key: storagePath,
+                    }),
+                });
+
+                if (!completeRes.ok) {
+                    const compErr = await completeRes.json().catch(() => ({}));
+                    throw new Error(compErr.error || "Failed to confirm storage upload");
+                }
+
+                setUploadProgress(100);
+                pictureUrl = `/api/media/download?key=${encodeURIComponent(storagePath)}`;
             } catch (error: any) {
                 console.error("Upload failed", error);
-                alert("Failed to upload image. Please check your network connection and try again.");
+                alert(`Failed to upload image: ${error?.message || "Please check your network connection and try again."}`);
                 setIsUploading(false);
                 setUploadProgress(0);
                 return false;
