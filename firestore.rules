@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && ('admin' in request.auth.token) && request.auth.token.admin == true;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Explicit allowed-field policy for customer profile documents (TASK B)
+    function isCustomerProfileAllowedFields(data) {
+      return data.keys().hasOnly([
+        'uid', 'email', 'role', 'createdAt', 'updatedAt',
+        'displayName', 'name', 'phone', 'phoneNumber',
+        'shippingAddress', 'address'
+      ]);
+    }
+
+    // 1. Users collection
+    // Customers can read their own profile; admins can read all profiles.
+    // Customers can create their own profile with role: 'customer' and allowed fields only.
+    // Customers cannot elevate role, modify uid, alter createdAt, or add arbitrary fields; admins have full management.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if (isOwner(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'customer'
+        && isCustomerProfileAllowedFields(request.resource.data))
+        || isAdmin();
+      allow update: if (isOwner(uid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.role == 'customer'
+        && (!('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt)
+        && isCustomerProfileAllowedFields(request.resource.data))
+        || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 2. Products collection
+    // Public catalog browsing requires isVisible: true.
+    // Admins can read all products (including hidden ones) and perform CRUD.
+    match /products/{productId} {
+      allow get: if resource.data.isVisible == true || isAdmin();
+      allow list: if resource.data.isVisible == true || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 3. Categories collection
+    // Public read for category navigation.
+    // Admin-only management.
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 4. Coupons collection
+    // Single coupon lookup allowed for discount preview (must know coupon code).
+    // Listing/enumeration restricted to admins.
+    // Admin-only creation, modification, and deletion.
+    match /coupons/{couponCode} {
+      allow get: if true;
+      allow list: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 5. Reviews collection
+    // Public read for customer reviews on product detail pages.
+    // Client SDK direct writes are denied to eliminate REVIEW-BYPASS vulnerability;
+    // all customer submissions must go through the server-side /api/reviews/submit route.
+    // Legitimate administrators maintain full moderation and review management permissions.
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // 6. Orders collection
+    // Client SDK reads/writes strictly restricted.
+    // Customer retrieval occurs exclusively through the secured /api/orders/by-ids route.
+    // Order creation occurs exclusively through verified server endpoints (/api/orders/create).
+    // Admins can read and update orders via Admin Console.
+    match /orders/{orderId} {
+      allow read, update: if isAdmin();
+      allow create, delete: if false;
+    }
+
+    // 7. Internal / Financial Collections (Server Admin SDK only)
+    match /paymentRecords/{id} {
+      allow read, write: if false;
+    }
+
+    match /paymentWebhookEvents/{id} {
+      allow read, write: if false;
+    }
+
+    match /unmatchedPayments/{id} {
+      allow read, write: if false;
+    }
+
+    match /rateLimits/{id} {
+      allow read, write: if false;
+    }
+
+    // 8. Default deny-all fallback
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

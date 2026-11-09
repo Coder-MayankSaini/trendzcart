@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, where, orderBy, onSnapshot, getDocs, doc, setDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
@@ -60,32 +60,35 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
         return () => unsub();
     }, [productId]);
 
-    // Check eligibility
+    // Check eligibility via secure server endpoint
     useEffect(() => {
+        let isMounted = true;
         async function checkEligibility() {
             if (!user) {
                 setIsEligible(false);
                 return;
             }
             try {
-                const q = query(collection(db, "orders"), where("userId", "==", user.uid), where("orderStatus", "==", "Delivered"));
-                const snapshot = await getDocs(q);
-                let eligible = false;
-
-                for (const orderDoc of snapshot.docs) {
-                    const orderData = orderDoc.data();
-                    if (orderData.items && orderData.items.some((item: any) => item.id === productId || item.productId === productId)) {
-                        eligible = true;
-                        break;
-                    }
+                const idToken = await user.getIdToken();
+                const res = await fetch(`/api/reviews/eligibility?productId=${encodeURIComponent(productId)}`, {
+                    headers: {
+                        Authorization: `Bearer ${idToken}`,
+                    },
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted) setIsEligible(Boolean(data.eligible));
+                } else {
+                    if (isMounted) setIsEligible(false);
                 }
-                setIsEligible(eligible);
             } catch (err) {
                 console.error("Eligibility check failed:", err);
+                if (isMounted) setIsEligible(false);
             }
         }
 
         checkEligibility();
+        return () => { isMounted = false; };
     }, [user, productId]);
 
     const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,20 +134,26 @@ export default function ProductReviews({ productId }: ProductReviewsProps) {
                 uploadedUrls.push(url);
             }
 
-            const reviewId = crypto.randomUUID();
-            const payload: Review = {
-                id: reviewId,
-                productId,
-                userId: user.uid,
-                userName: user.displayName || "Verified Buyer",
-                rating,
-                comment,
-                images: uploadedUrls,
-                createdAt: Date.now(),
-                isFake: false
-            };
+            const idToken = await user.getIdToken();
+            const res = await fetch("/api/reviews/submit", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${idToken}`,
+                },
+                body: JSON.stringify({
+                    productId,
+                    rating,
+                    comment,
+                    images: uploadedUrls,
+                    userName: user.displayName || "Verified Buyer",
+                }),
+            });
 
-            await setDoc(doc(db, "reviews", reviewId), payload);
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to submit review.");
+            }
 
             setShowReviewForm(false);
             setRating(5);

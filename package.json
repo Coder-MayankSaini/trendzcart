@@ -6,11 +6,17 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/unit/pricing.test.ts tests/unit/staging-guard.test.ts",
+    "test:integration": "node scripts/run-integration-tests.js",
+    "test:rules": "node scripts/run-rules-tests.js",
+    "emulators": "firebase emulators:start --project demo-trendkartz"
   },
   "dependencies": {
     "browser-image-compression": "^2.0.2",
     "firebase": "^12.9.0",
+    "firebase-admin": "^13.7.0",
     "next": "16.1.6",
     "razorpay": "^2.9.6",
     "react": "19.2.3",
@@ -19,6 +25,7 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -26,7 +33,7 @@
     "@types/uuid": "^10.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "firebase-admin": "^13.7.0",
+    "firebase-tools": "^15.35.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -2,84 +2,139 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
 import Link from "next/link";
 
 export default function MyOrdersPage() {
-    const { user } = useAuth();
+    const { user, loading: authLoading } = useAuth();
     const [orders, setOrders] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
     const ORDER_HISTORY_KEY = "trendkartz_order_ids";
+    const GUEST_TOKENS_KEY = "trendkartz_guest_tokens";
 
     useEffect(() => {
-        const fetchGuestOrders = async () => {
+        if (authLoading) return;
+
+        let isMounted = true;
+
+        const loadOrders = async () => {
+            setLoading(true);
+            setErrorMessage(null);
+
             try {
-                const localOrderIds = JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY) || "[]") as string[];
-                if (!localOrderIds.length) {
+                // PATH 1: Authenticated Customer
+                if (user) {
+                    const idToken = await user.getIdToken();
+                    const res = await fetch("/api/orders/by-ids", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "Authorization": `Bearer ${idToken}`,
+                        },
+                        body: JSON.stringify({ ids: [] }), // Server queries all orders for verified UID
+                    });
+
+                    if (res.status === 429) {
+                        throw new Error("Too many requests. Please wait a moment and try again.");
+                    }
+                    if (!res.ok) {
+                        throw new Error("Unable to retrieve your order history. Please try again shortly.");
+                    }
+
+                    const data = await res.json();
+                    if (isMounted) {
+                        setOrders(data?.orders || []);
+                    }
+                }
+                // PATH 2: Guest Customer with Access Tokens
+                else {
+                    const localOrderIds = JSON.parse(
+                        localStorage.getItem(ORDER_HISTORY_KEY) || "[]"
+                    ) as string[];
+                    const tokensMap = JSON.parse(
+                        localStorage.getItem(GUEST_TOKENS_KEY) || "{}"
+                    ) as Record<string, string>;
+
+                    if (!localOrderIds.length) {
+                        if (isMounted) {
+                            setOrders([]);
+                            setLoading(false);
+                        }
+                        return;
+                    }
+
+                    const ordersPayload = localOrderIds.map((id) => ({
+                        id,
+                        token: tokensMap[id] || undefined,
+                    }));
+
+                    const res = await fetch("/api/orders/by-ids", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ orders: ordersPayload }),
+                    });
+
+                    if (res.status === 429) {
+                        throw new Error("Too many requests. Please wait a moment and try again.");
+                    }
+                    if (!res.ok) {
+                        throw new Error("Unable to retrieve guest orders. Please try again shortly.");
+                    }
+
+                    const data = await res.json();
+                    if (isMounted) {
+                        setOrders(data?.orders || []);
+                    }
+                }
+            } catch (err: any) {
+                console.error("Failed to load orders", err);
+                if (isMounted) {
+                    setErrorMessage(err.message || "Failed to load orders.");
                     setOrders([]);
-                    setLoading(false);
-                    return;
                 }
-
-                const response = await fetch("/api/orders/by-ids", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ ids: localOrderIds }),
-                });
-                if (!response.ok) {
-                    throw new Error("Failed to fetch guest orders");
-                }
-
-                const data = await response.json();
-                setOrders(data?.orders || []);
-            } catch (err) {
-                console.error("Failed to load guest orders", err);
-                setOrders([]);
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
 
-        if (!user) {
-            fetchGuestOrders();
-            return;
-        }
+        loadOrders();
 
-        const q = query(
-            collection(db, "orders"),
-            where("userId", "==", user.uid),
-            orderBy("createdAt", "desc")
-        );
-
-        const unsub = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setOrders(data);
-            setLoading(false);
-        }, (err) => {
-            console.error("Failed to load orders", err);
-            fetchGuestOrders();
-        });
-
-        return () => unsub();
-    }, [user]);
+        return () => {
+            isMounted = false;
+        };
+    }, [user, authLoading]);
 
     const getStatusColor = (status: string) => {
         switch (status) {
-            case "Delivered": return { bg: "rgba(34, 197, 94, 0.1)", color: "#16a34a" };
-            case "Shipped": return { bg: "rgba(59, 130, 246, 0.1)", color: "#3b82f6" };
-            case "Processing": return { bg: "rgba(234, 179, 8, 0.1)", color: "#ca8a04" };
-            case "Cancelled": return { bg: "rgba(239, 68, 68, 0.1)", color: "#ef4444" };
-            default: return { bg: "rgba(148, 163, 184, 0.1)", color: "#94a3b8" };
+            case "Delivered":
+            case "Completed":
+                return { bg: "rgba(34, 197, 94, 0.1)", color: "#16a34a" };
+            case "Shipped":
+                return { bg: "rgba(59, 130, 246, 0.1)", color: "#3b82f6" };
+            case "Processing":
+                return { bg: "rgba(234, 179, 8, 0.1)", color: "#ca8a04" };
+            case "Cancelled":
+                return { bg: "rgba(239, 68, 68, 0.1)", color: "#ef4444" };
+            case "Verification Required":
+                return { bg: "rgba(234, 179, 8, 0.15)", color: "#b45309" };
+            default:
+                return { bg: "rgba(148, 163, 184, 0.1)", color: "#94a3b8" };
         }
     };
 
     const getPaymentColor = (status: string) => {
         switch (status) {
-            case "PAID": return { bg: "rgba(34, 197, 94, 0.1)", color: "#16a34a" };
-            case "PENDING": return { bg: "rgba(234, 179, 8, 0.1)", color: "#ca8a04" };
-            case "FAILED": return { bg: "rgba(239, 68, 68, 0.1)", color: "#ef4444" };
-            default: return { bg: "rgba(148, 163, 184, 0.1)", color: "#94a3b8" };
+            case "PAID":
+                return { bg: "rgba(34, 197, 94, 0.1)", color: "#16a34a" };
+            case "PENDING":
+                return { bg: "rgba(234, 179, 8, 0.1)", color: "#ca8a04" };
+            case "FAILED":
+                return { bg: "rgba(239, 68, 68, 0.1)", color: "#ef4444" };
+            default:
+                return { bg: "rgba(148, 163, 184, 0.1)", color: "#94a3b8" };
         }
     };
 
@@ -87,14 +142,16 @@ export default function MyOrdersPage() {
         try {
             const date = ts?.toDate?.() ? ts.toDate() : new Date(ts);
             return date.toLocaleDateString("en-IN", {
-                day: "numeric", month: "short", year: "numeric"
+                day: "numeric",
+                month: "short",
+                year: "numeric",
             });
         } catch {
             return "—";
         }
     };
 
-    if (loading) {
+    if (loading || authLoading) {
         return (
             <div className="mo-container">
                 <div className="mo-loading">
@@ -109,16 +166,48 @@ export default function MyOrdersPage() {
         <div className="mo-container">
             <h1 className="mo-title">My Orders</h1>
 
-            {orders.length === 0 ? (
+            {errorMessage && (
+                <div
+                    style={{
+                        padding: "14px 18px",
+                        borderRadius: "10px",
+                        backgroundColor: "rgba(239, 68, 68, 0.08)",
+                        border: "1px solid rgba(239, 68, 68, 0.2)",
+                        color: "#b91c1c",
+                        marginBottom: "20px",
+                        fontSize: "0.92rem",
+                    }}
+                >
+                    {errorMessage}
+                </div>
+            )}
+
+            {orders.length === 0 && !errorMessage ? (
                 <div className="mo-empty">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" /></svg>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                    >
+                        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                        <line x1="3" y1="6" x2="21" y2="6" />
+                        <path d="M16 10a4 4 0 0 1-8 0" />
+                    </svg>
                     <h3>No orders yet</h3>
                     <p>Your order history will appear here once you make a purchase.</p>
-                    <Link href="/products" className="co-empty-link">Start Shopping</Link>
+                    <Link href="/products" className="co-empty-link">
+                        Start Shopping
+                    </Link>
                 </div>
             ) : (
                 <div className="mo-list">
-                    {orders.map(order => {
+                    {orders.map((order) => {
                         const statusStyle = getStatusColor(order.orderStatus);
                         const payStyle = getPaymentColor(order.paymentStatus);
 
@@ -127,51 +216,122 @@ export default function MyOrdersPage() {
                                 {/* Card Header */}
                                 <div className="mo-card-header">
                                     <div className="mo-card-header-left">
-                                        <span className="mo-order-id">Order #{order.id.substring(0, 8).toUpperCase()}</span>
-                                        <span className="mo-order-date">{formatDate(order.createdAt)}</span>
+                                        <span className="mo-order-id">
+                                            Order #{order.id.substring(0, 8).toUpperCase()}
+                                        </span>
+                                        <span className="mo-order-date">
+                                            {formatDate(order.createdAt)}
+                                        </span>
                                     </div>
                                     <div className="mo-card-header-right">
-                                        <span className="mo-status-badge" style={{ background: statusStyle.bg, color: statusStyle.color }}>
+                                        <span
+                                            className="mo-status-badge"
+                                            style={{
+                                                background: statusStyle.bg,
+                                                color: statusStyle.color,
+                                            }}
+                                        >
                                             {order.orderStatus}
                                         </span>
                                     </div>
                                 </div>
 
-                                {/* Items */}
-                                <div className="mo-items">
-                                    {order.items?.map((item: any, idx: number) => (
-                                        <div key={idx} className="mo-item">
-                                            {item.image && (
-                                                <div className="mo-item-img">
-                                                    <img src={item.image} alt={item.name} />
+                                {/* Legacy Notice if Verification Required */}
+                                {order.requiresVerification ? (
+                                    <div
+                                        style={{
+                                            padding: "16px",
+                                            backgroundColor: "rgba(234, 179, 8, 0.08)",
+                                            borderLeft: "4px solid #ca8a04",
+                                            borderRadius: "4px",
+                                            margin: "12px 16px",
+                                            fontSize: "0.88rem",
+                                            color: "#854d0e",
+                                            lineHeight: 1.5,
+                                        }}
+                                    >
+                                        <strong>Identity Verification Required:</strong>{" "}
+                                        {order.verificationNotice ||
+                                            "This legacy order requires customer identity verification. Please contact support at support@bazaarvilla.com."}
+                                    </div>
+                                ) : (
+                                    /* Normal Order Items */
+                                    <div className="mo-items">
+                                        {order.items?.map((item: any, idx: number) => (
+                                            <div key={idx} className="mo-item">
+                                                {item.image && (
+                                                    <div className="mo-item-img">
+                                                        <img src={item.image} alt={item.name} />
+                                                    </div>
+                                                )}
+                                                <div className="mo-item-info">
+                                                    <span className="mo-item-name">{item.name}</span>
+                                                    <span className="mo-item-meta">
+                                                        Qty: {item.quantity} &middot; ₹
+                                                        {item.price?.toLocaleString("en-IN")}
+                                                        {item.size ? ` · Size: ${item.size}` : ""}
+                                                    </span>
                                                 </div>
-                                            )}
-                                            <div className="mo-item-info">
-                                                <span className="mo-item-name">{item.name}</span>
-                                                <span className="mo-item-meta">Qty: {item.quantity} &middot; ₹{item.price?.toLocaleString("en-IN")}</span>
+                                                <span className="mo-item-total">
+                                                    ₹{(item.price * item.quantity).toLocaleString("en-IN")}
+                                                </span>
                                             </div>
-                                            <span className="mo-item-total">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {/* Card Footer */}
                                 <div className="mo-card-footer">
                                     <div className="mo-footer-left">
-                                        <span className="mo-pay-method">{order.paymentMethod === "RAZORPAY" ? "Paid Online" : "Cash on Delivery"}</span>
-                                        <span className="mo-pay-badge" style={{ background: payStyle.bg, color: payStyle.color }}>
+                                        <span className="mo-pay-method">
+                                            {order.paymentMethod === "RAZORPAY"
+                                                ? "Paid Online"
+                                                : order.paymentMethod === "COD"
+                                                ? "Cash on Delivery"
+                                                : "—"}
+                                        </span>
+                                        <span
+                                            className="mo-pay-badge"
+                                            style={{
+                                                background: payStyle.bg,
+                                                color: payStyle.color,
+                                            }}
+                                        >
                                             {order.paymentStatus}
                                         </span>
                                     </div>
-                                    <div className="mo-footer-total" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                                    <div
+                                        className="mo-footer-total"
+                                        style={{
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            alignItems: "flex-end",
+                                            gap: "4px",
+                                        }}
+                                    >
                                         {order.couponCode && (
-                                            <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 600 }}>
-                                                Coupon {order.couponCode}: -₹{order.couponDiscount?.toLocaleString("en-IN") || order.discount?.toLocaleString("en-IN")}
+                                            <span
+                                                style={{
+                                                    fontSize: "0.8rem",
+                                                    color: "#16a34a",
+                                                    fontWeight: 600,
+                                                }}
+                                            >
+                                                Coupon {order.couponCode}: -₹
+                                                {(
+                                                    order.couponDiscount ||
+                                                    order.discount ||
+                                                    0
+                                                ).toLocaleString("en-IN")}
                                             </span>
                                         )}
                                         <div>
-                                            <span className="mo-total-label" style={{ marginRight: '8px' }}>Total</span>
-                                            <span className="mo-total-value">₹{order.total?.toLocaleString("en-IN")}</span>
+                                            <span className="mo-total-label" style={{ marginRight: "8px" }}>
+                                                Total
+                                            </span>
+                                            <span className="mo-total-value">
+                                                ₹{order.total?.toLocaleString("en-IN")}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>

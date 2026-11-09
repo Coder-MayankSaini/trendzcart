@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import AuthModal from "./AuthModal";
 
 export default function Navbar() {
-    const { user, profile, signOut } = useAuth();
+    const { user, profile, isAdmin, signOut } = useAuth();
     const { cartCount } = useCart();
     const { theme, toggleTheme } = useTheme();
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -80,7 +80,7 @@ export default function Navbar() {
                     <div className="desktop-auth">
                         {user ? (
                             <>
-                                {profile?.role === "admin" && (
+                                {isAdmin && (
                                     <Link href="/admin/dashboard" className="action-btn admin-btn">Admin</Link>
                                 )}
                                 <button onClick={signOut} className="action-btn logout-btn">Logout</button>
@@ -143,7 +143,7 @@ export default function Navbar() {
                                     <div className="mobile-avatar">{user.email?.charAt(0).toUpperCase()}</div>
                                     <span className="mobile-user-email">{user.email}</span>
                                 </div>
-                                {profile?.role === "admin" && (
+                                {isAdmin && (
                                     <Link href="/admin/dashboard" className="mobile-auth-btn admin" onClick={closeMobileMenu}>
                                         Admin Dashboard
                                     </Link>

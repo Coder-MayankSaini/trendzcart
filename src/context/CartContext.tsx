@@ -14,6 +14,9 @@ export interface CartItem {
     customizationData?: {
         name?: string;
         pictureUrl?: string; // Firebase Storage URL
+        storagePath?: string;
+        ownerUid?: string;
+        fileId?: string;
     };
 }
 
