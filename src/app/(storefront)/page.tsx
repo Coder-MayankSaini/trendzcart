@@ -129,7 +129,15 @@ export default async function Home() {
               {homeCategories.map((cat) => (
                 <Link href={`/products?category=${encodeURIComponent(cat.name)}`} key={cat.id} className="hp-category-card">
                   {cat.image ? (
-                    <Image src={cat.image} alt={cat.name} width={500} height={600} className="hp-category-img" style={{ objectFit: "cover" }} />
+                    <Image
+                      src={cat.image}
+                      alt={cat.name}
+                      width={500}
+                      height={600}
+                      className="hp-category-img"
+                      style={{ objectFit: "cover" }}
+                      unoptimized={cat.image.startsWith("/")}
+                    />
                   ) : (
                     <div className="hp-category-img" style={{ backgroundColor: 'var(--bg-secondary)' }} />
                   )}
@@ -165,7 +173,15 @@ export default async function Home() {
                   <Link href={`/products/${product.slug}`} key={product.id} className="hp-product-card">
                     <div className="hp-product-img-wrap">
                       {mainImage ? (
-                        <Image src={mainImage} alt={product.name} width={400} height={500} className="hp-product-img" style={{ objectFit: "cover" }} />
+                        <Image
+                          src={mainImage}
+                          alt={product.name}
+                          width={400}
+                          height={500}
+                          className="hp-product-img"
+                          style={{ objectFit: "cover" }}
+                          unoptimized={typeof mainImage === "string" && mainImage.startsWith("/")}
+                        />
                       ) : (
                         <div className="hp-product-img" style={{ backgroundColor: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No Image</div>
                       )}
