@@ -112,6 +112,7 @@ export async function POST(req: NextRequest) {
             idempotencyKey: body.idempotencyKey,
             currency,
             receipt,
+            allowTestFixtures: Boolean(gateCheck.isAuthorizedTest),
         });
 
         if (!pendingResult.success) {

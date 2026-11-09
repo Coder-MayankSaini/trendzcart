@@ -46,6 +46,10 @@ export interface ProductRecord {
     inventory?: number;
     isVisible?: boolean;
     images?: string[];
+    category?: string;
+    isTestFixture?: boolean;
+    purchasable?: boolean;
+    isArchived?: boolean;
 }
 
 export interface CouponRecord {
@@ -56,6 +60,7 @@ export interface CouponRecord {
     usageLimit?: number;
     timesUsed?: number;
     isActive?: boolean;
+    isTestFixture?: boolean;
 }
 
 export interface PriceCalculationResult {
@@ -96,10 +101,15 @@ export function isCouponExpired(expiryDate: any, now: Date = new Date()): boolea
 export function calculateCouponDiscount(
     coupon: CouponRecord,
     subtotal: number,
-    now: Date = new Date()
+    now: Date = new Date(),
+    options?: { allowTestFixtures?: boolean }
 ): { discount: number; error?: string } {
     if (!coupon.isActive) {
         return { discount: 0, error: "Coupon is not active" };
+    }
+
+    if (!options?.allowTestFixtures && (coupon.isTestFixture === true || coupon.code.startsWith("TASK013_") || coupon.code.startsWith("TEST_"))) {
+        return { discount: 0, error: "Test coupons cannot be used for commercial checkout" };
     }
 
     if (isCouponExpired(coupon.expiryDate, now)) {
@@ -136,7 +146,8 @@ export async function calculateOrderPricing(
     couponCode: string | null | undefined,
     fetchProduct: (productId: string) => Promise<ProductRecord | null>,
     fetchCoupon: (code: string) => Promise<CouponRecord | null>,
-    now: Date = new Date()
+    now: Date = new Date(),
+    options?: { allowTestFixtures?: boolean }
 ): Promise<PriceCalculationResult> {
     const errors: string[] = [];
     const validatedItems: ValidatedOrderItem[] = [];
@@ -185,7 +196,12 @@ export async function calculateOrderPricing(
             continue;
         }
 
-        if (product.isVisible === false) {
+        if (
+            product.isVisible === false ||
+            product.isArchived === true ||
+            product.purchasable === false ||
+            (!options?.allowTestFixtures && (product.category === "Testing" || product.isTestFixture === true || productId.startsWith("task013_test_")))
+        ) {
             errors.push(`Product '${product.name}' is no longer available.`);
             continue;
         }
@@ -237,7 +253,7 @@ export async function calculateOrderPricing(
         if (!coupon) {
             errors.push(`Coupon '${normalizedCode}' not found.`);
         } else {
-            const result = calculateCouponDiscount(coupon, subtotal, now);
+            const result = calculateCouponDiscount(coupon, subtotal, now, options);
             if (result.error) {
                 errors.push(`Coupon error: ${result.error}`);
             } else {

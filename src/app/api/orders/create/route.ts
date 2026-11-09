@@ -214,6 +214,10 @@ export async function POST(req: NextRequest) {
                         inventory: typeof data?.inventory === "number" ? data.inventory : undefined,
                         isVisible: data?.isVisible,
                         images: data?.images,
+                        category: data?.category,
+                        isTestFixture: data?.isTestFixture,
+                        purchasable: data?.purchasable,
+                        isArchived: data?.isArchived,
                     };
                 },
                 async (code: string) => {
@@ -227,8 +231,11 @@ export async function POST(req: NextRequest) {
                         usageLimit: data?.usageLimit,
                         timesUsed: data?.timesUsed,
                         isActive: data?.isActive,
+                        isTestFixture: data?.isTestFixture,
                     };
-                }
+                },
+                new Date(),
+                { allowTestFixtures: Boolean(gateCheck.isAuthorizedTest) }
             );
 
             if (!pricing.isValid) {

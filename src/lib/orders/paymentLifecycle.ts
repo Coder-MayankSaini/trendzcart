@@ -97,6 +97,7 @@ export interface CreatePendingPrepaidOrderParams {
     idempotencyKey?: string | null;
     currency?: string;
     receipt?: string;
+    allowTestFixtures?: boolean;
 }
 
 export interface PendingOrderResult {
@@ -196,6 +197,10 @@ export async function createPendingPrepaidOrder(
                     inventory: typeof data?.inventory === "number" ? data.inventory : undefined,
                     isVisible: data?.isVisible,
                     images: data?.images,
+                    category: data?.category,
+                    isTestFixture: data?.isTestFixture,
+                    purchasable: data?.purchasable,
+                    isArchived: data?.isArchived,
                 };
             },
             async (code: string) => {
@@ -209,8 +214,11 @@ export async function createPendingPrepaidOrder(
                     usageLimit: data?.usageLimit,
                     timesUsed: data?.timesUsed,
                     isActive: data?.isActive,
+                    isTestFixture: data?.isTestFixture,
                 };
-            }
+            },
+            new Date(),
+            { allowTestFixtures: Boolean(params.allowTestFixtures) }
         );
 
         if (!pricing.isValid) {

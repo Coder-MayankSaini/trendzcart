@@ -27,6 +27,15 @@ async function getProducts(category?: string) {
             ...doc.data()
         })) as any[];
 
+        // Exclude synthetic test fixtures and non-commercial test products from storefront
+        products = products.filter(p =>
+            !p.id.startsWith("task") &&
+            p.category !== "Testing" &&
+            p.isTestFixture !== true &&
+            p.purchasable !== false &&
+            !p.isArchived
+        );
+
         if (category) {
             products = products.filter(p => p.category === category || (p.categories && p.categories.includes(category)));
         }

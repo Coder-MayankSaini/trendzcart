@@ -43,6 +43,15 @@ describe("Pricing and Order Validation Module", () => {
             inventory: 0,
             isVisible: true,
         },
+        "task013_test_prod_simple": {
+            id: "task013_test_prod_simple",
+            name: "TASK013 Test Simple Mug",
+            price: 199,
+            inventory: 46,
+            isVisible: true,
+            category: "Testing",
+            isTestFixture: true,
+        },
     };
 
     const mockCoupons: Record<string, CouponRecord> = {
@@ -88,6 +97,16 @@ describe("Pricing and Order Validation Module", () => {
             isActive: false,
             timesUsed: 0,
             usageLimit: 100,
+        },
+        "TASK013_SAVE50": {
+            code: "TASK013_SAVE50",
+            discountType: "flat",
+            discountValue: 50,
+            isActive: true,
+            timesUsed: 0,
+            usageLimit: 100,
+            isTestFixture: true,
+            expiryDate: new Date(Date.now() + 86400000),
         },
     };
 
@@ -226,6 +245,39 @@ describe("Pricing and Order Validation Module", () => {
         assert.equal(result.isValid, false);
         assert.match(result.errors[0], /Coupon is not active/);
         assert.equal(result.couponDiscount, 0);
+    });
+
+    it("should reject synthetic test product in commercial checkout unless allowTestFixtures is true", async () => {
+        const items: OrderItemInput[] = [
+            { productId: "task013_test_prod_simple", quantity: 1 },
+        ];
+
+        // Public commercial checkout (allowTestFixtures = false)
+        const publicResult = await calculateOrderPricing(items, null, fetchProduct, fetchCoupon, new Date(), { allowTestFixtures: false });
+        assert.equal(publicResult.isValid, false);
+        assert.match(publicResult.errors[0], /is no longer available/);
+
+        // Authorized test checkout (allowTestFixtures = true)
+        const testResult = await calculateOrderPricing(items, null, fetchProduct, fetchCoupon, new Date(), { allowTestFixtures: true });
+        assert.equal(testResult.isValid, true);
+        assert.equal(testResult.total, 199);
+    });
+
+    it("should reject synthetic test coupon in commercial checkout unless allowTestFixtures is true", async () => {
+        const items: OrderItemInput[] = [
+            { productId: "prod-hoodie", quantity: 1 },
+        ];
+
+        // Public commercial checkout (allowTestFixtures = false)
+        const publicResult = await calculateOrderPricing(items, "TASK013_SAVE50", fetchProduct, fetchCoupon, new Date(), { allowTestFixtures: false });
+        assert.equal(publicResult.isValid, false);
+        assert.match(publicResult.errors[0], /Test coupons cannot be used/);
+
+        // Authorized test checkout (allowTestFixtures = true)
+        const testResult = await calculateOrderPricing(items, "TASK013_SAVE50", fetchProduct, fetchCoupon, new Date(), { allowTestFixtures: true });
+        assert.equal(testResult.isValid, true);
+        assert.equal(testResult.couponDiscount, 50);
+        assert.equal(testResult.total, 1449);
     });
 
     it("should verify valid Razorpay HMAC signatures (SEC-TEST-008)", () => {

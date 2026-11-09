@@ -24,7 +24,20 @@ async function getProductBySlug(slug: string) {
   if (snapshot.empty) return null;
 
   const doc = snapshot.docs[0];
-  return { id: doc.id, ...doc.data() } as any;
+  const data = doc.data();
+
+  // Exclude synthetic test fixtures and non-commercial products
+  if (
+    doc.id.startsWith("task") ||
+    data?.category === "Testing" ||
+    data?.isTestFixture === true ||
+    data?.purchasable === false ||
+    data?.isArchived === true
+  ) {
+    return null;
+  }
+
+  return { id: doc.id, ...data } as any;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
