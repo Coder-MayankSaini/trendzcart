@@ -15,6 +15,12 @@
  */
 
 import admin from "firebase-admin";
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+let cliAccessToken = null;
+const TARGET_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || "trendkartz";
 
 function parseArgs() {
     const args = process.argv.slice(2);
@@ -39,6 +45,40 @@ function parseArgs() {
     return parsed;
 }
 
+async function syncFirestoreProfile(db, uid, role) {
+    if (cliAccessToken) {
+        try {
+            const url = `https://firestore.googleapis.com/v1/projects/${TARGET_PROJECT_ID}/databases/(default)/documents/users/${uid}?updateMask.fieldPaths=role&updateMask.fieldPaths=updatedAt`;
+            const resp = await fetch(url, {
+                method: "PATCH",
+                headers: {
+                    Authorization: `Bearer ${cliAccessToken}`,
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    fields: {
+                        role: { stringValue: role },
+                        updatedAt: { integerValue: String(Date.now()) },
+                    },
+                }),
+            });
+            if (resp.ok) {
+                console.log(`+ Synchronized Firestore user profile users/${uid} to role: "${role}" (via Firestore REST)`);
+                return;
+            }
+        } catch (e) {
+            console.warn("! Warning: Could not sync Firestore profile via REST:", e);
+        }
+    }
+    try {
+        const userRef = db.collection("users").doc(uid);
+        await userRef.set({ role, updatedAt: Date.now() }, { merge: true });
+        console.log(`+ Synchronized Firestore user profile users/${uid} to role: "${role}"`);
+    } catch (fsErr) {
+        console.warn("! Warning: Could not sync Firestore profile document:", fsErr);
+    }
+}
+
 async function main() {
     const { uid, action, dryRun } = parseArgs();
 
@@ -60,20 +100,43 @@ async function main() {
             admin.initializeApp({
                 projectId: process.env.FIREBASE_PROJECT_ID || "demo-trendkartz",
             });
-        } else {
+        } else if (process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
             console.log("[Info] Connecting with server credentials");
             admin.initializeApp({
                 credential: admin.credential.cert({
-                    projectId: process.env.FIREBASE_PROJECT_ID,
+                    projectId: TARGET_PROJECT_ID,
                     clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
                     privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
                 }),
             });
+        } else {
+            const toolsConfigPath = path.join(os.homedir(), ".config", "configstore", "firebase-tools.json");
+            if (fs.existsSync(toolsConfigPath)) {
+                const toolsData = JSON.parse(fs.readFileSync(toolsConfigPath, "utf-8"));
+                const token = toolsData.tokens?.access_token;
+                if (token) {
+                    console.log(`[Info] Connecting via Firebase CLI session (${toolsData.user?.email || "active user"})`);
+                    cliAccessToken = token;
+                    admin.initializeApp({
+                        credential: {
+                            getAccessToken: async () => ({
+                                access_token: token,
+                                expires_in: 3600,
+                            }),
+                        },
+                        projectId: TARGET_PROJECT_ID,
+                    });
+                }
+            }
+            if (!admin.apps.length) {
+                console.error("Error: Neither Firebase service account env vars nor Firebase CLI session found.");
+                process.exit(1);
+            }
         }
     }
 
     const auth = admin.auth();
-    const db = admin.firestore();
+    const db = cliAccessToken ? null : admin.firestore();
 
     console.log("================================================================================");
     console.log("TRENDKARTZ / BAZAARVILLA — ADMIN CLAIMS MANAGER");
@@ -116,13 +179,7 @@ async function main() {
             console.log(`\n+ Successfully set custom claim { admin: true } for UID: ${uid}`);
 
             // Synchronize Firestore profile for consistency
-            try {
-                const userRef = db.collection("users").doc(uid);
-                await userRef.set({ role: "admin", updatedAt: Date.now() }, { merge: true });
-                console.log(`+ Synchronized Firestore user profile users/${uid} to role: "admin"`);
-            } catch (fsErr) {
-                console.warn("! Warning: Could not sync Firestore profile document:", fsErr);
-            }
+            await syncFirestoreProfile(db, uid, "admin");
 
             console.log("\nIMPORTANT: The user must sign out and sign in again, or call getIdTokenResult(true) to refresh claims.");
             process.exit(0);
@@ -147,13 +204,7 @@ async function main() {
             console.log(`\n- Successfully revoked admin claim for UID: ${uid}`);
 
             // Synchronize Firestore profile
-            try {
-                const userRef = db.collection("users").doc(uid);
-                await userRef.set({ role: "customer", updatedAt: Date.now() }, { merge: true });
-                console.log(`- Synchronized Firestore user profile users/${uid} to role: "customer"`);
-            } catch (fsErr) {
-                console.warn("! Warning: Could not sync Firestore profile document:", fsErr);
-            }
+            await syncFirestoreProfile(db, uid, "customer");
 
             console.log("\nIMPORTANT: The user's active tokens will lose admin privileges after token expiration or refresh.");
             process.exit(0);
