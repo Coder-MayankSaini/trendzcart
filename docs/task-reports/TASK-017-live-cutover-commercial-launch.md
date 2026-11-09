@@ -13,7 +13,7 @@
 - **Cloudflare R2 Bucket:** `bazaarvilla-media`
 - **Razorpay Mode:** Live Mode (`rzp_live_Ty8CuwoSSBGpHi`)
 - **Checkout Feature Gate Status:** `COMMERCIAL_CHECKOUT_ENABLED=false` (**CLOSED — FAIL-CLOSED ENFORCEMENT**)
-- **Task Status:** **PHASE A & PHASE B COMPLETED — AWAITING OWNER AUTHORIZATION FOR PHASE C CONTROLLED LIVE PAYMENT**
+- **Task Status:** **PHASE A & PHASE B COMPLETED — PHASE C RECORDED & VERIFIED IN TASK 018**
 
 ---
 
@@ -140,12 +140,9 @@ Probes executed against published deploy `6af23e3a3f429069e9f5c278` on `https://
 
 ---
 
-## 6. Action Items Awaiting Owner Approval for Phase C
+## 6. Phase C Authorization & Handover to TASK 018
 
-With Phase A and Phase B completed and verified on production, public commercial checkout remains closed. We are ready to proceed with **Phase C: Controlled Live Payment Test**.
+Following verification of Phase A (data quarantine and synthetic fixture sanitization) and Phase B (secure Razorpay Live Mode ingestion and historical test mode isolation), the owner explicitly authorized opening the commercial checkout gate (`COMMERCIAL_CHECKOUT_ENABLED=true`) and executing a live payment verification test.
 
-In strict accordance with commercial safety rules, please provide authorization for:
-1. **Target Product for Live Payment:** Selection of genuine catalog product (e.g., `Om Rudraksha Silver Chain Bracelet` at ₹399, or `Tulsi Kanthi Mala` at ₹249, or another approved product).
-2. **Authorized Payable Amount:** Confirmation of the exact charge amount.
-3. **Payer / Payment Method:** Confirmation of who will execute the payment and payment method (e.g., UPI / Card / Netbanking via Razorpay Standard Checkout).
-4. **Refund Intention:** Whether an immediate owner-authorized refund via Razorpay API should be processed after verification, or if the test order will remain captured.
+The full execution of Phase C — including the diagnostic fix for Next.js 16 Turbopack image prerendering, production deployment `6af243583aebc6084acf5b0a`, opening the commercial checkout gate, and empirical verification of the genuine ₹1 live transaction (`order_TyEk5zMUs5soYA` / `pay_TyEkKKO51nzlMx`) — is documented in:
+👉 [TASK-018-live-payment-verification-commercial-launch.md](./TASK-018-live-payment-verification-commercial-launch.md)
