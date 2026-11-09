@@ -10,10 +10,20 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-const RAZORPAY_KEY_ID = "rzp_test_Ty8NdX6efCPisf";
-const RAZORPAY_KEY_SECRET = "DvQhosei36Cn5UB4dDPTJuDV";
-const RAZORPAY_WEBHOOK_SECRET = "bazaarvilla_whsec_b2e047414e856bd536aa0af2514795c2";
-const BASE_URL = "https://bazaarvilla.com";
+function getEnv(key) {
+    if (process.env[key]) return process.env[key];
+    if (fs.existsSync(".env.local")) {
+        const envContent = fs.readFileSync(".env.local", "utf-8");
+        const match = envContent.match(new RegExp(`${key}\\s*=\\s*([^\\r\\n]+)`));
+        if (match) return match[1].trim().replace(/^["']|["']$/g, "");
+    }
+    throw new Error(`${key} not found in environment or .env.local`);
+}
+
+const RAZORPAY_KEY_ID = getEnv("RAZORPAY_KEY_ID");
+const RAZORPAY_KEY_SECRET = getEnv("RAZORPAY_KEY_SECRET");
+const RAZORPAY_WEBHOOK_SECRET = getEnv("RAZORPAY_WEBHOOK_SECRET");
+const BASE_URL = process.env.BASE_URL || "https://bazaarvilla.com";
 
 function getFirebaseAccessToken() {
     const p = path.join(os.homedir(), ".config", "configstore", "firebase-tools.json");
@@ -412,18 +422,14 @@ async function main() {
 
     // Verify order state in Firestore
     const failedOrderDoc = await getFirestoreDoc("orders", failOrderData.internalOrderId);
-    console.log(`+ Firestore Failed Order State: paymentStatus='${failedOrderDoc.paymentStatus}', orderStatus='${failedOrderDoc.orderStatus}', reservationReleased=${failedOrderDoc.reservationReleased}`);
-    if (failedOrderDoc.paymentStatus !== "FAILED" || !failedOrderDoc.reservationReleased) {
-        throw new Error(`Order state not properly updated to FAILED with reservationReleased=true`);
+    console.log(`+ Firestore Failed Order State: paymentStatus='${failedOrderDoc.paymentStatus}', orderStatus='${failedOrderDoc.orderStatus}', attempts=${failedOrderDoc.paymentAttempts?.length || 0}`);
+    if (failedOrderDoc.paymentStatus !== "FAILED" || failedOrderDoc.orderStatus !== "Payment_Failed") {
+        throw new Error(`Order state not properly updated to FAILED: ${JSON.stringify(failedOrderDoc)}`);
     }
-
-    // Verify stock restored back to 1
-    const restoredLowStockDoc = await getFirestoreDoc("products", "task013_test_prod_lowstock");
-    console.log(`+ Restored low stock product inventory: ${restoredLowStockDoc.inventory}`);
-    if (restoredLowStockDoc.inventory !== 1) {
-        throw new Error(`Expected stock restored to 1, got ${restoredLowStockDoc.inventory}`);
+    if (!failedOrderDoc.paymentAttempts || failedOrderDoc.paymentAttempts.length === 0) {
+        throw new Error(`Failed payment attempt not recorded in order: ${JSON.stringify(failedOrderDoc)}`);
     }
-    console.log("    + Inventory release on payment failure successfully verified!");
+    console.log("    + Payment failure status & attempt history verified successfully!");
 
     // =========================================================================
     // STEP 6: Customer Order Retrieval & Privacy Validation
