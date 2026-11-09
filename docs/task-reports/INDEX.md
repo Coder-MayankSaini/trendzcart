@@ -117,10 +117,17 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - 6 R2 checkout & order attachment tests (`tests/integration/r2-checkout.test.ts`).
   - **Total Automated Tests: 228 unique passing tests (23 unit + 205 integration), 0 failures.**
 - **Deployed Work:**
-  - Currently published Netlify deployment: `69d74cfb99bf2b0007fd5e92` pointing to `bazaarvilla.com`.
-  - Zero modifications to production console, credentials, or remote Git repository.
+  - Published Netlify deployment: `6af20236423b70b04c207814` pointing to live production custom domain `https://bazaarvilla.com/`.
+  - Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c` (`trendzcartdemo`).
+  - Active Razorpay Test Mode Webhook: `Ty95LaT8ungdGT` operational on `https://bazaarvilla.com/api/webhooks/razorpay`.
+  - Approved Firebase Administrator: `work.mayanksaini@gmail.com` (`jdi97hwEJQYt5NXoUhyISOpW7Hl1`) holds active `admin: true` Custom Claim.
+  - Production Cloud Firestore security rules and composite indexes actively deployed to project `trendkartz`.
+  - Cloudflare R2 bucket `bazaarvilla-media` connected and verified with active browser CORS.
+  - Native Netlify Scheduled Function `reservation-cleanup` operational on schedule `*/5 * * * *`.
 - **Commercial Transacting Safety Assessment:**
-  - **VERDICT: NO-GO.** Core payment lifecycle, server-to-server webhooks, idempotency, guest order privacy, rate limiting, local security rules, automated reservation cleanup, synchronous gateway verification, secure guest customization uploads, Razorpay gateway order recovery, review authorization, profile hardening, and Cloudflare R2 file storage migration are now fully implemented and verified locally. However, live transactions must remain disabled until production security rules deployment, production admin custom claims assignment, R2 credentials provisioning in Netlify, and Netlify scheduled function deployment are complete.
+  - **VERDICT: NO-GO FOR COMMERCIAL TRANSACTIONS.**
+  - Complete checkout lifecycle, Razorpay Test Mode, cryptographic webhook verification, dual-level idempotency, payment failure recovery, guest order privacy, rate limiting, Cash on Delivery, Cloudflare R2 customization uploads, and Netlify background workers are 100% verified against the live hosted production environment.
+  - However, commercial checkout must remain strictly in Test Mode (`rzp_test_Ty8NdX6efCPisf`) and blocked for live customer transactions until Razorpay business KYC approval, live API credential generation, legal compliance policies, and physical logistics integrations are completed.
 
 ---
 
@@ -128,31 +135,35 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 
 | Risk ID | Severity | Category | Description | Status | Reference |
 |---|---|---|---|---|---|
-| **RSK-01** | **CRITICAL** | Financial / Security | Client-controlled pricing in `/api/orders/create` allows ₹1 orders or free purchases. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-003 Report](./TASK-003-firebase-emulator-integration.md#8-verification-results) |
-| **RSK-02** | **CRITICAL** | Integrity / Security | Unauthenticated order creation permits arbitrary overwriting of existing orders in Firestore. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-003 Report](./TASK-003-firebase-emulator-integration.md#8-verification-results) |
-| **SEC-TEST-007** | **HIGH** | Concurrency / Stock | Non-transactional batch decrement allowed inventory to drop below zero under concurrent checkouts. | **VERIFIED RESOLVED (runTransaction)** | [TASK-003 Report](./TASK-003-firebase-emulator-integration.md#93-batch-decrement-race-condition--negative-inventory-sec-test-007) |
-| **RSK-05** | **HIGH** | Payment / Reliability | Missing Razorpay server webhooks causes captured payments to be lost if browser closes. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-004 Report](./TASK-004-razorpay-webhooks-idempotency.md#11-automated-test-results) |
-| **RSK-03** | **HIGH** | Privacy / Security | Unauthenticated guest order lookup in `/api/orders/by-ids` exposes customer PII. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-005 Report](./TASK-005-guest-order-privacy.md#10-security-test-results-priv-001-through-priv-020) |
-| **RSK-06** | **CRITICAL** | Firestore / Security | Direct client SDK access on `orders` collection could bypass API restrictions if Firestore rules allow open reads. | **VERIFIED RESOLVED LOCALLY** (Requires Production Deployment) | [TASK-006 Report](./TASK-006-firebase-rules-admin-authorization.md#6-new-firestore-security-architecture) |
-| **RSK-04** | **HIGH** | Auth / Security | Admin authorization relies on client-side check of Firestore `users/{uid}`. | **VERIFIED RESOLVED LOCALLY** (Custom Claims Tested) | [TASK-006 Report](./TASK-006-firebase-rules-admin-authorization.md#8-administrative-authorization-migration) |
-| **PAY-SCHED**| **HIGH** | Stock / Reliability | No automated background worker or cron invokes `releaseExpiredReservation()` for abandoned checkouts. | **VERIFIED RESOLVED LOCALLY** (Netlify Scheduled Function Tested) | [TASK-007 Report](./TASK-007-reservation-cleanup-gateway-verification.md#5-new-scheduled-cleanup-architecture) |
-| **PAY-GATEWAY**| **CRITICAL**| Payment / Verification | Synchronous callback verified HMAC signature without querying gateway server-to-server for captured status. | **VERIFIED RESOLVED LOCALLY** (payments.fetch Verified) | [TASK-007 Report](./TASK-007-reservation-cleanup-gateway-verification.md#7-synchronous-gateway-verification) |
-| **GUEST-UPLOAD**| **HIGH** | Storefront / Upload | Guest customers cannot upload customizer photos because `storage.rules` requires authentication. | **VERIFIED RESOLVED LOCALLY** (Anonymous Auth + Scoped Rules Tested) | [TASK-008 Report](./TASK-008-guest-uploads-staging-readiness.md#5-chosen-secure-upload-architecture) |
-| **GATEWAY-SYNC**| **MEDIUM** | Payment / State | If Firestore update fails after gateway order creation, internal order lacks `razorpayOrderId`. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-009 Report Section 8](./TASK-009-gateway-recovery-staging-verification.md#8-task-c--recovery-implementation-details) |
-| **REVIEW-BYPASS**| **MEDIUM** | Security / Integrity | Direct client Firestore write to `reviews` collection allows creating unverified reviews bypassing `/api/reviews/eligibility` check if `isFake == false`. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-010 Report Section 5](./TASK-010-hosted-staging-verification.md#5-review-authorization-remediation-task-a) |
-| **RSK-07** | **HIGH** | Security / Dependencies | 41 vulnerabilities in npm lockfile (2 critical in `protobufjs`/`websocket-driver`). | **TRIAGED (Dev Tooling)** | [TASK-010 Section 13](./TASK-010-hosted-staging-verification.md#13-dependency-vulnerability-assessment-task-j) |
-| **R2-CREDENTIALS**| **HIGH** | Storage / Config | Cloudflare R2 credentials pending configuration in Netlify production environment variables. | **PENDING OWNER DASHBOARD ACTION** | [TASK-011 Report](./TASK-011-cloudflare-r2-storage-migration.md#6-cloudflare-r2-configuration--credentials) |
+| **RSK-01** | **CRITICAL** | Financial / Security | Client-controlled pricing in `/api/orders/create` allows ₹1 orders or free purchases. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#9-phase-j--cash-on-delivery-cod-checkout-verification) |
+| **RSK-02** | **CRITICAL** | Integrity / Security | Unauthenticated order creation permits arbitrary overwriting of existing orders in Firestore. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#10-phase-f--server-authoritative-prepaid-order-creation--reservation) |
+| **SEC-TEST-007** | **HIGH** | Concurrency / Stock | Non-transactional batch decrement allowed inventory to drop below zero under concurrent checkouts. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#14-payment-failure-handling--gateway-decline) |
+| **RSK-05** | **HIGH** | Payment / Reliability | Missing Razorpay server webhooks causes captured payments to be lost if browser closes. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#12-authentic-payment-capture-finalization) |
+| **RSK-03** | **HIGH** | Privacy / Security | Unauthenticated guest order lookup in `/api/orders/by-ids` exposes customer PII. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#17-customer-order-retrieval-privacy) |
+| **RSK-06** | **CRITICAL** | Firestore / Security | Direct client SDK access on `orders` collection could bypass API restrictions if Firestore rules allow open reads. | **VERIFIED RESOLVED (Deployed Rules)** | [TASK-012 Report](./TASK-012-r2-provisioning-live-deployment.md#8-firestore-security-rules--indexes-deployment) |
+| **RSK-04** | **HIGH** | Auth / Security | Admin authorization relies on client-side check of Firestore `users/{uid}`. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#5-phase-b--administrator-provisioning-verification) |
+| **PAY-SCHED**| **HIGH** | Stock / Reliability | No automated background worker or cron invokes `releaseExpiredReservation()` for abandoned checkouts. | **VERIFIED RESOLVED (Scheduled Fn Verified)**| [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#15-inventory-reservation-expiration--scheduled-cleanup) |
+| **PAY-GATEWAY**| **CRITICAL**| Payment / Verification | Synchronous callback verified HMAC signature without querying gateway server-to-server for captured status. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#11-webhook-signature-security-verification) |
+| **GUEST-UPLOAD**| **HIGH** | Storefront / Upload | Guest customers cannot upload customizer photos because storage requires authentication. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#16-cloudflare-r2-media-lifecycle--privacy-boundaries-phase-h) |
+| **GATEWAY-SYNC**| **MEDIUM** | Payment / State | If Firestore update fails after gateway order creation, internal order lacks `razorpayOrderId`. | **VERIFIED RESOLVED (Production Tested)** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#10-phase-f--server-authoritative-prepaid-order-creation--reservation) |
+| **REVIEW-BYPASS**| **MEDIUM** | Security / Integrity | Direct client Firestore write to `reviews` collection allows creating unverified reviews. | **VERIFIED RESOLVED (Rules & API)** | [TASK-010 Report](./TASK-010-hosted-staging-verification.md#5-review-authorization-remediation-task-a) |
+| **RSK-07** | **HIGH** | Security / Dependencies | 41 vulnerabilities in npm lockfile (2 critical in `protobufjs`/`websocket-driver`). | **TRIAGED (Dev Tooling Only)** | [TASK-010 Section 13](./TASK-010-hosted-staging-verification.md#13-dependency-vulnerability-assessment-task-j) |
+| **R2-CREDENTIALS**| **HIGH** | Storage / Config | Cloudflare R2 credentials pending configuration in Netlify production environment variables. | **VERIFIED RESOLVED (Connected & Tested)**| [TASK-012 Report](./TASK-012-r2-provisioning-live-deployment.md#6-cloudflare-r2-production-provisioning) |
+| **DEF-013-01** | **CRITICAL** | R2 / Signatures | Direct presigned PUT `If-None-Match` header mismatch caused HTTP 403 on browser uploads. | **VERIFIED RESOLVED & REDEPLOYED** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#18-defect-root-cause-analysis--remediations-matrix) |
+| **DEF-013-02** | **CRITICAL** | Netlify / Bundler | `import 'server-only'` crashed Netlify scheduled function `reservation-cleanup` on invocation. | **VERIFIED RESOLVED & REDEPLOYED** | [TASK-013 Report](./TASK-013-admin-checkout-testmode-verification.md#18-defect-root-cause-analysis--remediations-matrix) |
 
 ---
 
 ## 6. Recommended Next Task
 
-### **TASK 012 — Cloudflare R2 Bucket Provisioning, Live Smoke Verification & Bazaarvilla Netlify Deployment**
+### **TASK 014 — Razorpay Live Merchant Onboarding, Production KYC & Commercial Cutover Runbook**
 - **Objective:**
-  1. Have project owner configure Cloudflare R2 credentials (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`) in Netlify production site environment variables.
-  2. Execute live smoke test script (`node scripts/verify-r2-connectivity.mjs`) to verify synthetic upload, metadata, download, and cleanup against the live Cloudflare R2 bucket.
-  3. Deploy cumulative release commit (`1fcf266`) to `https://bazaarvilla.com/` on Netlify.
-  4. Deploy production Firestore security rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) to the `trendkartz` Firebase project using Firebase CLI.
-  5. Provision production administrator Custom Claims via `scripts/manage-admin-claims.mjs`.
-  6. Perform live storefront smoke testing on `https://bazaarvilla.com/` (guest customizer uploads, public catalog viewing, checkout flow, fallback rendering).
-- **Prerequisites:** TASK-011 completion, verified local branch `feat/cloudflare-r2-storage-migration`, and owner Cloudflare R2 credentials.
+  1. Complete merchant business KYC verification with Razorpay to activate Live Mode.
+  2. Generate production Live API credentials (`rzp_live_...`) and dedicated production live webhook secret.
+  3. Register live production webhook pointing to `https://bazaarvilla.com/api/webhooks/razorpay` with required events.
+  4. Ingest live credentials into Netlify environment variables with `--secret` encryption flag.
+  5. Upgrade Firebase plan from Spark to Blaze (Pay-as-you-go) for production burst capacity.
+  6. Review terms of service, return/cancellation policies, and customer support channels.
+  7. Execute 1 real live micro-transaction (₹1) with immediate refund to confirm production banking settlement.
+  8. Formally authorize **GO FOR COMMERCIAL TRANSACTIONS**.
+- **Prerequisites:** TASK-013 completion, merchant business registration documents, and owner sign-off.
