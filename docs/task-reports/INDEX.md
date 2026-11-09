@@ -2,7 +2,7 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `release/bazaarvilla-r2-task-012`  
+**Current Active Git Branch:** `task/013-admin-checkout-testmode-verification`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
 **Current Commercial Transacting Safety Status:** **NO-GO FOR COMMERCIAL TRANSACTIONS** (Production live checkout remains safely in Razorpay Test Mode until explicit commercial launch authorization and owner sign-off)
 
@@ -42,27 +42,32 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-010** | Isolated Hosted Staging Environment, Razorpay Test Mode E2E Verification & Release Security Gates | **COMPLETED LOCALLY — STAGING PENDING** | `release/staging-validation-task-010` (`7bf9748`) | [TASK-010-hosted-staging-verification.md](./TASK-010-hosted-staging-verification.md) | Remediated review authorization bypass (`REVIEW-BYPASS`) via `POST /api/reviews/submit` and rules restriction; hardened profile field permissions with strict allowlist; revalidated gateway receipt recovery with exact match filtering and 15-minute observation window for uncertain orders; strengthened `stagingGuard.ts` with 8 fail-closed rules; audited 41 dependency vulnerabilities; formulated owner-executable staging provisioning runbook; authored 11 review and 4 gateway sync integration tests; verified 100% pass across all 213 automated tests (23 unit + 190 integration); validated production build (25 routes). |
 | **TASK-011** | Cloudflare R2 File Storage Migration & Production Readiness | **COMPLETED LOCALLY — R2 CONFIGURATION PENDING** | `feat/cloudflare-r2-storage-migration` (`1fcf266`) | [TASK-011-cloudflare-r2-storage-migration.md](./TASK-011-cloudflare-r2-storage-migration.md) | Decoupled file storage from Firebase Cloud Storage to Cloudflare R2; built server-authoritative presigned PUT upload authorization, post-upload verification, public asset delivery, and admin private media retrieval; migrated storefront customizer, reviews, products, and categories; implemented safe legacy fallbacks; added 25 R2 test criteria (R2-001 to R2-025); verified 100% pass across all 228 automated tests (23 unit + 205 integration); validated Next.js production build (30 routes). |
 | **TASK-012** | Cloudflare R2 Provisioning, Firebase Security & Production Live Deployment | **COMPLETED & PUBLISHED** | `release/bazaarvilla-r2-task-012` (`7adb9e9` / `4a5e6ae`) | [TASK-012-r2-provisioning-live-deployment.md](./TASK-012-r2-provisioning-live-deployment.md) | Configured Cloudflare R2 credentials securely in Netlify; verified live R2 connectivity & CORS headers; deployed version-controlled Firestore security rules & composite indexes to project `trendkartz`; resolved Next.js 16 Server Component event handler boundary on `/products`; successfully published application to `https://bazaarvilla.com/` (Netlify Deploy ID: `6af1bcb67fe1fb6cddcddc08`); verified 100% pass across all 25 live smoke tests (LIVE-001 through LIVE-025). |
+| **TASK-013** | Bazaarvilla Complete Checkout, Razorpay Test Mode & Admin Verification | **COMPLETED & VERIFIED ON PRODUCTION** | `task/013-admin-checkout-testmode-verification` (`b976295`) | [TASK-013-admin-checkout-testmode-verification.md](./TASK-013-admin-checkout-testmode-verification.md) | Ingested Razorpay Test Mode credentials; registered real Test Mode webhook (`Ty95LaT8ungdGT`); provisioned approved administrator (`admin: true`); created synthetic products/coupons; verified live COD and prepaid Razorpay checkouts; confirmed authoritative payment capture, dual-level idempotency, and failure recovery; resolved R2 presigned PUT `If-None-Match` signature mismatch; resolved Netlify scheduled function `server-only` bundler crash; verified 228 automated tests (23 unit + 205 integration) and 25 live hosted verification checks; published deploy `6af20236423b70b04c207814`. |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is safely isolated on local release branch `release/bazaarvilla-r2-task-012` (`7adb9e9` / `4a5e6ae`).
-  - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af1bcb67fe1fb6cddcddc08`).
+  - Git working tree is safely isolated on local release branch `task/013-admin-checkout-testmode-verification` (`b976295`).
+  - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af20236423b70b04c207814`).
+  - Active Razorpay Test Mode Webhook `Ty95LaT8ungdGT` is operational on `https://bazaarvilla.com/api/webhooks/razorpay`.
+  - Approved Firebase Administrator account (`work.mayanksaini@gmail.com` / UID `jdi97hwEJQYt5NXoUhyISOpW7Hl1`) holds verified Custom Claims `admin: true`.
   - Cloudflare R2 bucket `bazaarvilla-media` is fully connected with active preflight CORS (`PUT, GET`) from `https://bazaarvilla.com`.
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Host runtime is Node.js `v24.15.0` with `npm` `11.12.1`.
   - Automated multi-JDK resolution detects and binds JetBrains JBR OpenJDK 25 for Firebase Emulator CLI.
-  - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *`.
+  - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing without errors.
   - Full automated test suite passes:
     - `npm test`: 23/23 unit tests passing.
     - `npm run test:rules`: 38/38 rules and authorization tests passing.
     - `npm run test:integration`: 205/205 integration tests across 17 suites passing.
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 30/30 Next.js routes compiling cleanly.
-  - Live Smoke Tests:
-    - `node scripts/live-smoke-test.mjs`: **25/25 LIVE SMOKE TESTS PASSING (100%)** directly against `https://bazaarvilla.com/`.
+  - Live Hosted E2E Tests:
+    - `node scripts/verify-customization-r2-lifecycle.mjs`: **100% PASS** on guest/registered customization upload, completion, and admin private media boundaries.
+    - `node scripts/verify-razorpay-e2e.mjs`: **100% PASS** on order creation, stock reservation, webhook HMAC validation, payment capture, dual-level idempotency, and failure tracking.
+    - `node scripts/test_cod_checkout.cjs`: **100% PASS** on Cash on Delivery checkout, stock deduction, and guest token retrieval.
 - **Implemented Work:**
   - Cloudflare R2 S3-compatible storage engine (`src/lib/storage/r2.ts`).
   - Direct browser-to-R2 presigned PUT upload authorization (`src/app/api/uploads/authorize/route.ts`).

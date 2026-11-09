@@ -48,6 +48,26 @@ async function getFirestoreDoc(collection, docId) {
     return parseFirestoreDoc(raw);
 }
 
+async function setFirestoreInventory(productId, inventory) {
+    const token = getFirebaseAccessToken();
+    const url = `https://firestore.googleapis.com/v1/projects/trendkartz/databases/(default)/documents/products/${productId}?updateMask.fieldPaths=inventory`;
+    const res = await fetch(url, {
+        method: "PATCH",
+        headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            fields: {
+                inventory: { integerValue: inventory.toString() }
+            }
+        })
+    });
+    if (!res.ok) {
+        throw new Error(`Failed to set inventory for ${productId}: HTTP ${res.status}`);
+    }
+}
+
 function parseFirestoreDoc(rawDoc) {
     if (!rawDoc || !rawDoc.fields) return null;
     const res = {};
@@ -337,7 +357,10 @@ async function main() {
     console.log("--------------------------------------------------------------------------------");
 
     // Create an order for low stock product (inventory: 1)
-    console.log(`Initial stock of low stock product: ${initialLowStockDoc.inventory}`);
+    // Ensure product has at least 1 unit of stock for this test
+    await setFirestoreInventory("task013_test_prod_lowstock", 1);
+    const lowStockDocBefore = await getFirestoreDoc("products", "task013_test_prod_lowstock");
+    console.log(`Initial stock of low stock product: ${lowStockDocBefore?.inventory}`);
 
     const failOrderPayload = {
         amount: 99,
