@@ -22,7 +22,8 @@ if (!admin.apps || !admin.apps.length) {
         } else {
             const projectId = getServerEnv("FIREBASE_PROJECT_ID") || getServerEnv("NEXT_PUBLIC_FIREBASE_PROJECT_ID");
             const clientEmail = getServerEnv("FIREBASE_CLIENT_EMAIL");
-            const privateKey = getServerEnv("FIREBASE_PRIVATE_KEY")?.replace(/\\n/g, '\n');
+            const rawKey = getServerEnv("FIREBASE_PRIVATE_KEY");
+            const privateKey = rawKey ? rawKey.replace(/^['"]|['"]$/g, '').replace(/\\n/g, '\n') : undefined;
             const storageBucket = getServerEnv("NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET");
 
             if (projectId && clientEmail && privateKey) {
