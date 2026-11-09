@@ -1,6 +1,7 @@
 import { adminDb } from "@/lib/firebase/admin";
 import Link from "next/link";
 import { Metadata } from "next";
+import { ProductCardImage } from "@/components/storefront/ProductCardImage";
 
 export const metadata: Metadata = {
     title: "Shop All Products | TrendKartz",
@@ -66,11 +67,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                             <Link href={`/products/${product.slug}`} key={product.id} className="product-card">
                                 <div className="product-image-container">
                                     {thumbImage ? (
-                                        <img
+                                        <ProductCardImage
                                             src={thumbImage}
                                             alt={product.name}
                                             className="product-image"
-                                            onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
                                         />
                                     ) : (
                                         <div className="placeholder-image">No Image</div>
