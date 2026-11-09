@@ -2,9 +2,9 @@
 
 **Project Name:** TrendKartz (Storefront: `TrendKartz` | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `release/staging-validation-task-010`  
-**Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Firebase Auth/Firestore/Storage/Admin SDK, Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **NO-GO FOR COMMERCIAL TRANSACTIONS** (Awaiting production deployment of rules, admin custom claims bootstrapping, hosted staging payment verification, and Netlify scheduled function deployment)
+**Current Active Git Branch:** `feat/cloudflare-r2-storage-migration`  
+**Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
+**Current Commercial Transacting Safety Status:** **NO-GO FOR COMMERCIAL TRANSACTIONS** (Awaiting Cloudflare R2 credentials provisioning in Netlify, production Firestore security rules & composite indexes deployment, admin claims provisioning, and payment gateway activation)
 
 ---
 
@@ -40,41 +40,49 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-008** | Secure Guest Customization Uploads, Checkout Compatibility & Staging Readiness | **COMPLETED LOCALLY** | `fix/guest-customization-staging-readiness` | [TASK-008-guest-uploads-staging-readiness.md](./TASK-008-guest-uploads-staging-readiness.md) | Remediated guest customization upload blockage via transparent anonymous auth and scoped Cloud Storage rules (`customizations/{ownerUid}/{fileName}`); enforced client-side compression and format validation (JPEG, PNG, WebP <= 10MB); hardened `/api/orders/create` and `/api/razorpay/create-order` with server-side customization ownership, storage existence, and MIME type validation; authored 24 upload security tests (UPLOAD-001 to UPLOAD-024); formulated staging architecture and production release runbook; verified 100% pass across 158 tests (12 unit + 146 integration); validated production build (24 routes). |
 | **TASK-009** | Razorpay Association Recovery, Isolated Hosted Staging Verification & Production Release Gates | **COMPLETED LOCALLY** | `fix/staging-verification-gateway-recovery` | [TASK-009-gateway-recovery-staging-verification.md](./TASK-009-gateway-recovery-staging-verification.md) | Remediated Razorpay order association edge cases (`GATEWAY-SYNC`); implemented explicit gateway lifecycle state machine, stable receipt querying (`orders.all({ receipt })`), attempt logging, and transactional order reuse; built fail-closed hosted staging isolation guards; hardened reservation cleanup and payment reconciliation; audited guest upload quotas and review submission boundaries; authored 16 gateway sync integration tests (SYNC-001 to SYNC-016); verified 100% pass across all 174 automated tests (12 unit + 162 integration); validated production build (24 routes). |
 | **TASK-010** | Isolated Hosted Staging Environment, Razorpay Test Mode E2E Verification & Release Security Gates | **COMPLETED LOCALLY — STAGING PENDING** | `release/staging-validation-task-010` (`7bf9748`) | [TASK-010-hosted-staging-verification.md](./TASK-010-hosted-staging-verification.md) | Remediated review authorization bypass (`REVIEW-BYPASS`) via `POST /api/reviews/submit` and rules restriction; hardened profile field permissions with strict allowlist; revalidated gateway receipt recovery with exact match filtering and 15-minute observation window for uncertain orders; strengthened `stagingGuard.ts` with 8 fail-closed rules; audited 41 dependency vulnerabilities; formulated owner-executable staging provisioning runbook; authored 11 review and 4 gateway sync integration tests; verified 100% pass across all 213 automated tests (23 unit + 190 integration); validated production build (25 routes). |
+| **TASK-011** | Cloudflare R2 File Storage Migration & Production Readiness | **COMPLETED LOCALLY — R2 CONFIGURATION PENDING** | `feat/cloudflare-r2-storage-migration` (`1fcf266`) | [TASK-011-cloudflare-r2-storage-migration.md](./TASK-011-cloudflare-r2-storage-migration.md) | Decoupled file storage from Firebase Cloud Storage to Cloudflare R2; built server-authoritative presigned PUT upload authorization, post-upload verification, public asset delivery, and admin private media retrieval; migrated storefront customizer, reviews, products, and categories; implemented safe legacy fallbacks; added 25 R2 test criteria (R2-001 to R2-025); verified 100% pass across all 228 automated tests (23 unit + 205 integration); validated Next.js production build (30 routes). |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is safely isolated on local release branch `release/staging-validation-task-010`.
+  - Git working tree is safely isolated on local feature branch `feat/cloudflare-r2-storage-migration` (`1fcf266`).
   - Host runtime is Node.js `v24.15.0` with `npm` `11.12.1`.
   - Automated multi-JDK resolution detects and binds JetBrains JBR OpenJDK 25 for Firebase Emulator CLI.
   - Authoritative lockfile is `package-lock.json`.
+  - Cloudflare R2 file storage architecture implemented via `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`.
   - Fail-closed emulator guard prevents any accidental connection to production Firebase or live Razorpay keys.
   - Fail-closed hosted staging isolation validator (`src/lib/security/stagingGuard.ts`) enforces 8 mandatory isolation rules.
-  - Authoritative Firestore Security Rules (`firestore.rules`) and Storage Security Rules (`storage.rules`) loaded and enforced.
+  - Authoritative Firestore Security Rules (`firestore.rules`) loaded and enforced.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *`.
   - Automated test suite established:
-    - `npm test`: 23/23 unit tests passing in ~140ms.
-    - `npm run test:rules`: 38/38 rules and authorization tests passing in ~10.7s.
-    - `npm run test:integration`: 180/180 integration tests across 14 suites passing in ~82.9s.
+    - `npm test`: 23/23 unit tests passing in ~131ms.
+    - `npm run test:rules`: 38/38 rules and authorization tests passing in ~8.8s.
+    - `npm run test:integration`: 205/205 integration tests across 17 suites passing in ~74.3s.
     - `npm run typecheck`: 0 TypeScript errors across all `.ts` and `.mts` files.
-    - `npm run build`: 25/25 routes compiling and optimizing in ~4.5s.
+    - `npm run build`: 30/30 routes compiling and optimizing in ~3.4s.
 - **Implemented Work:**
+  - Cloudflare R2 S3-compatible storage engine (`src/lib/storage/r2.ts`).
+  - Direct browser-to-R2 presigned PUT upload authorization (`src/app/api/uploads/authorize/route.ts`).
+  - Server-side upload verification and session completion (`src/app/api/uploads/complete/route.ts`).
+  - Public asset delivery with caching and SVG fallback (`src/app/api/media/public/route.ts`).
+  - Authorized customer/admin private media retrieval (`src/app/api/media/download/route.ts`).
+  - Storefront product customizer migrated to direct R2 uploads (`src/components/storefront/ProductCustomizer.tsx`).
+  - Storefront product review uploads migrated to R2 flow (`src/components/storefront/ProductReviews.tsx`).
+  - Admin product management and thumbnail uploads migrated to R2 (`src/components/admin/AdminProducts.tsx`).
+  - Admin category banner uploads migrated to R2 (`src/app/(admin)/admin/categories/page.tsx`).
+  - Admin fulfillment private customer photo inspection (`src/app/(admin)/admin/orders/page.tsx`).
+  - Authoritative customization attachment validation against R2 (`src/lib/orders/customizationAuth.ts`).
+  - Safe fallback `onError` image handling across all storefront routes.
+  - Live R2 connectivity and smoke test verification utility (`scripts/verify-r2-connectivity.mjs`).
   - Authoritative review submission endpoint (`src/app/api/reviews/submit/route.ts`).
-  - Storefront review submission via authorized API (`src/components/storefront/ProductReviews.tsx`).
-  - Profile field allowlist enforcement in `firestore.rules` (`isCustomerProfileAllowedFields`).
-  - Direct client review write denial in `firestore.rules`.
   - Exact receipt filtering and pagination handling in `src/lib/orders/gatewayRecovery.ts`.
   - Observation grace window for uncertain orders in `src/lib/orders/reservationCleanup.ts`.
   - 8-rule fail-closed isolation guard in `src/lib/security/stagingGuard.ts`.
-  - Production-isolated Firebase Emulator Suite (`firebase.json`).
   - Scoped customization namespace (`customizations/{ownerUid}/{fileName}`).
   - Transparent anonymous guest authentication helper (`src/lib/auth/guestAuth.ts`).
-  - Storefront product customizer with client compression (`src/components/storefront/ProductCustomizer.tsx`).
-  - Server-side customization attachment verification engine (`src/lib/orders/customizationAuth.ts`).
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`).
-  - Core reservation cleanup engine with gateway reconciliation (`src/lib/orders/reservationCleanup.ts`).
   - Hardened synchronous payment verification endpoint (`src/app/api/razorpay/verify-payment/route.ts`).
   - Unified idempotent payment lifecycle state machine (`src/lib/orders/paymentLifecycle.ts`).
   - Razorpay gateway order association recovery engine (`src/lib/orders/gatewayRecovery.ts`).
@@ -98,12 +106,15 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - 24 customization upload & authorization integration tests (`tests/integration/customization-upload.test.ts`).
   - 20 gateway association recovery integration tests (`tests/integration/gateway-association-recovery.test.ts`).
   - 11 review submission integration tests (`tests/integration/reviews-submission.test.ts`).
-  - **Total Automated Tests: 213 unique passing tests (23 unit + 190 integration), 0 failures.**
+  - 12 R2 storage layer integration tests (`tests/integration/r2-storage.test.ts`).
+  - 7 R2 authorization & media access tests (`tests/integration/r2-authorization.test.ts`).
+  - 6 R2 checkout & order attachment tests (`tests/integration/r2-checkout.test.ts`).
+  - **Total Automated Tests: 228 unique passing tests (23 unit + 205 integration), 0 failures.**
 - **Deployed Work:**
-  - Deployment remains untouched on Netlify pointing to `bazaarvilla.com`.
+  - Currently published Netlify deployment: `69d74cfb99bf2b0007fd5e92` pointing to `bazaarvilla.com`.
   - Zero modifications to production console, credentials, or remote Git repository.
 - **Commercial Transacting Safety Assessment:**
-  - **VERDICT: NO-GO.** Core payment lifecycle, server-to-server webhooks, idempotency, guest order privacy, rate limiting, local security rules, automated reservation cleanup, synchronous gateway verification, secure guest customization uploads, Razorpay gateway order recovery, review authorization, and profile hardening are now fully implemented and verified locally. However, live transactions must remain disabled until production security rules deployment, production admin custom claims assignment, hosted staging verification, and Netlify scheduled function deployment are complete.
+  - **VERDICT: NO-GO.** Core payment lifecycle, server-to-server webhooks, idempotency, guest order privacy, rate limiting, local security rules, automated reservation cleanup, synchronous gateway verification, secure guest customization uploads, Razorpay gateway order recovery, review authorization, profile hardening, and Cloudflare R2 file storage migration are now fully implemented and verified locally. However, live transactions must remain disabled until production security rules deployment, production admin custom claims assignment, R2 credentials provisioning in Netlify, and Netlify scheduled function deployment are complete.
 
 ---
 
@@ -124,18 +135,18 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **GATEWAY-SYNC**| **MEDIUM** | Payment / State | If Firestore update fails after gateway order creation, internal order lacks `razorpayOrderId`. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-009 Report Section 8](./TASK-009-gateway-recovery-staging-verification.md#8-task-c--recovery-implementation-details) |
 | **REVIEW-BYPASS**| **MEDIUM** | Security / Integrity | Direct client Firestore write to `reviews` collection allows creating unverified reviews bypassing `/api/reviews/eligibility` check if `isFake == false`. | **VERIFIED RESOLVED (Emulator Tested)** | [TASK-010 Report Section 5](./TASK-010-hosted-staging-verification.md#5-review-authorization-remediation-task-a) |
 | **RSK-07** | **HIGH** | Security / Dependencies | 41 vulnerabilities in npm lockfile (2 critical in `protobufjs`/`websocket-driver`). | **TRIAGED (Dev Tooling)** | [TASK-010 Section 13](./TASK-010-hosted-staging-verification.md#13-dependency-vulnerability-assessment-task-j) |
+| **R2-CREDENTIALS**| **HIGH** | Storage / Config | Cloudflare R2 credentials pending configuration in Netlify production environment variables. | **PENDING OWNER DASHBOARD ACTION** | [TASK-011 Report](./TASK-011-cloudflare-r2-storage-migration.md#6-cloudflare-r2-configuration--credentials) |
 
 ---
 
 ## 6. Recommended Next Task
 
-### **TASK 011 — Hosted Staging Cloud Provisioning, Live Razorpay Test Mode Execution & Netlify Scheduler Verification**
+### **TASK 012 — Cloudflare R2 Bucket Provisioning, Live Smoke Verification & Bazaarvilla Netlify Deployment**
 - **Objective:**
-  1. Obtain explicit project owner approval for external cloud provisioning.
-  2. Provision dedicated staging Firebase project (`bazaarvilla-staging`) and isolated Netlify staging site (`bazaarvilla-staging.netlify.app`).
-  3. Deploy Firestore rules, Cloud Storage rules, and composite indexes to staging project.
-  4. Bootstrap staging administrator custom claims (`scripts/manage-admin-claims.mjs`).
-  5. Configure staging environment variables using Razorpay **Test Mode** credentials and verify staging isolation guards.
-  6. Execute the 25 hosted staging test scenarios (`STAGE-001` through `STAGE-025`) using synthetic accounts and Razorpay test payment methods.
-  7. Verify real webhook delivery and automated Netlify background scheduled function execution on the hosted staging URL.
-- **Prerequisites:** TASK-010 completion, verified local release branch `release/staging-validation-task-010`, and explicit project owner authorization for staging cloud resource creation.
+  1. Have project owner configure Cloudflare R2 credentials (`R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`) in Netlify production site environment variables.
+  2. Execute live smoke test script (`node scripts/verify-r2-connectivity.mjs`) to verify synthetic upload, metadata, download, and cleanup against the live Cloudflare R2 bucket.
+  3. Deploy cumulative release commit (`1fcf266`) to `https://bazaarvilla.com/` on Netlify.
+  4. Deploy production Firestore security rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) to the `trendkartz` Firebase project using Firebase CLI.
+  5. Provision production administrator Custom Claims via `scripts/manage-admin-claims.mjs`.
+  6. Perform live storefront smoke testing on `https://bazaarvilla.com/` (guest customizer uploads, public catalog viewing, checkout flow, fallback rendering).
+- **Prerequisites:** TASK-011 completion, verified local branch `feat/cloudflare-r2-storage-migration`, and owner Cloudflare R2 credentials.
