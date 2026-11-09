@@ -38,6 +38,7 @@ export default function CheckoutPage() {
     const [coupon, setCoupon] = useState<{ code: string; type: string; value: number } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [razorpayKeyId, setRazorpayKeyId] = useState("");
+    const [isCommercialOpen, setIsCommercialOpen] = useState(true);
 
     useEffect(() => {
         const script = document.createElement("script");
@@ -59,6 +60,9 @@ export default function CheckoutPage() {
                 const data = await response.json();
                 if (data.keyId) {
                     setRazorpayKeyId(data.keyId);
+                }
+                if (typeof data.commercialCheckoutEnabled === "boolean") {
+                    setIsCommercialOpen(data.commercialCheckoutEnabled);
                 }
             } catch (error) {
                 console.error("Failed to load Razorpay config", error);
@@ -152,6 +156,11 @@ export default function CheckoutPage() {
     };
 
     const processPayment = async () => {
+        if (!isCommercialOpen) {
+            alert("Ordering will open soon. Bazaarvilla is preparing for commercial launch!");
+            return;
+        }
+
         if (!shipping.fullName || !shipping.email || !shipping.addressLine1 || !shipping.pincode || !shipping.phone) {
             alert("Please fill in all required shipping details including email.");
             return;
@@ -412,16 +421,35 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
+                        {!isCommercialOpen && (
+                            <div style={{
+                                padding: "12px 14px",
+                                marginTop: "16px",
+                                marginBottom: "16px",
+                                borderRadius: "10px",
+                                backgroundColor: "rgba(234, 179, 8, 0.1)",
+                                border: "1px solid rgba(234, 179, 8, 0.3)",
+                                color: "#ca8a04",
+                                fontSize: "0.82rem",
+                                lineHeight: 1.5,
+                            }}>
+                                <strong>Pre-Launch Notice:</strong> Online and COD ordering will open soon! Bazaarvilla is currently completing pre-launch operational hardening.
+                            </div>
+                        )}
+
                         <button
                             onClick={processPayment}
-                            disabled={isProcessing}
+                            disabled={isProcessing || !isCommercialOpen}
                             className="co-pay-btn"
+                            style={!isCommercialOpen ? { opacity: 0.65, cursor: "not-allowed" } : undefined}
                         >
                             {isProcessing ? (
                                 <>
                                     <span className="co-spinner" />
                                     Processing...
                                 </>
+                            ) : !isCommercialOpen ? (
+                                <>Ordering Will Open Soon (Pre-Launch)</>
                             ) : paymentMethod === "RAZORPAY" ? (
                                 <>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>

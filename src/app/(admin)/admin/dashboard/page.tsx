@@ -20,18 +20,27 @@ export default function AdminDashboard() {
                 const snapshot = await getDocs(q);
 
                 let revenue = 0;
+                let validOrderCount = 0;
                 const orders = snapshot.docs.map((doc) => {
                     const data = doc.data();
-                    if (data.paymentStatus === "PAID" || data.paymentMethod === "COD") {
-                        revenue += data.total || 0;
+                    const isQuarantined =
+                        data.quarantined === true ||
+                        data.orderStatus === "Synthetic_Test_Artifact" ||
+                        data.paymentStatus === "UNPAID_SYNTHETIC_ARTIFACT";
+
+                    if (!isQuarantined) {
+                        validOrderCount++;
+                        if (data.paymentStatus === "PAID" || (data.paymentMethod === "COD" && data.orderStatus !== "Cancelled")) {
+                            revenue += data.total || 0;
+                        }
                     }
                     return { id: doc.id, ...data };
                 });
 
                 setStats({
-                    totalOrders: snapshot.size,
+                    totalOrders: validOrderCount,
                     totalRevenue: revenue,
-                    recentOrders: orders.slice(0, 5),
+                    recentOrders: orders.filter((o: any) => !o.quarantined && o.orderStatus !== "Synthetic_Test_Artifact").slice(0, 5),
                 });
             } catch (err: any) {
                 console.error("Failed to fetch admin stats", err);

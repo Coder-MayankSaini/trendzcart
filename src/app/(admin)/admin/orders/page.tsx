@@ -32,6 +32,11 @@ export default function AdminOrders() {
     const handleStatusChange = async (id: string, newStatus: string) => {
         try {
             const order = orders.find(o => o.id === id);
+            if (order?.quarantined === true || order?.orderStatus === "Synthetic_Test_Artifact") {
+                alert("Quarantined synthetic test artifacts cannot be fulfilled or status-modified.");
+                return;
+            }
+
             const updateData: any = { orderStatus: newStatus, updatedAt: new Date() };
 
             // Auto-mark COD orders as PAID when delivered
@@ -187,27 +192,36 @@ export default function AdminOrders() {
                                         )}
                                         <span style={{
                                             padding: '3px 10px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700,
-                                            backgroundColor: order.paymentStatus === 'PAID' ? 'rgba(34, 197, 94, 0.1)' : order.paymentStatus === 'PENDING' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                            color: order.paymentStatus === 'PAID' ? '#16a34a' : order.paymentStatus === 'PENDING' ? '#ca8a04' : '#ef4444',
+                                            backgroundColor: order.quarantined ? 'rgba(239, 68, 68, 0.15)' : order.paymentStatus === 'PAID' ? 'rgba(34, 197, 94, 0.1)' : order.paymentStatus === 'PENDING' ? 'rgba(234, 179, 8, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                            color: order.quarantined ? '#dc2626' : order.paymentStatus === 'PAID' ? '#16a34a' : order.paymentStatus === 'PENDING' ? '#ca8a04' : '#ef4444',
                                         }}>
-                                            {order.paymentStatus}
+                                            {order.quarantined ? "QUARANTINED" : order.paymentStatus}
                                         </span>
                                     </td>
                                     <td style={{ padding: '16px 24px', verticalAlign: 'top', textAlign: 'right' }}>
-                                        <select
-                                            value={order.orderStatus}
-                                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                                            style={{
-                                                padding: '8px 14px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem',
-                                                border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)',
-                                                color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
-                                            }}
-                                        >
-                                            <option value="Processing">Processing</option>
-                                            <option value="Shipped">Shipped</option>
-                                            <option value="Delivered">Delivered</option>
-                                            <option value="Cancelled">Cancelled</option>
-                                        </select>
+                                        {order.quarantined ? (
+                                            <span style={{
+                                                padding: '6px 12px', borderRadius: '8px', fontSize: '0.75rem', fontWeight: 700,
+                                                backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#dc2626', border: '1px solid rgba(239, 68, 68, 0.2)'
+                                            }}>
+                                                Quarantined Artifact
+                                            </span>
+                                        ) : (
+                                            <select
+                                                value={order.orderStatus}
+                                                onChange={(e) => handleStatusChange(order.id, e.target.value)}
+                                                style={{
+                                                    padding: '8px 14px', borderRadius: '12px', fontWeight: 600, fontSize: '0.85rem',
+                                                    border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)',
+                                                    color: 'var(--text-primary)', fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
+                                                }}
+                                            >
+                                                <option value="Processing">Processing</option>
+                                                <option value="Shipped">Shipped</option>
+                                                <option value="Delivered">Delivered</option>
+                                                <option value="Cancelled">Cancelled</option>
+                                            </select>
+                                        )}
                                     </td>
                                 </tr>
                             ))}

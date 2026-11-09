@@ -2,13 +2,13 @@ import React from 'react';
 import Link from 'next/link';
 
 export const metadata = {
-    title: "Contact Us | TrendKartz",
-    description: "Get in touch with TrendKartz customer support.",
+    title: "Contact Us | Bazaarvilla",
+    description: "Get in touch with Bazaarvilla customer support.",
 };
 
 export default function ContactPage() {
     const phoneNumber = "918278377255";
-    const message = encodeURIComponent("Hello TrendKartz, I have a query about your store.");
+    const message = encodeURIComponent("Hello Bazaarvilla, I have a query about your store.");
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
 
     return (

@@ -17,6 +17,7 @@ import {
     extractStoragePath,
 } from "@/lib/orders/customizationAuth";
 import { verifyPaymentWithGateway } from "@/lib/orders/gatewayVerification";
+import { assertCommercialCheckoutGate } from "@/lib/orders/checkoutGate";
 
 interface CreateOrderBody {
     id?: string;
@@ -80,6 +81,12 @@ export async function POST(req: NextRequest) {
         }
         if (!verifiedCallerUid && body.userId) {
             verifiedCallerUid = body.userId;
+        }
+
+        // 1.6 Server-Enforced Commercial Checkout Gate
+        const gateCheck = await assertCommercialCheckoutGate(req, { verifiedAdminUid: verifiedCallerUid });
+        if (!gateCheck.allowed) {
+            return gateCheck.response!;
         }
 
         const hasCustomizedPhotos = body.items.some(

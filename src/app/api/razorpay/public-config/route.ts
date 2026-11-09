@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isCommercialCheckoutEnabled } from "@/lib/orders/checkoutGate";
 
 const getServerEnv = (key: string): string | undefined => process.env[key];
 
@@ -9,5 +10,8 @@ export async function GET() {
         return NextResponse.json({ error: "Razorpay key is not configured" }, { status: 500 });
     }
 
-    return NextResponse.json({ keyId });
+    return NextResponse.json({
+        keyId,
+        commercialCheckoutEnabled: isCommercialCheckoutEnabled(),
+    });
 }

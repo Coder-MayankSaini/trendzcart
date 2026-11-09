@@ -37,6 +37,7 @@ env.USE_FIREBASE_EMULATOR = "true";
 env.FIREBASE_PROJECT_ID = "demo-trendkartz";
 env.GCLOUD_PROJECT = "demo-trendkartz";
 env.NODE_ENV = "test";
+env.COMMERCIAL_CHECKOUT_ENABLED = "true";
 
 console.log("================================================================================");
 console.log("TRENDKARTZ / BAZAARVILLA — FIREBASE EMULATOR INTEGRATION TEST RUNNER");
@@ -68,7 +69,8 @@ const tests = [
     "tests/integration/r2-storage.test.ts",
     "tests/integration/r2-authorization.test.ts",
     "tests/integration/r2-checkout.test.ts",
-    "tests/integration/payment-trust-boundary.test.ts"
+    "tests/integration/payment-trust-boundary.test.ts",
+    "tests/integration/commercial-checkout-gate.test.ts"
 ];
 
 const result = spawnSync(process.execPath, ["--import", "./tests/register.mjs", "--test", "--test-concurrency=1", ...tests], {

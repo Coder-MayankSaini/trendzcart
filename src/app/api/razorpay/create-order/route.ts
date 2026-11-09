@@ -14,6 +14,7 @@ import {
     recordGatewayCreationStarted,
 } from "@/lib/orders/gatewayRecovery";
 import { assertStagingIsolation } from "@/lib/security/stagingGuard";
+import { assertCommercialCheckoutGate } from "@/lib/orders/checkoutGate";
 
 const getServerEnv = (key: string): string | undefined => process.env[key];
 
@@ -77,6 +78,12 @@ export async function POST(req: NextRequest) {
         }
         if (!verifiedCallerUid && body.userId) {
             verifiedCallerUid = body.userId;
+        }
+
+        // 0.6 Server-Enforced Commercial Checkout Gate
+        const gateCheck = await assertCommercialCheckoutGate(req, { verifiedAdminUid: verifiedCallerUid });
+        if (!gateCheck.allowed) {
+            return gateCheck.response!;
         }
 
         const hasCustomizedPhotos = body.items.some(
