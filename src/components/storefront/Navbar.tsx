@@ -37,7 +37,7 @@ export default function Navbar() {
                 {/* Logo */}
                 <div className="navbar-logo">
                     <Link href="/">
-                        TrendKartz<span className="logo-dot">.</span>
+                        Bazaarvilla<span className="logo-dot">.</span>
                     </Link>
                 </div>
 

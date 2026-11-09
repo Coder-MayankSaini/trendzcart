@@ -10,7 +10,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <aside style={{ width: '280px', backgroundColor: 'var(--bg-secondary)', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ padding: '32px 24px', borderBottom: '1px solid var(--border-color)' }}>
                         <a href="/admin/dashboard" style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', textDecoration: 'none' }}>
-                            TrendKartz <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '1rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginLeft: '8px' }}>Admin</span>
+                            Bazaarvilla <span style={{ color: 'var(--accent)', fontWeight: 600, fontSize: '1rem', letterSpacing: '0.1em', textTransform: 'uppercase', marginLeft: '8px' }}>Admin</span>
                         </a>
                     </div>
 

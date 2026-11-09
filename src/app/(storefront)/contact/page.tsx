@@ -31,8 +31,8 @@ export default function ContactPage() {
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', flex: 1 }}>
                         Have a question regarding your order, our products, or anything else? Send us an email and we'll get back to you soon.
                     </p>
-                    <a href="mailto:ofctrendkartz@gmail.com" style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'underline' }}>
-                        ofctrendkartz@gmail.com
+                    <a href="mailto:support@bazaarvilla.com" style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'underline' }}>
+                        support@bazaarvilla.com
                     </a>
                 </div>
 

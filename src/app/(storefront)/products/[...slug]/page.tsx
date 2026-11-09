@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!product) return { title: "Product Not Found" };
 
   return {
-    title: `${product.name} | TrendKartz`,
+    title: `${product.name} | Bazaarvilla`,
     description: product.description,
     openGraph: {
       images: product.images ? [product.images[0]] : [],

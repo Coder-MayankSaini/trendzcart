@@ -221,7 +221,7 @@ export default function CheckoutPage() {
                 key: razorpayKeyId,
                 amount: amount.toString(),
                 currency: currency,
-                name: "TrendKartz",
+                name: "Bazaarvilla",
                 description: "Payment for your order",
                 order_id: rzpOrderId,
                 handler: async function (response: any) {

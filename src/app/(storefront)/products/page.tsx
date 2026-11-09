@@ -4,7 +4,7 @@ import { Metadata } from "next";
 import { ProductCardImage } from "@/components/storefront/ProductCardImage";
 
 export const metadata: Metadata = {
-    title: "Shop All Products | TrendKartz",
+    title: "Shop All Products | Bazaarvilla",
     description: "Browse our premium collection of customizable and ready-to-wear lifestyle products.",
 };
 

@@ -1,8 +1,8 @@
 import { Metadata } from "next";
 
 export const metadata: Metadata = {
-    title: "About Us | TrendKartz",
-    description: "Learn about our mission to provide elevated everyday style.",
+    title: "About Us | Bazaarvilla",
+    description: "Learn about our mission to provide elevated everyday style and custom merchandise.",
 };
 
 export default function AboutPage() {
@@ -11,7 +11,7 @@ export default function AboutPage() {
             <div className="catalog-header" style={{ marginBottom: '64px', textAlign: 'left' }}>
                 <h1 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '-0.04em', marginBottom: '24px' }}>Our Story</h1>
                 <p style={{ fontSize: '1.25rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                    TrendKartz was built on a simple premise: everyday essentials shouldn't be boring.
+                    Bazaarvilla was built on a simple premise: everyday essentials shouldn't be boring.
                     We believe in merging minimalist aesthetics with premium fabrics to create clothing and accessories that elevate your daily life.
                 </p>
             </div>
@@ -34,7 +34,7 @@ export default function AboutPage() {
                 <div>
                     <h2 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '16px' }}>The Custom Experience</h2>
                     <p style={{ color: 'var(--text-secondary)', lineHeight: 1.8 }}>
-                        What truly sets TrendKartz apart is our seamless integration of personalization. We built our
+                        What truly sets Bazaarvilla apart is our seamless integration of personalization. We built our
                         storefront to allow you to easily attach your name or upload your favorite pictures to our
                         base products, creating something that is uniquely yours.
                     </p>

@@ -13,9 +13,9 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
                 <div className="hp-footer-grid">
                     {/* Brand Column */}
                     <div>
-                        <h3 className="hp-footer-brand-name">TrendKartz<span>.</span></h3>
+                        <h3 className="hp-footer-brand-name">Bazaarvilla<span>.</span></h3>
                         <p className="hp-footer-tagline">
-                            Defining elegance through minimalism. Curated collections for the modern wardrobe.
+                            Defining elegance through curated essentials. Custom apparel and personalized lifestyle collections.
                         </p>
                     </div>
 
@@ -44,13 +44,13 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
                     <div>
                         <h4 className="hp-footer-col-title">Connect</h4>
                         <ul className="hp-footer-links">
-                            <li><a href="mailto:ofctrendkartz@gmail.com" className="hp-footer-link">ofctrendkartz@gmail.com</a></li>
+                            <li><a href="mailto:support@bazaarvilla.com" className="hp-footer-link">support@bazaarvilla.com</a></li>
                         </ul>
                     </div>
                 </div>
 
                 <div className="hp-footer-bottom">
-                    <p className="hp-footer-copy">&copy; {new Date().getFullYear()} TrendKartz. All rights reserved.</p>
+                    <p className="hp-footer-copy">&copy; {new Date().getFullYear()} Bazaarvilla. All rights reserved.</p>
                 </div>
             </footer>
             <WhatsAppFloat />

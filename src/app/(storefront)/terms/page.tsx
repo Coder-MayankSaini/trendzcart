@@ -57,7 +57,7 @@ export default function TermsPage() {
                         For questions, disputes, or order assistance, contact Bazaarvilla customer support at:
                     </p>
                     <ul style={{ paddingLeft: '20px', marginTop: '8px' }}>
-                        <li><strong>Email:</strong> support@bazaarvilla.com (or ofctrendkartz@gmail.com)</li>
+                        <li><strong>Email:</strong> support@bazaarvilla.com</li>
                         <li><strong>WhatsApp:</strong> +91 8278377255</li>
                         <li><strong>Operating Hours:</strong> Monday – Saturday, 10:00 AM – 7:00 PM IST</li>
                     </ul>
