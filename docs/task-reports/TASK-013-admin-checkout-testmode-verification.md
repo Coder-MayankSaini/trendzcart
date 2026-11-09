@@ -221,7 +221,7 @@ Executed live against `https://bazaarvilla.com/api/orders/create` using `scripts
   "subtotal": 199,
   "discount": 0,
   "total": 199,
-  "guestAccessToken": "5d5f76ef2af8b86944f11fbb412aa9c273bd3b92ba415cb9a4952096996f620a",
+  "guestAccessToken": "[REDACTED_GUEST_ACCESS_TOKEN_5d5f...]",
   "razorpayOrderId": null,
   "razorpayPaymentId": null
 }
@@ -376,7 +376,7 @@ Executed `scripts/verify-customization-r2-lifecycle.mjs` live against `https://b
 
 Verified live via `POST https://bazaarvilla.com/api/orders/by-ids`:
 - **Unauthenticated / Forged Token Attempt:** Dispatched order lookup for `MBbquzz08LpVNZqqUTSt` with token `"wrong_invalid_token"`. Returned `orders: []` (0 orders).
-- **Authorized Guest Token Attempt:** Dispatched order lookup with the authentic guest access token (`1acf4d00433ee240a97691dcb0947b3204be5d572a4db78c604c64ad17726ce9`). Returned exactly 1 order with full order details, total ₹149, and `paymentStatus: "PAID"`.
+- **Authorized Guest Token Attempt:** Dispatched order lookup with the authentic guest access token (`[REDACTED_GUEST_ACCESS_TOKEN_1acf...]`). Returned exactly 1 order with full order details, total ₹149, and `paymentStatus: "PAID"`.
 
 ---
 
@@ -541,6 +541,7 @@ Before Bazaarvilla can transition from **NO-GO** to **GO FOR COMMERCIAL LAUNCH**
   - `75fa4de`: `fix(test): remove hardcoded secrets from test script to pass Netlify secrets scanner (TASK 013)`
   - `b976295`: `test(razorpay): enhance assertions in verify-razorpay-e2e script (TASK 013)`
 - **Clean Working Tree:** Verified all scratch files reside outside tracked directories.
+- **Redaction Audit Note (TASK 014 Security Remediation):** In compliance with TASK 014 Security & Credential Hygiene standards, plaintext guest access tokens previously documented in Section 9 and Section 17 were sanitized and replaced with `[REDACTED_GUEST_ACCESS_TOKEN_...]`. Historical order IDs and technical findings remain intact.
 
 ---
 

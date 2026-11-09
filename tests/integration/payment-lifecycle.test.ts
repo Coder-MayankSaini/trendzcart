@@ -51,8 +51,8 @@ describe("Payment Lifecycle, Webhooks & Idempotency Integration Tests (Firestore
                 return {
                     id: paymentId,
                     entity: "payment",
-                    amount: 100000,
-                    currency: "INR",
+                    amount: typeof capturedOptions?.amount === "number" ? capturedOptions.amount : 100000,
+                    currency: capturedOptions?.currency || "INR",
                     status: "captured",
                     order_id: `order_rzp_mock_${mockOrderCounter}`,
                     captured: true,

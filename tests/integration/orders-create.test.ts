@@ -1,6 +1,7 @@
 import { describe, it, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import crypto from "crypto";
+import Razorpay from "razorpay";
 import * as adminModule from "firebase-admin";
 import { POST as createOrderRoute } from "../../src/app/api/orders/create/route.ts";
 
@@ -13,7 +14,26 @@ describe("POST /api/orders/create Integration Tests (Firestore Emulator)", () =>
     const mockSecret = "test_razorpay_secret_key_mock_999";
 
     before(() => {
+        process.env.RAZORPAY_KEY_ID = "rzp_test_mock_create";
         process.env.RAZORPAY_KEY_SECRET = mockSecret;
+
+        const dummy = new Razorpay({ key_id: "rzp_test_mock", key_secret: "mock" });
+        const apiProto = Object.getPrototypeOf(dummy.api);
+        apiProto.get = async function (params: any) {
+            const url = params?.url || "";
+            if (url.includes("/payments/")) {
+                return {
+                    id: "pay_rzp_mock_67890",
+                    entity: "payment",
+                    amount: 100000,
+                    currency: "INR",
+                    status: "captured",
+                    order_id: "order_rzp_mock_12345",
+                    captured: true,
+                };
+            }
+            return {};
+        };
     });
 
     beforeEach(async () => {

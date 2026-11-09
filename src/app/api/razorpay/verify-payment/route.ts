@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Razorpay from "razorpay";
 import { adminDb } from "@/lib/firebase/admin";
 import { verifyRazorpaySignature } from "@/lib/orders/pricing";
 import { finalizeOrderPayment } from "@/lib/orders/paymentLifecycle";
+import { verifyPaymentWithGateway } from "@/lib/orders/gatewayVerification";
 import { assertStagingIsolation } from "@/lib/security/stagingGuard";
 
 const getServerEnv = (key: string): string | undefined => process.env[key];
@@ -98,12 +98,21 @@ export async function POST(req: NextRequest) {
         const expectedCurrency: string = (orderData?.currency || "INR").toUpperCase();
 
         // 5. Server-to-Server Gateway Status Verification (payments.fetch)
-        const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
-        let gatewayPayment: any;
-        try {
-            gatewayPayment = await razorpay.payments.fetch(razorpay_payment_id);
-        } catch (gatewayErr: any) {
-            console.error("[Razorpay Verification Error] Failed to fetch payment from gateway", gatewayErr);
+        const verification = await verifyPaymentWithGateway(undefined, {
+            paymentId: razorpay_payment_id,
+            expectedOrderId: razorpay_order_id,
+            expectedAmountPaise,
+            expectedCurrency,
+        });
+
+        if (verification.notFound) {
+            return NextResponse.json(
+                { success: false, message: verification.error || "Payment not found in gateway" },
+                { status: 400 }
+            );
+        }
+
+        if (verification.networkError) {
             return NextResponse.json(
                 {
                     success: false,
@@ -114,51 +123,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        if (!gatewayPayment) {
-            return NextResponse.json(
-                { success: false, message: "No payment record returned by gateway" },
-                { status: 400 }
-            );
-        }
-
-        // 6. Validate Gateway Payment Identifiers, Amount, Currency, and Captured Status
-        if (gatewayPayment.id !== razorpay_payment_id) {
-            return NextResponse.json(
-                { success: false, message: "Gateway payment ID mismatch" },
-                { status: 400 }
-            );
-        }
-
-        if (gatewayPayment.order_id && gatewayPayment.order_id !== razorpay_order_id) {
-            return NextResponse.json(
-                { success: false, message: "Gateway order ID mismatch on payment record" },
-                { status: 400 }
-            );
-        }
-
-        if (Number(gatewayPayment.amount) !== expectedAmountPaise) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: `Payment amount mismatch: expected ${expectedAmountPaise} paise, got ${gatewayPayment.amount} paise`,
-                },
-                { status: 400 }
-            );
-        }
-
-        const actualCurrency = (gatewayPayment.currency || "INR").toUpperCase();
-        if (actualCurrency !== expectedCurrency) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    message: `Payment currency mismatch: expected ${expectedCurrency}, got ${actualCurrency}`,
-                },
-                { status: 400 }
-            );
-        }
-
-        // State check: Payment must be captured
-        if (gatewayPayment.status === "authorized") {
+        if (verification.status === "AUTHORIZED") {
             return NextResponse.json(
                 {
                     success: false,
@@ -170,17 +135,17 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        if (gatewayPayment.status !== "captured" && !gatewayPayment.captured) {
+        if (!verification.verified) {
             return NextResponse.json(
                 {
                     success: false,
-                    message: `Payment is not in captured status (current: ${gatewayPayment.status})`,
+                    message: verification.error || `Payment is not in captured status`,
                 },
                 { status: 400 }
             );
         }
 
-        // 7. Authoritative Transactional Payment Finalization
+        // 6. Authoritative Transactional Payment Finalization
         const finalizationResult = await finalizeOrderPayment(adminDb, {
             razorpayOrderId: razorpay_order_id,
             razorpayPaymentId: razorpay_payment_id,

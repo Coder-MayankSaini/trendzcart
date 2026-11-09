@@ -5,6 +5,10 @@ import {
     finalizeOrderPayment,
     recordPaymentFailure,
 } from "@/lib/orders/paymentLifecycle";
+import {
+    verifyPaymentWithGateway,
+    getRazorpayClient,
+} from "@/lib/orders/gatewayVerification";
 import { assertStagingIsolation } from "@/lib/security/stagingGuard";
 
 const getServerEnv = (key: string): string | undefined => process.env[key];
@@ -102,11 +106,156 @@ export async function POST(req: NextRequest) {
                     );
                 }
 
+                // Check Level 1 event deduplication
+                if (eventId) {
+                    const eventSnap = await adminDb.collection("paymentWebhookEvents").doc(eventId).get();
+                    if (eventSnap.exists && eventSnap.data()?.status === "PROCESSED") {
+                        return NextResponse.json({
+                            success: true,
+                            duplicate: true,
+                            message: "Event already processed",
+                        });
+                    }
+                }
+
+                // Locate internal order record
+                let orderDocSnap = await adminDb
+                    .collection("orders")
+                    .where("razorpayOrderId", "==", razorpayOrderId)
+                    .limit(1)
+                    .get();
+
+                if (orderDocSnap.empty) {
+                    orderDocSnap = await adminDb
+                        .collection("orders")
+                        .where("unassociatedGatewayOrderId", "==", razorpayOrderId)
+                        .limit(1)
+                        .get();
+                }
+
+                if (orderDocSnap.empty) {
+                    // Record unmatched payment safely for admin reconciliation
+                    await adminDb.collection("unmatchedPayments").doc(razorpayPaymentId).set({
+                        razorpayPaymentId,
+                        razorpayOrderId,
+                        amountPaise,
+                        currency,
+                        eventId: eventId || null,
+                        receivedAt: new Date(),
+                        reason: "INTERNAL_ORDER_NOT_FOUND",
+                    });
+
+                    return NextResponse.json(
+                        { error: `No internal order found matching Razorpay Order ID: ${razorpayOrderId}` },
+                        { status: 404 }
+                    );
+                }
+
+                const internalOrderDoc = orderDocSnap.docs[0];
+                const internalOrderData = internalOrderDoc.data();
+
+                // If already paid with this payment ID, return idempotent success
+                if (internalOrderData.paymentStatus === "PAID" && internalOrderData.razorpayPaymentId === razorpayPaymentId) {
+                    return NextResponse.json({
+                        success: true,
+                        orderId: internalOrderDoc.id,
+                        duplicate: true,
+                        message: "Payment already finalized for this order",
+                    });
+                }
+
+                // Authoritative expected values from internal order
+                const expectedAmountPaise: number =
+                    typeof internalOrderData.amountPaise === "number"
+                        ? internalOrderData.amountPaise
+                        : Math.round(Number(internalOrderData.total) * 100);
+                const expectedCurrency: string = (internalOrderData.currency || "INR").toUpperCase();
+
+                // Validate webhook payload against internal authoritative values
+                if (amountPaise !== expectedAmountPaise) {
+                    await adminDb.collection("orders").doc(internalOrderDoc.id).update({
+                        reconciliationRequired: true,
+                        reconciliationReason: `Payment amount mismatch: expected ${expectedAmountPaise} paise, received ${amountPaise} paise`,
+                        reconciliationPaymentId: razorpayPaymentId,
+                        updatedAt: new Date(),
+                    });
+                    return NextResponse.json(
+                        { error: `Payment amount mismatch: expected ${expectedAmountPaise} paise, received ${amountPaise} paise` },
+                        { status: 400 }
+                    );
+                }
+
+                if (currency.toUpperCase() !== expectedCurrency.toUpperCase()) {
+                    await adminDb.collection("orders").doc(internalOrderDoc.id).update({
+                        reconciliationRequired: true,
+                        reconciliationReason: `Payment currency mismatch: expected ${expectedCurrency}, received ${currency}`,
+                        reconciliationPaymentId: razorpayPaymentId,
+                        updatedAt: new Date(),
+                    });
+                    return NextResponse.json(
+                        { error: `Payment currency mismatch: expected ${expectedCurrency}, received ${currency}` },
+                        { status: 400 }
+                    );
+                }
+
+                // 4.1 TRUST BOUNDARY ENFORCEMENT: Server-to-Server Gateway Status Verification
+                const verification = await verifyPaymentWithGateway(undefined, {
+                    paymentId: razorpayPaymentId,
+                    expectedOrderId: razorpayOrderId,
+                    expectedAmountPaise,
+                    expectedCurrency,
+                });
+
+                if (verification.notFound) {
+                    console.warn(
+                        `[Razorpay Webhook Trust Warning] Payment ${razorpayPaymentId} does not exist in gateway: ${verification.error}`
+                    );
+                    return NextResponse.json(
+                        { error: verification.error || "Payment ID does not exist in gateway" },
+                        { status: 400 }
+                    );
+                }
+
+                if (verification.networkError) {
+                    console.error(
+                        `[Razorpay Webhook Error] Gateway unavailable during verification for payment ${razorpayPaymentId}`
+                    );
+                    await adminDb.collection("orders").doc(internalOrderDoc.id).update({
+                        reconciliationRequired: true,
+                        reconciliationReason: "GATEWAY_TIMEOUT_DURING_WEBHOOK",
+                        updatedAt: new Date(),
+                    });
+                    return NextResponse.json(
+                        { error: "Gateway verification temporarily unavailable" },
+                        { status: 502 }
+                    );
+                }
+
+                if (!verification.verified) {
+                    console.warn(
+                        `[Razorpay Webhook Warning] Gateway payment ${razorpayPaymentId} not verified (status: ${verification.status}, mismatch: ${verification.mismatch})`
+                    );
+                    if (verification.mismatch) {
+                        await adminDb.collection("orders").doc(internalOrderDoc.id).update({
+                            reconciliationRequired: true,
+                            reconciliationReason: verification.mismatchReason || "GATEWAY_PAYMENT_MISMATCH",
+                            reconciliationPaymentId: razorpayPaymentId,
+                            updatedAt: new Date(),
+                        });
+                    }
+                    return NextResponse.json(
+                        { error: verification.error || "Payment verification failed" },
+                        { status: 400 }
+                    );
+                }
+
+                // 4.2 Authoritative Transactional Payment Finalization
                 const result = await finalizeOrderPayment(adminDb, {
                     razorpayOrderId,
                     razorpayPaymentId,
-                    amountPaise,
-                    currency,
+                    amountPaise: expectedAmountPaise,
+                    currency: expectedCurrency,
+                    internalOrderId: internalOrderDoc.id,
                     source: "WEBHOOK",
                     eventId,
                 });
@@ -128,45 +277,120 @@ export async function POST(req: NextRequest) {
                 const paymentEntity = event.payload?.payment?.entity;
 
                 const razorpayOrderId = orderEntity?.id || paymentEntity?.order_id;
-                const razorpayPaymentId = paymentEntity?.id;
-                const amountPaise = Number(orderEntity?.amount_paid || paymentEntity?.amount);
-                const currency = orderEntity?.currency || paymentEntity?.currency || "INR";
+                let razorpayPaymentId = paymentEntity?.id;
 
                 if (!razorpayOrderId) {
                     return NextResponse.json(
-                        { error: "Incomplete order.paid metadata" },
+                        { error: "Incomplete order.paid metadata: missing order_id" },
                         { status: 400 }
                     );
                 }
 
-                // If payment entity is not included in order.paid, locate payment record or order
-                if (!razorpayPaymentId) {
-                    // Try to locate order to see if it was already marked PAID
-                    const existingOrderSnap = await adminDb
+                // Locate internal order
+                let existingOrderSnap = await adminDb
+                    .collection("orders")
+                    .where("razorpayOrderId", "==", razorpayOrderId)
+                    .limit(1)
+                    .get();
+
+                if (existingOrderSnap.empty) {
+                    existingOrderSnap = await adminDb
                         .collection("orders")
-                        .where("razorpayOrderId", "==", razorpayOrderId)
+                        .where("unassociatedGatewayOrderId", "==", razorpayOrderId)
                         .limit(1)
                         .get();
+                }
 
-                    if (!existingOrderSnap.empty && existingOrderSnap.docs[0].data()?.paymentStatus === "PAID") {
+                if (existingOrderSnap.empty) {
+                    return NextResponse.json(
+                        { error: `No internal order found matching Razorpay Order ID: ${razorpayOrderId}` },
+                        { status: 404 }
+                    );
+                }
+
+                const orderDoc = existingOrderSnap.docs[0];
+                const orderData = orderDoc.data();
+
+                if (orderData?.paymentStatus === "PAID") {
+                    return NextResponse.json({
+                        success: true,
+                        duplicate: true,
+                        message: "Order already paid",
+                    });
+                }
+
+                const expectedAmountPaise: number =
+                    typeof orderData.amountPaise === "number"
+                        ? orderData.amountPaise
+                        : Math.round(Number(orderData.total) * 100);
+                const expectedCurrency: string = (orderData.currency || "INR").toUpperCase();
+
+                // If payment entity was not attached directly, query gateway payments for this order
+                if (!razorpayPaymentId) {
+                    const client = getRazorpayClient();
+                    if (!client) {
+                        return NextResponse.json(
+                            { error: "Razorpay client unavailable for order.paid reconciliation" },
+                            { status: 502 }
+                        );
+                    }
+
+                    let paymentsRes: any;
+                    try {
+                        paymentsRes = await client.orders.fetchPayments(razorpayOrderId);
+                    } catch (gwErr: any) {
+                        console.error("[Razorpay Webhook Error] Failed to fetch payments for order.paid:", gwErr);
+                        return NextResponse.json(
+                            { error: "Gateway lookup failed for order.paid" },
+                            { status: 502 }
+                        );
+                    }
+
+                    const payments: any[] = Array.isArray(paymentsRes?.items)
+                        ? paymentsRes.items
+                        : Array.isArray(paymentsRes)
+                        ? paymentsRes
+                        : [];
+
+                    const capturedPayment = payments.find(
+                        (p: any) =>
+                            p &&
+                            (p.status === "captured" || p.captured === true) &&
+                            Number(p.amount) === expectedAmountPaise &&
+                            (p.currency || "INR").toUpperCase() === expectedCurrency
+                    );
+
+                    if (!capturedPayment) {
                         return NextResponse.json({
                             success: true,
-                            duplicate: true,
-                            message: "Order already paid",
+                            message: "order.paid acknowledged, no captured payment verified yet",
                         });
                     }
 
-                    return NextResponse.json({
-                        success: true,
-                        message: "order.paid acknowledged, awaiting payment.captured with payment ID",
-                    });
+                    razorpayPaymentId = capturedPayment.id;
+                }
+
+                // Verify the resolved payment with gateway
+                const verification = await verifyPaymentWithGateway(undefined, {
+                    paymentId: razorpayPaymentId,
+                    expectedOrderId: razorpayOrderId,
+                    expectedAmountPaise,
+                    expectedCurrency,
+                });
+
+                if (!verification.verified) {
+                    return NextResponse.json(
+                        { error: verification.error || "Payment verification failed for order.paid" },
+                        { status: 400 }
+                    );
                 }
 
                 const result = await finalizeOrderPayment(adminDb, {
                     razorpayOrderId,
                     razorpayPaymentId,
-                    amountPaise,
-                    currency,
+                    amountPaise: expectedAmountPaise,
+                    currency: expectedCurrency,
+                    internalOrderId: orderDoc.id,
                     source: "WEBHOOK",
                     eventId,
                 });
@@ -179,6 +403,68 @@ export async function POST(req: NextRequest) {
                     success: true,
                     orderId: result.orderId,
                     duplicate: result.duplicate || false,
+                });
+            }
+
+            case "payment.authorized": {
+                const payment = event.payload?.payment?.entity;
+                const razorpayOrderId = payment?.order_id;
+                const razorpayPaymentId = payment?.id;
+
+                if (!razorpayOrderId) {
+                    return NextResponse.json(
+                        { error: "Missing order_id for payment.authorized" },
+                        { status: 400 }
+                    );
+                }
+
+                // Locate internal order
+                const existingOrderSnap = await adminDb
+                    .collection("orders")
+                    .where("razorpayOrderId", "==", razorpayOrderId)
+                    .limit(1)
+                    .get();
+
+                if (existingOrderSnap.empty) {
+                    return NextResponse.json(
+                        { error: `No internal order found matching: ${razorpayOrderId}` },
+                        { status: 404 }
+                    );
+                }
+
+                const orderDoc = existingOrderSnap.docs[0];
+                const orderData = orderDoc.data();
+
+                // Invariant: An authorized event must NEVER regress an already PAID order
+                if (orderData?.paymentStatus === "PAID") {
+                    return NextResponse.json({
+                        success: true,
+                        ignored: true,
+                        message: "Order is already PAID; payment.authorized ignored",
+                    });
+                }
+
+                // Record authorization attempt without marking order as PAID
+                const existingAttempts = Array.isArray(orderData?.paymentAttempts) ? orderData.paymentAttempts : [];
+                const updatedAttempts = [
+                    ...existingAttempts,
+                    {
+                        razorpayPaymentId: razorpayPaymentId || null,
+                        authorizedAt: new Date(),
+                        status: "AUTHORIZED",
+                    },
+                ];
+
+                await orderDoc.ref.update({
+                    gatewayState: "PAYMENT_AUTHORIZED",
+                    paymentAttempts: updatedAttempts,
+                    updatedAt: new Date(),
+                });
+
+                return NextResponse.json({
+                    success: true,
+                    status: "AUTHORIZED",
+                    message: "Payment authorized recorded; order awaits payment capture",
                 });
             }
 

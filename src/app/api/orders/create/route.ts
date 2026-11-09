@@ -16,6 +16,7 @@ import {
     validateOrderCustomizations,
     extractStoragePath,
 } from "@/lib/orders/customizationAuth";
+import { verifyPaymentWithGateway } from "@/lib/orders/gatewayVerification";
 
 interface CreateOrderBody {
     id?: string;
@@ -131,6 +132,21 @@ export async function POST(req: NextRequest) {
                 if (!isSignatureValid) {
                     return NextResponse.json(
                         { error: "Invalid payment signature verification failed" },
+                        { status: 400 }
+                    );
+                }
+
+                const expectedPaise = Math.round(Number(body.total) * 100);
+                const verification = await verifyPaymentWithGateway(undefined, {
+                    paymentId: body.razorpayPaymentId,
+                    expectedOrderId: body.razorpayOrderId,
+                    expectedAmountPaise: expectedPaise,
+                    expectedCurrency: "INR",
+                });
+
+                if (!verification.verified) {
+                    return NextResponse.json(
+                        { error: verification.error || "Gateway payment verification failed" },
                         { status: 400 }
                     );
                 }
