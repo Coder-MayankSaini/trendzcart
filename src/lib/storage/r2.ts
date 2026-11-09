@@ -1,4 +1,6 @@
-import 'server-only';
+if (typeof window !== 'undefined') {
+    throw new Error('This module can only be executed in a server environment.');
+}
 import {
     S3Client,
     PutObjectCommand,

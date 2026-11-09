@@ -16,8 +16,18 @@ const SYNTHETIC_WEBP = Buffer.from([
     0x10, 0x07, 0x10, 0x11, 0x11, 0x88, 0x88, 0xfe, 0x07, 0x00
 ]);
 
+function getFirebaseApiKey() {
+    if (process.env.NEXT_PUBLIC_FIREBASE_API_KEY) {
+        return process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+    }
+    const envContent = fs.readFileSync(".env.local", "utf-8");
+    const match = envContent.match(/NEXT_PUBLIC_FIREBASE_API_KEY\s*=\s*([^\r\n]+)/);
+    if (match) return match[1].trim().replace(/^["']|["']$/g, "");
+    throw new Error("NEXT_PUBLIC_FIREBASE_API_KEY not found in .env.local");
+}
+
 async function getTokens() {
-    const apiKey = fs.readFileSync(".firebase_apikey", "utf-8").trim();
+    const apiKey = getFirebaseApiKey();
 
     // 1. Guest Anonymous Token
     const anonRes = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${apiKey}`, {
@@ -129,10 +139,10 @@ async function testUploadAndOrder(userLabel, user, adminToken, unrelatedToken) {
     });
     console.log(`   Complete status: HTTP ${compRes.status}`);
     const compData = await compRes.json();
-    if (!compRes.ok || !compData.verified) {
+    if (!compRes.ok || !compData.success || !compData.size) {
         throw new Error(`Upload completion verification failed: ${JSON.stringify(compData)}`);
     }
-    console.log(`   + R2 Object HeadObject check verified (size: ${compData.sizeBytes} bytes, type: ${compData.contentType})!`);
+    console.log(`   + R2 Object HeadObject check verified (size: ${compData.size} bytes, type: ${compData.contentType})!`);
 
     // 4. Create Order with Customized Product
     console.log(`4. Creating customized order via /api/orders/create...`);

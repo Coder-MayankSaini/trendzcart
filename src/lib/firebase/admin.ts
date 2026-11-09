@@ -1,4 +1,6 @@
-import 'server-only';
+if (typeof window !== 'undefined') {
+    throw new Error('This module can only be executed in a server environment.');
+}
 import * as adminModule from 'firebase-admin';
 import { assertEmulatorSafety, isEmulatorMode, DEMO_PROJECT_ID } from './emulatorGuard';
 
