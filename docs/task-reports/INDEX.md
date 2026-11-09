@@ -1,10 +1,10 @@
 # TrendKartz — Central Task Reports Index
 
-**Project Name:** TrendKartz (Storefront: `TrendKartz` | Domain: `bazaarvilla.com`)  
+**Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `feat/cloudflare-r2-storage-migration`  
+**Current Active Git Branch:** `release/bazaarvilla-r2-task-012`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **NO-GO FOR COMMERCIAL TRANSACTIONS** (Awaiting Cloudflare R2 credentials provisioning in Netlify, production Firestore security rules & composite indexes deployment, admin claims provisioning, and payment gateway activation)
+**Current Commercial Transacting Safety Status:** **NO-GO FOR COMMERCIAL TRANSACTIONS** (Production live checkout remains safely in Razorpay Test Mode until explicit commercial launch authorization and owner sign-off)
 
 ---
 
@@ -41,27 +41,28 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-009** | Razorpay Association Recovery, Isolated Hosted Staging Verification & Production Release Gates | **COMPLETED LOCALLY** | `fix/staging-verification-gateway-recovery` | [TASK-009-gateway-recovery-staging-verification.md](./TASK-009-gateway-recovery-staging-verification.md) | Remediated Razorpay order association edge cases (`GATEWAY-SYNC`); implemented explicit gateway lifecycle state machine, stable receipt querying (`orders.all({ receipt })`), attempt logging, and transactional order reuse; built fail-closed hosted staging isolation guards; hardened reservation cleanup and payment reconciliation; audited guest upload quotas and review submission boundaries; authored 16 gateway sync integration tests (SYNC-001 to SYNC-016); verified 100% pass across all 174 automated tests (12 unit + 162 integration); validated production build (24 routes). |
 | **TASK-010** | Isolated Hosted Staging Environment, Razorpay Test Mode E2E Verification & Release Security Gates | **COMPLETED LOCALLY — STAGING PENDING** | `release/staging-validation-task-010` (`7bf9748`) | [TASK-010-hosted-staging-verification.md](./TASK-010-hosted-staging-verification.md) | Remediated review authorization bypass (`REVIEW-BYPASS`) via `POST /api/reviews/submit` and rules restriction; hardened profile field permissions with strict allowlist; revalidated gateway receipt recovery with exact match filtering and 15-minute observation window for uncertain orders; strengthened `stagingGuard.ts` with 8 fail-closed rules; audited 41 dependency vulnerabilities; formulated owner-executable staging provisioning runbook; authored 11 review and 4 gateway sync integration tests; verified 100% pass across all 213 automated tests (23 unit + 190 integration); validated production build (25 routes). |
 | **TASK-011** | Cloudflare R2 File Storage Migration & Production Readiness | **COMPLETED LOCALLY — R2 CONFIGURATION PENDING** | `feat/cloudflare-r2-storage-migration` (`1fcf266`) | [TASK-011-cloudflare-r2-storage-migration.md](./TASK-011-cloudflare-r2-storage-migration.md) | Decoupled file storage from Firebase Cloud Storage to Cloudflare R2; built server-authoritative presigned PUT upload authorization, post-upload verification, public asset delivery, and admin private media retrieval; migrated storefront customizer, reviews, products, and categories; implemented safe legacy fallbacks; added 25 R2 test criteria (R2-001 to R2-025); verified 100% pass across all 228 automated tests (23 unit + 205 integration); validated Next.js production build (30 routes). |
+| **TASK-012** | Cloudflare R2 Provisioning, Firebase Security & Production Live Deployment | **COMPLETED & PUBLISHED** | `release/bazaarvilla-r2-task-012` (`7adb9e9` / `4a5e6ae`) | [TASK-012-r2-provisioning-live-deployment.md](./TASK-012-r2-provisioning-live-deployment.md) | Configured Cloudflare R2 credentials securely in Netlify; verified live R2 connectivity & CORS headers; deployed version-controlled Firestore security rules & composite indexes to project `trendkartz`; resolved Next.js 16 Server Component event handler boundary on `/products`; successfully published application to `https://bazaarvilla.com/` (Netlify Deploy ID: `6af1bcb67fe1fb6cddcddc08`); verified 100% pass across all 25 live smoke tests (LIVE-001 through LIVE-025). |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is safely isolated on local feature branch `feat/cloudflare-r2-storage-migration` (`1fcf266`).
+  - Git working tree is safely isolated on local release branch `release/bazaarvilla-r2-task-012` (`7adb9e9` / `4a5e6ae`).
+  - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af1bcb67fe1fb6cddcddc08`).
+  - Cloudflare R2 bucket `bazaarvilla-media` is fully connected with active preflight CORS (`PUT, GET`) from `https://bazaarvilla.com`.
+  - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Host runtime is Node.js `v24.15.0` with `npm` `11.12.1`.
   - Automated multi-JDK resolution detects and binds JetBrains JBR OpenJDK 25 for Firebase Emulator CLI.
-  - Authoritative lockfile is `package-lock.json`.
-  - Cloudflare R2 file storage architecture implemented via `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`.
-  - Fail-closed emulator guard prevents any accidental connection to production Firebase or live Razorpay keys.
-  - Fail-closed hosted staging isolation validator (`src/lib/security/stagingGuard.ts`) enforces 8 mandatory isolation rules.
-  - Authoritative Firestore Security Rules (`firestore.rules`) loaded and enforced.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *`.
-  - Automated test suite established:
-    - `npm test`: 23/23 unit tests passing in ~131ms.
-    - `npm run test:rules`: 38/38 rules and authorization tests passing in ~8.8s.
-    - `npm run test:integration`: 205/205 integration tests across 17 suites passing in ~74.3s.
-    - `npm run typecheck`: 0 TypeScript errors across all `.ts` and `.mts` files.
-    - `npm run build`: 30/30 routes compiling and optimizing in ~3.4s.
+  - Full automated test suite passes:
+    - `npm test`: 23/23 unit tests passing.
+    - `npm run test:rules`: 38/38 rules and authorization tests passing.
+    - `npm run test:integration`: 205/205 integration tests across 17 suites passing.
+    - `npm run typecheck`: 0 TypeScript errors.
+    - `npm run build`: 30/30 Next.js routes compiling cleanly.
+  - Live Smoke Tests:
+    - `node scripts/live-smoke-test.mjs`: **25/25 LIVE SMOKE TESTS PASSING (100%)** directly against `https://bazaarvilla.com/`.
 - **Implemented Work:**
   - Cloudflare R2 S3-compatible storage engine (`src/lib/storage/r2.ts`).
   - Direct browser-to-R2 presigned PUT upload authorization (`src/app/api/uploads/authorize/route.ts`).
