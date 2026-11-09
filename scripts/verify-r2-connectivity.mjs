@@ -45,9 +45,9 @@ const endpoint = process.env.R2_ENDPOINT || (accountId ? `https://${accountId}.r
 
 console.log("================================================================================");
 console.log("CLOUDFLARE R2 LIVE CONNECTIVITY & SMOKE TEST VERIFIER");
-console.log(`Endpoint:    ${endpoint || "NOT CONFIGURED"}`);
+console.log(`Endpoint:    ${endpoint ? "CONFIGURED" : "NOT CONFIGURED"}`);
 console.log(`Bucket Name: ${bucketName}`);
-console.log(`Access Key:  ${accessKeyId ? accessKeyId.substring(0, 6) + "..." : "NOT CONFIGURED"}`);
+console.log(`Access Key:  ${accessKeyId ? "CONFIGURED" : "NOT CONFIGURED"}`);
 console.log("================================================================================");
 
 if (!accountId || !accessKeyId || !secretAccessKey || !endpoint) {
