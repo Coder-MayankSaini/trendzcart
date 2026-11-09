@@ -366,6 +366,9 @@ async function main() {
         body: JSON.stringify(failOrderPayload)
     });
     const failOrderData = await failOrderRes.json();
+    if (!failOrderRes.ok || !failOrderData.id) {
+        throw new Error(`Order creation failed for low stock product: ${JSON.stringify(failOrderData)}`);
+    }
     console.log(`Created order for low stock product: ${failOrderData.internalOrderId} (Razorpay: ${failOrderData.id})`);
 
     // Verify stock dropped to 0 during reservation
