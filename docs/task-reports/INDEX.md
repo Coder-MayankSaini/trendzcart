@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/014-payment-trust-genuine-testmode-verification`  
+**Current Active Git Branch:** `task/015-precommercial-hardening-launch-readiness`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **NO-GO FOR COMMERCIAL TRANSACTIONS** (Production live checkout remains safely in Razorpay Test Mode until explicit commercial launch authorization, business KYC approval, and owner sign-off)
+**Current Commercial Transacting Safety Status:** **NO-GO FOR COMMERCIAL TRANSACTIONS** (Production live checkout remains safely gated by `COMMERCIAL_CHECKOUT_ENABLED=false` and Razorpay Test Mode until owner approval of 7 historical records, completed Razorpay Live business KYC, and explicit commercial launch sign-off)
 
 ---
 
@@ -44,30 +44,33 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-012** | Cloudflare R2 Provisioning, Firebase Security & Production Live Deployment | **COMPLETED & PUBLISHED** | `release/bazaarvilla-r2-task-012` (`7adb9e9` / `4a5e6ae`) | [TASK-012-r2-provisioning-live-deployment.md](./TASK-012-r2-provisioning-live-deployment.md) | Configured Cloudflare R2 credentials securely in Netlify; verified live R2 connectivity & CORS headers; deployed version-controlled Firestore security rules & composite indexes to project `trendkartz`; resolved Next.js 16 Server Component event handler boundary on `/products`; successfully published application to `https://bazaarvilla.com/` (Netlify Deploy ID: `6af1bcb67fe1fb6cddcddc08`); verified 100% pass across all 25 live smoke tests (LIVE-001 through LIVE-025). |
 | **TASK-013** | Bazaarvilla Complete Checkout, Razorpay Test Mode & Admin Verification | **COMPLETED & VERIFIED ON PRODUCTION** | `task/013-admin-checkout-testmode-verification` (`b976295`) | [TASK-013-admin-checkout-testmode-verification.md](./TASK-013-admin-checkout-testmode-verification.md) | Ingested Razorpay Test Mode credentials; registered real Test Mode webhook (`Ty95LaT8ungdGT`); provisioned approved administrator (`admin: true`); created synthetic products/coupons; verified live COD and prepaid Razorpay checkouts; confirmed authoritative payment capture, dual-level idempotency, and failure recovery; resolved R2 presigned PUT `If-None-Match` signature mismatch; resolved Netlify scheduled function `server-only` bundler crash; verified 228 automated tests (23 unit + 205 integration) and 25 live hosted verification checks; published deploy `6af20236423b70b04c207814`. |
 | **TASK-014** | Razorpay Payment Integrity Audit, Genuine Test Mode Checkout & Commercial Launch Readiness | **COMPLETED & VERIFIED ON PRODUCTION** | `task/014-payment-trust-genuine-testmode-verification` (`bba7583`) | [TASK-014-payment-trust-genuine-testmode-verification.md](./TASK-014-payment-trust-genuine-testmode-verification.md) | Remediated synthetic webhook payment trust boundary; implemented authoritative server-to-server `verifyPaymentWithGateway` validating payment existence, captured state, order association, currency, and amount directly with Razorpay API; empirically verified rejection of synthetic payment webhooks on production (HTTP 400); performed genuine Razorpay Test Mode checkout (`pay_TyBODYqTZVduUs` captured); audited 7 historical synthetic orders and formulated non-destructive quarantine proposal; redacted exposed guest tokens in TASK-013; verified Netlify `reservation-cleanup` scheduled function (cron `*/5 * * * *`, 0 errors); authored 20 security tests (TRUST-001 to TRUST-020); verified 248 automated tests (23 unit + 225 integration); published production deploy `6af214aa8c222447b0fe6feb`. |
+| **TASK-015** | Bazaarvilla Final Production Hardening, Synthetic Payment Reconciliation & Commercial Launch Readiness | **COMPLETED & PUBLISHED** | `task/015-precommercial-hardening-launch-readiness` (`c7ad9da` / `b570be6`) | [TASK-015-precommercial-hardening-launch-readiness.md](./TASK-015-precommercial-hardening-launch-readiness.md) | Restored Netlify secret scanning (`SECRETS_SCAN_ENABLED=true`) with targeted key/path omissions; audited 7 historical false-PAID orders via read-only dry run and designed compatible quarantine patch (`VERIFIED — AWAITING OWNER APPROVAL`); correlated genuine Razorpay webhook delivery events (`TyBOHQfmXY8IAb`, `TyBMwZkj1EtFPm`); verified live scheduled reservation cleanup on production (stock 45 -> restored 46, idempotency verified); enforced server-authoritative commercial checkout safety gate (`COMMERCIAL_CHECKOUT_ENABLED=false`, HTTP 503); unified customer-facing storefront branding from TrendKartz to Bazaarvilla across 11 files; verified 256 automated tests (23 unit + 233 integration including 38 rules); published Netlify production deploy `6af2234f54d68c5ee5d0e1bb`; verified 7/7 live smoke tests on `https://bazaarvilla.com`. |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is safely isolated on local release branch `task/014-payment-trust-genuine-testmode-verification` (`bba7583`).
-  - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af214aa8c222447b0fe6feb`).
+  - Git working tree is safely isolated on local release branch `task/015-precommercial-hardening-launch-readiness` (`b570be6`).
+  - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af2234f54d68c5ee5d0e1bb`).
+  - Netlify secret scanning is active (`SECRETS_SCAN_ENABLED=true`) with targeted exclusions (`SECRETS_SCAN_OMIT_KEYS`, `SECRETS_SCAN_OMIT_PATHS`), verified passing on remote build.
   - Server-to-server gateway verification (`verifyPaymentWithGateway`) protects all payment finalization pathways against synthetic claims.
+  - Public checkout feature gate (`COMMERCIAL_CHECKOUT_ENABLED=false`) is enforced server-side, blocking unapproved public checkout with HTTP 503 and storefront pre-launch notice.
+  - Storefront branding is unified to **Bazaarvilla** across all headers, footers, checkout, terms, privacy, contact, and about views.
   - Active Razorpay Test Mode Webhook `Ty95LaT8ungdGT` is operational on `https://bazaarvilla.com/api/webhooks/razorpay`.
   - Approved Firebase Administrator account (`work.mayanksaini@gmail.com` / UID `jdi97hwEJQYt5NXoUhyISOpW7Hl1`) holds verified Custom Claims `admin: true`.
   - Cloudflare R2 bucket `bazaarvilla-media` is fully connected with active preflight CORS (`PUT, GET`) from `https://bazaarvilla.com`.
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
-  - Host runtime is Node.js `v24.15.0` with `npm` `11.12.1`.
-  - Automated multi-JDK resolution detects and binds JetBrains JBR OpenJDK 25 for Firebase Emulator CLI.
-  - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing without errors every 5 minutes.
-  - Full automated test suite passing: 248 automated tests (23 unit + 225 integration including 38 security rules tests). Zero failures. Next.js production build passing across all 30 routes.
+  - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
     - `npm test`: 23/23 unit tests passing.
     - `npm run test:rules`: 38/38 rules and authorization tests passing.
-    - `npm run test:integration`: 205/205 integration tests across 17 suites passing.
+    - `npm run test:integration`: 233/233 integration tests across 19 suites passing.
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 30/30 Next.js routes compiling cleanly.
-  - Live Hosted E2E Tests:
+    - Total unique automated tests: **256 passing**.
+  - Live Production Smoke Tests:
+    - 7/7 live checks passing on `https://bazaarvilla.com` (public config gate, COD 503, prepaid 503, Terms branding, Privacy branding, Contact branding, About branding).
     - `node scripts/verify-customization-r2-lifecycle.mjs`: **100% PASS** on guest/registered customization upload, completion, and admin private media boundaries.
     - `node scripts/verify-razorpay-e2e.mjs`: **100% PASS** on order creation, stock reservation, webhook HMAC validation, payment capture, dual-level idempotency, and failure tracking.
     - `node scripts/test_cod_checkout.cjs`: **100% PASS** on Cash on Delivery checkout, stock deduction, and guest token retrieval.
@@ -159,14 +162,15 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 
 ## 6. Recommended Next Task
 
-### **TASK 014 — Razorpay Live Merchant Onboarding, Production KYC & Commercial Cutover Runbook**
+### **TASK 016 — Razorpay Live Merchant Onboarding, Production KYC & Commercial Cutover Runbook**
 - **Objective:**
-  1. Complete merchant business KYC verification with Razorpay to activate Live Mode.
-  2. Generate production Live API credentials (`rzp_live_...`) and dedicated production live webhook secret.
-  3. Register live production webhook pointing to `https://bazaarvilla.com/api/webhooks/razorpay` with required events.
-  4. Ingest live credentials into Netlify environment variables with `--secret` encryption flag.
-  5. Upgrade Firebase plan from Spark to Blaze (Pay-as-you-go) for production burst capacity.
-  6. Review terms of service, return/cancellation policies, and customer support channels.
-  7. Execute 1 real live micro-transaction (₹1) with immediate refund to confirm production banking settlement.
-  8. Formally authorize **GO FOR COMMERCIAL TRANSACTIONS**.
-- **Prerequisites:** TASK-013 completion, merchant business registration documents, and owner sign-off.
+  1. Project owner reviews and approves the historical 7-order synthetic reconciliation patch (`VERIFIED — AWAITING OWNER APPROVAL`).
+  2. Complete merchant business KYC verification with Razorpay to activate Live Mode.
+  3. Generate production Live API credentials (`rzp_live_...`) and dedicated production live webhook secret.
+  4. Register live production webhook pointing to `https://bazaarvilla.com/api/webhooks/razorpay` with required events.
+  5. Ingest live credentials into Netlify environment variables with `--secret` encryption flag.
+  6. Upgrade Firebase plan from Spark to Blaze (Pay-as-you-go) for production burst capacity.
+  7. Set `COMMERCIAL_CHECKOUT_ENABLED="true"` in Netlify environment variables to open public checkout.
+  8. Execute 1 real live micro-transaction (₹1) with immediate refund to confirm production banking settlement.
+  9. Formally authorize **GO FOR COMMERCIAL TRANSACTIONS**.
+- **Prerequisites:** TASK-015 completion, owner approval of 7-order patch, merchant business registration documents, and owner sign-off.
