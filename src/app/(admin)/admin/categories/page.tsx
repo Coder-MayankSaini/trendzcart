@@ -100,10 +100,10 @@ export default function AdminCategories() {
                     throw new Error(err.error || "Failed to authorize category upload");
                 }
 
-                const { uploadUrl, key, sessionId, publicUrl } = await authRes.json();
+                const { uploadUrl, key, sessionId, publicUrl, headers: presignedHeaders } = await authRes.json();
                 await fetch(uploadUrl, {
                     method: "PUT",
-                    headers: { "Content-Type": compressedFile.type || "image/jpeg" },
+                    headers: (presignedHeaders && typeof presignedHeaders === "object") ? presignedHeaders : { "Content-Type": compressedFile.type || "image/jpeg" },
                     body: compressedFile,
                 });
 

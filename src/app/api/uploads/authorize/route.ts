@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
             sizeBytes,
             originalName: typeof originalName === "string" ? originalName.slice(0, 100) : undefined,
             expiresInSeconds: 900, // 15 mins
-            ifNoneMatch: true, // create-once protection
+            ifNoneMatch: false, // unique keys generated via uuid, avoid signature mismatch
         });
 
         // 7. Store Upload Intent Session in Firestore

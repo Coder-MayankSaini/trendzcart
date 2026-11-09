@@ -23,10 +23,10 @@ async function uploadFileToR2(file: File, folder: string, subId?: string): Promi
         const err = await authRes.json().catch(() => ({}));
         throw new Error(err.error || "Failed to authorize upload");
     }
-    const { uploadUrl, key, sessionId, publicUrl } = await authRes.json();
+    const { uploadUrl, key, sessionId, publicUrl, headers: presignedHeaders } = await authRes.json();
     await fetch(uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": file.type || "image/jpeg" },
+        headers: (presignedHeaders && typeof presignedHeaders === "object") ? presignedHeaders : { "Content-Type": file.type || "image/jpeg" },
         body: file,
     });
     await fetch("/api/uploads/complete", {

@@ -228,6 +228,7 @@ export async function generateUploadUrl(options: {
             expiresAt,
             headers: {
                 'Content-Type': contentType,
+                ...(ifNoneMatch ? { 'If-None-Match': '*' } : {}),
             },
         };
     }
@@ -256,6 +257,7 @@ export async function generateUploadUrl(options: {
         expiresAt,
         headers: {
             'Content-Type': contentType,
+            ...(ifNoneMatch ? { 'If-None-Match': '*' } : {}),
         },
     };
 }

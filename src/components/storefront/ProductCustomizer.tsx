@@ -139,7 +139,8 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                     throw new Error(authErr.error || "Failed to authorize upload");
                 }
 
-                const { uploadUrl, key, sessionId } = await authRes.json();
+                const authData = await authRes.json();
+                const { uploadUrl, key, sessionId, headers: presignedHeaders } = authData;
                 storagePath = key;
                 fileId = key.split("/").pop() || uuidv4();
 
@@ -147,7 +148,13 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                 await new Promise<void>((resolve, reject) => {
                     const xhr = new XMLHttpRequest();
                     xhr.open("PUT", uploadUrl);
-                    xhr.setRequestHeader("Content-Type", fileToUpload.type || "image/jpeg");
+                    if (presignedHeaders && typeof presignedHeaders === "object") {
+                        Object.entries(presignedHeaders).forEach(([headerName, headerVal]) => {
+                            xhr.setRequestHeader(headerName, headerVal as string);
+                        });
+                    } else {
+                        xhr.setRequestHeader("Content-Type", fileToUpload.type || "image/jpeg");
+                    }
                     xhr.upload.onprogress = (evt) => {
                         if (evt.lengthComputable) {
                             const percent = Math.round((evt.loaded / evt.total) * 80);
