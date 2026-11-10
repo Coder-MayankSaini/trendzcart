@@ -14,6 +14,7 @@ interface ProductCardImageProps {
     className?: string;
     priority?: boolean;
     sizes?: string;
+    objectFit?: "cover" | "contain";
 }
 
 export function ProductCardImage({
@@ -21,7 +22,8 @@ export function ProductCardImage({
     alt,
     className = "product-image",
     priority = false,
-    sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
+    sizes = "(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw",
+    objectFit = "cover"
 }: ProductCardImageProps) {
     const cleanSrc = normalizeMediaUrl(src);
     const [imgSrc, setImgSrc] = useState(cleanSrc);
@@ -60,7 +62,7 @@ export function ProductCardImage({
             sizes={sizes}
             priority={priority}
             className={className}
-            style={{ objectFit: "cover" }}
+            style={{ objectFit }}
             unoptimized={isDataUri}
             onError={() => {
                 if (!hasError) {

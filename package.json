@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/unit/pricing.test.ts tests/unit/staging-guard.test.ts tests/unit/admin-responsive.test.ts tests/unit/admin-gallery.test.ts tests/unit/storefront-image-quality.test.ts tests/unit/reviews-validation.test.ts tests/unit/purchase-activity.test.ts tests/unit/cod-customization-restriction.test.ts",
+    "test": "node --test tests/unit/pricing.test.ts tests/unit/staging-guard.test.ts tests/unit/admin-responsive.test.ts tests/unit/admin-gallery.test.ts tests/unit/storefront-image-quality.test.ts tests/unit/reviews-validation.test.ts tests/unit/purchase-activity.test.ts tests/unit/cod-customization-restriction.test.ts tests/unit/image-containment.test.ts",
     "test:integration": "node scripts/run-integration-tests.js",
     "test:rules": "node scripts/run-rules-tests.js",
     "emulators": "firebase emulators:start --project demo-trendkartz"

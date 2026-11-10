@@ -23,10 +23,10 @@ export default function ProductImageGallery({ images, productName }: ProductImag
     const mainImgSrc = isMainFailed ? FALLBACK_DATA_URI : normalizeMediaUrl(rawMainImg);
 
     return (
-        <div className="pig-container">
+        <div className="pig-container" data-testid="pig-container">
             {/* Thumbnail Column (left side on desktop, bottom scroll on mobile) */}
             {images.length > 1 && (
-                <div className="pig-thumbs">
+                <div className="pig-thumbs" data-testid="pig-thumbs">
                     {images.map((img, idx) => {
                         const thumbSrc = failedImages[idx] ? FALLBACK_DATA_URI : normalizeMediaUrl(img);
                         return (
@@ -36,6 +36,7 @@ export default function ProductImageGallery({ images, productName }: ProductImag
                                 onClick={() => setSelectedIndex(idx)}
                                 className={`pig-thumb ${safeIndex === idx ? 'pig-thumb-active' : ''}`}
                                 aria-label={`View ${productName} image ${idx + 1}`}
+                                data-testid={`pig-thumb-${idx}`}
                             >
                                 <Image
                                     src={thumbSrc}
@@ -43,7 +44,7 @@ export default function ProductImageGallery({ images, productName }: ProductImag
                                     width={64}
                                     height={80}
                                     sizes="64px"
-                                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
                                     unoptimized={thumbSrc.startsWith("data:")}
                                     onError={() => {
                                         setFailedImages(prev => ({ ...prev, [idx]: true }));
@@ -56,16 +57,17 @@ export default function ProductImageGallery({ images, productName }: ProductImag
             )}
 
             {/* Main Featured Display Image */}
-            <div className="pig-main">
+            <div className="pig-main" data-testid="pig-main">
                 <Image
                     src={mainImgSrc}
                     alt={`${productName} - Image ${safeIndex + 1}`}
-                    width={900}
-                    height={1125}
+                    width={1200}
+                    height={1500}
                     priority
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 55vw, 650px"
                     className="pig-main-img"
-                    style={{ width: "100%", height: "auto", objectFit: "cover" }}
+                    data-testid="pig-main-img"
+                    style={{ width: "100%", height: "auto", maxHeight: "100%", objectFit: "contain" }}
                     unoptimized={mainImgSrc.startsWith("data:")}
                     onError={() => {
                         setFailedImages(prev => ({ ...prev, [safeIndex]: true }));
@@ -73,7 +75,7 @@ export default function ProductImageGallery({ images, productName }: ProductImag
                 />
                 {/* Image counter indicator */}
                 {images.length > 1 && (
-                    <span className="pig-counter">
+                    <span className="pig-counter" data-testid="pig-counter">
                         {safeIndex + 1} / {images.length}
                     </span>
                 )}

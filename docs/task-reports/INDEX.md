@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/027-customizable-product-cod-restriction`  
+**Current Active Git Branch:** `task/028-product-image-containment`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 027 FULLY DEPLOYED & VERIFIED ON PRODUCTION** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af358848c8957162298eb3c`; Task 027 customizable product COD restriction active in production with 396 unique automated tests passing [99 unit + 297 integration]; anti-flicker and fail-closed checkout verification live; 10/10 post-deployment smoke tests verified live; Razorpay Live Mode operational)
+**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 028 COMPLETED LOCALLY (AWAITING OWNER APPROVAL)** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af358848c8957162298eb3c`; Task 028 product image containment completed locally with 406 unique automated tests passing [109 unit + 297 integration]; 16 before/after visual QA screenshots captured across 6 viewports and 4 aspect ratios; production release gate enforced; Razorpay Live Mode operational)
 
 ---
 
@@ -57,6 +57,7 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-025** | Bazaarvilla Admin Product Image Gallery UI Layout Repair | **COMPLETED & PUBLISHED** | `task/025-admin-product-gallery-layout-fix` (`d071ebc`) | [TASK-025-admin-product-gallery-layout-fix.md](./TASK-025-admin-product-gallery-layout-fix.md) | Diagnosed and proved root cause of hero blank space (global `.hero` padding leakage of 240px onto admin cards) and overlapping action buttons; replaced generic `.hero` with scoped `.is-hero` and eliminated `!important` overrides; re-architected gallery cards with self-contained 1:1 preview box, neutral background, `object-fit: contain`, position chips, hero badge, and dedicated footer actions; optimized mobile viewports (<= 430px) with 44px symmetric touch targets; upgraded dropzone UI; authored 5 unit tests (GALLERY-001 to GALLERY-005); verified 293 unique tests (35 unit + 258 integration); published Netlify deploy `6af30335364d8bc4b2d811d5`; verified live on `https://bazaarvilla.com`. |
 | **TASK-026** | Bazaarvilla Blurry Storefront Product Images & Image Quality Optimization | **COMPLETED & PUBLISHED** | `task/026-storefront-product-image-sharpness-fix` (`af9aa4d`) | [TASK-026-storefront-product-image-sharpness-fix.md](./TASK-026-storefront-product-image-sharpness-fix.md) | Diagnosed and proved root causes of storefront product image blurriness (premature thumbnail selection of 279×375 px asset stretched 2.74×–3.33× on high-DPI displays, raw unoptimized `<img>` tags, and homepage `unoptimized={true}`); implemented high-resolution cover prioritization, path-based URL normalization, Next.js `<Image>` with responsive `sizes` across catalog and homepage, high-definition PDP gallery with enforced 4/5 aspect ratio (`height: auto`), instant thumbnail switching, admin compression threshold increase to 500KB/800px, and modern WebP/AVIF formats; reduced image payload by 53%–96% while delivering pristine sharpness; authored 6 unit tests (QUALITY-001 to QUALITY-006); verified 299 unique automated tests (41 unit + 258 integration); published Netlify production deploy `6af31801088738694fc1dcb8`; 36/36 post-deployment live smoke checks passed on `https://bazaarvilla.com`. |
 | **TASK-027** | Bazaarvilla Customizable Product COD Restriction & Mixed-Cart Safeguards | **COMPLETED & PUBLISHED** | `task/027-customizable-product-cod-restriction` (`87261bc`) | [TASK-027-customizable-product-cod-restriction.md](./TASK-027-customizable-product-cod-restriction.md) | Enforced secure checkout business rule: if shopping cart contains any customizable product, Cash on Delivery is strictly disabled for the entire cart, while regular products retain existing COD eligibility; authoritative personalization detection via trusted catalog metadata (`isCustomized: true`, `customizationType`, legacy custom flags) using shared browser-safe `isCustomizableProduct` utility; anti-flicker pending verification gate (`Checking eligibility...`) and fail-closed catalog verification; mixed-cart protection; mandatory server-side transactional validation on `POST /api/orders/create` before inventory reservations; 396 unique automated tests passing (99 unit + 297 integration); 9 visual QA screenshots captured; published to Netlify production (Deploy ID: `6af358848c8957162298eb3c`); 10/10 live smoke checks passed on `https://bazaarvilla.com`. |
+| **TASK-028** | Bazaarvilla Product Image Containment & No-Crop Gallery Fix | **COMPLETED LOCALLY (RELEASE GATE)** | `task/028-product-image-containment` | [TASK-028-product-image-containment.md](./TASK-028-product-image-containment.md) | Eliminated product photograph cropping and clipping on storefront PDP; container-level framing with `aspect-ratio: 4/5` and neutral background provides zero CLS; `object-fit: contain` displays 100% of source pixels across portrait (4:5), square (1:1), landscape (16:9), and tall (9:16) photos; updated admin dropzone guidance for 4:5 recommendation while supporting square and landscape; authored 10 containment unit tests (CONTAIN-001 to CONTAIN-010); 406 unique automated tests passing (109 unit + 297 integration); 16 before/after visual QA screenshots captured; production release gate enforced. |
 
 ---
 
@@ -80,19 +81,27 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
-    - `npm test`: 99/99 unit tests passing across 8 suites (14 pricing, 11 staging guard, 5 responsive admin, 5 gallery layout, 6 image quality, 19 review validation, 25 purchase activity, and **14 customizable product COD restriction**).
+    - `npm test`: 109/109 unit tests passing across 9 suites (14 pricing, 11 staging guard, 5 responsive admin, 5 gallery layout, 6 image quality, 19 review validation, 25 purchase activity, 14 customizable product COD restriction, and **10 product image containment tests**).
     - `npm run test:rules`: 39/39 rules and authorization tests passing (subset of integration suite).
-    - `npm run test:integration`: 297/297 integration tests across 23 suites passing (including **14 COD restriction integration tests**, 10 purchase activity API & security tests, 14 bulk review management tests, 39 security rules tests, and 25 media isolation tests).
+    - `npm run test:integration`: 297/297 integration tests across 23 suites passing (including 14 COD restriction integration tests, 10 purchase activity API & security tests, 14 bulk review management tests, 39 security rules tests, and 25 media isolation tests).
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 35/35 Next.js routes compiling cleanly with Turbopack.
-    - Total unique automated tests: **396 passing** (99 unit + 297 integration; zero double-counting).
+    - Total unique automated tests: **406 passing** (109 unit + 297 integration; zero double-counting).
+  - TASK 028 Status:
+    - Product photograph cropping, clipping, and distortion eliminated on storefront PDP.
+    - Container-level framing with `aspect-ratio: 4/5`, flex centering, and neutral background prevents Cumulative Layout Shift (CLS = 0).
+    - Main image and thumbnail strips enforce `object-fit: contain`, displaying 100% of source pixels across portrait (4:5), square (1:1), landscape (16:9), and tall portrait (9:16) photos.
+    - Counter badge (`.pig-counter`) elevated with `z-index: 2` to float neatly over contained imagery.
+    - Admin dropzone recommendations updated: "Recommended: 4:5 portrait (1200 × 1500 px) · Square & landscape images also fully supported without cropping".
+    - 16 before/after visual QA screenshots captured across 6 viewports (320px, 375px, 430px, 768px, 1024px, 1440px) in `docs/screenshots/task028/`.
+    - Production deployment safely paused awaiting explicit owner authorization.
   - TASK 027 Status:
     - Business rule fully implemented and verified: Cash on Delivery strictly disabled when cart contains customizable/personalized products.
     - Regular products retain complete COD eligibility.
     - Mixed regular/personalized carts are protected as whole prepaid orders (no automatic cart splitting or forced product removals).
     - Server-side transactional enforcement active on `POST /api/orders/create` before inventory decrements or order persistence.
     - 9 visual QA screenshots captured and verified across desktop and mobile in `docs/screenshots/task027/`.
-    - Production deployment safely paused awaiting explicit owner authorization.
+    - Production deployment executed and verified live on `https://bazaarvilla.com` (Deploy ID: `6af358848c8957162298eb3c`).
   - TASK 026 Storefront Image Sharpness Status:
     - Root causes mathematically proven and remediated: storefront cover image selector now prioritizes master photo `images[0]` over compressed thumbnail `thumbnails[0]`.
     - Upgraded `ProductCardImage.tsx` to Next.js `<Image>` with responsive `sizes` and path-based URL normalizer.
@@ -236,14 +245,9 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 
 ## 7. Future Feature Backlog & Engineering Roadmap
 
-The following upcoming features are documented in the authoritative project backlog for future milestones. In accordance with architectural dependencies, the flexible product variant schema must precede the CSV bulk importer to ensure full variant support from inception. None of these features are implemented in TASK 023.
+The following upcoming features are documented in the authoritative project backlog for future milestones. In accordance with architectural dependencies, the flexible product variant schema must precede the CSV bulk importer to ensure full variant support from inception. Product Image Containment has been implemented in TASK 028.
 
-### 1. Upcoming — Product Image Containment
-- **Full Display:** Product detail main and gallery images must display completely without cropping using `object-fit: contain`.
-- **Aspect Ratio Recommendation:** Maintain the 4:5 recommendation (`1200 × 1500 px`) for optimal vertical framing.
-- **Visual Quality:** Preserve high-DPI responsive rendering and pristine sharpness across all mobile and desktop viewports without degrading blur filters or distortion.
-
-### 2. Upcoming — Flexible Product Sizes and Variants
+### 1. Upcoming — Flexible Product Sizes and Variants
 - **Apparel Size Options:** Standard apparel sizes: XS, S, M, L, XL, XXL, and Free Size.
 - **Named & Metric Sizes:** Support named descriptor sizes (e.g. Small, Medium, Large) and explicit physical dimensions per size (e.g., Large — `26 × 26 cm`).
 - **Customizable Labels:** Allow arbitrary custom size and attribute labels per product category.
@@ -251,7 +255,7 @@ The following upcoming features are documented in the authoritative project back
 - **Variant-Level Inventory & Pricing:** Each variant supports its own distinct SKU, price override, inventory stock count, and optional variant-specific image.
 - **Server-Side Trust Boundary:** Comprehensive server-side variant verification during cart additions, order creation (`/api/orders/create`), and Razorpay checkout (`/api/razorpay/create-order`).
 
-### 3. Upcoming — CSV Bulk Product Import
+### 2. Upcoming — CSV Bulk Product Import
 - **Compatibility:** Shopify-compatible CSV column mapping alongside an authoritative downloadable Bazaarvilla CSV template.
 - **Batch Processing:** Support bulk product creation and catalog updates with pre-import schema validation and interactive preview.
 - **Variant & Dimension Integration:** Full support for multi-variant products, dimensions, and size attributes powered by the flexible variant schema.

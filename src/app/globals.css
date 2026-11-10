@@ -428,6 +428,9 @@ button {
   padding: 0;
   background: var(--bg-secondary);
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .pig-thumb:hover {
@@ -442,7 +445,7 @@ button {
 .pig-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -452,13 +455,18 @@ button {
   border-radius: 16px;
   overflow: hidden;
   background: var(--bg-secondary);
+  aspect-ratio: 4/5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .pig-main-img {
   width: 100%;
   height: auto;
+  max-height: 100%;
   aspect-ratio: 4/5;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 
@@ -474,6 +482,7 @@ button {
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
+  z-index: 2;
 }
 
 /* Product Info Column */

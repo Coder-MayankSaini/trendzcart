@@ -849,7 +849,10 @@ export default function AdminProducts() {
                                 <span style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)" }}>
                                     {galleryItems.length === 0 ? "Upload Product Photos" : "Add More Images"}
                                 </span>
-                                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", textAlign: "center" }}>
+                                    Recommended: 4:5 portrait (1200 × 1500 px) · Square & landscape images also fully supported without cropping
+                                </span>
+                                <span style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>
                                     JPEG, PNG, WebP · Max 10MB per file · Auto-optimized before R2 upload
                                 </span>
                             </div>
