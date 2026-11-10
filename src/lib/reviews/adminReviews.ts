@@ -97,6 +97,7 @@ export async function recalculateAndPersistProductStats(
     const reviewsSnap = await adminDb
         .collection("reviews")
         .where("productId", "==", productId)
+        .limit(500)
         .get();
 
     const reviewsData = reviewsSnap.docs.map((d) => d.data() as any);

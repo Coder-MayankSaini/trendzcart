@@ -580,4 +580,81 @@ describe("Review Bulk Import, Moderation & Storefront Aggregates Integration Tes
         assert.ok(!returnedIds.includes("rev_archived"), "Archived review must NOT be visible");
         assert.ok(!returnedIds.includes("rev_simulated"), "Simulated review must NOT be visible");
     });
+
+    it("REV-IMPORT-013: should display genuine legacy customer reviews while strictly filtering legacy fake reviews", async () => {
+        const timestamp = Date.now();
+
+        // 1. Genuine legacy customer review (created pre-TASK 022: no publicationStatus, isFake: false)
+        await adminDb!.collection("reviews").doc("rev_legacy_genuine").set({
+            id: "rev_legacy_genuine",
+            productId: targetProductId,
+            userId: "legacy_user_123",
+            userName: "Legacy Customer",
+            rating: 5,
+            comment: "Genuine historical review before TASK 022.",
+            isFake: false,
+            verifiedPurchase: true,
+            createdAt: timestamp,
+        });
+
+        // 2. Legacy fake review (created in early dev: no publicationStatus, isFake: true)
+        await adminDb!.collection("reviews").doc("rev_legacy_fake").set({
+            id: "rev_legacy_fake",
+            productId: targetProductId,
+            userId: null,
+            userName: "Test User",
+            rating: 5,
+            comment: "Dummy review from old testing.",
+            isFake: true,
+            createdAt: timestamp,
+        });
+
+        const req = new Request(`http://localhost:3000/api/reviews?productId=${targetProductId}`);
+        const res = await publicReviewsGetRoute(req as any);
+        assert.equal(res.status, 200);
+
+        const data = await res.json();
+        const returnedIds = data.reviews.map((r: any) => r.id);
+
+        assert.ok(returnedIds.includes("rev_legacy_genuine"), "Genuine legacy customer review must be visible");
+        assert.ok(!returnedIds.includes("rev_legacy_fake"), "Legacy fake review must NOT be visible");
+    });
+
+    it("REV-IMPORT-014: should block review publishing with HTTP 503 when ADMIN_REVIEW_PUBLISHING_ENABLED='false'", async () => {
+        const prevEnv = process.env.ADMIN_REVIEW_PUBLISHING_ENABLED;
+        process.env.ADMIN_REVIEW_PUBLISHING_ENABLED = "false";
+
+        try {
+            const req = createJsonPostRequest(
+                "http://localhost:3000/api/admin/reviews/publish-batch",
+                {
+                    productId: targetProductId,
+                    reviews: [
+                        {
+                            externalReviewId: "transition-guard-01",
+                            reviewerDisplayName: "Transition User",
+                            rating: 5,
+                            body: "Test during security transition.",
+                            reviewedAt: "2026-11-01",
+                            source: "offline-customer-feedback",
+                            sourceReference: "TRANS-01",
+                            customerConsentConfirmed: true,
+                        },
+                    ],
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            );
+
+            const res = await publishBatchRoute(req);
+            assert.equal(res.status, 503);
+            const data = await res.json();
+            assert.equal(data.transitionPaused, true);
+        } finally {
+            if (prevEnv !== undefined) {
+                process.env.ADMIN_REVIEW_PUBLISHING_ENABLED = prevEnv;
+            } else {
+                delete process.env.ADMIN_REVIEW_PUBLISHING_ENABLED;
+            }
+        }
+    });
 });

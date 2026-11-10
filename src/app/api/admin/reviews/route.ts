@@ -42,7 +42,8 @@ export async function GET(req: NextRequest) {
 
         let query: FirebaseFirestore.Query = adminDb
             .collection("reviews")
-            .where("productId", "==", productId);
+            .where("productId", "==", productId)
+            .limit(200);
 
         const snap = await query.get();
         let reviews = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
@@ -121,6 +122,17 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json(
                 { error: `publicationStatus must be one of: ${allowedStatuses.join(", ")}` },
                 { status: 400, headers }
+            );
+        }
+
+        // Transition guard: block publishing if paused during security transition
+        if (publicationStatus === "published" && process.env.ADMIN_REVIEW_PUBLISHING_ENABLED === "false") {
+            return NextResponse.json(
+                {
+                    error: "Review publishing is temporarily paused during production security transition. Deploy hardened Firestore rules before enabling review publishing.",
+                    transitionPaused: true,
+                },
+                { status: 503, headers }
             );
         }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase/admin";
-import { calculateProductRatingStats } from "@/lib/reviews/validation";
+import { calculateProductRatingStats, isPubliclyPublishedReview } from "@/lib/reviews/validation";
 
 const PUBLIC_CACHE_HEADERS = {
     "Cache-Control": "public, s-maxage=30, stale-while-revalidate=60",
@@ -31,10 +31,11 @@ export async function GET(req: NextRequest) {
             );
         }
 
-        // Query all reviews for this product
+        // Bounded query for reviews to prevent excessive or unbounded Firestore reads
         const snap = await adminDb
             .collection("reviews")
             .where("productId", "==", productId)
+            .limit(200)
             .get();
 
         const allDocs = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
@@ -42,16 +43,8 @@ export async function GET(req: NextRequest) {
         // Overall stats calculated across all published customer reviews
         const stats = calculateProductRatingStats(allDocs);
 
-        // Filter strictly to published reviews for public consumption
-        let publishedReviews = allDocs.filter((r) => {
-            if (r.editorialNote === true) return false;
-            if (r.sourceType === "simulated-test") return false;
-            if (r.isFake === true && r.publicationStatus !== "published") return false;
-            const isPublished =
-                r.publicationStatus === "published" ||
-                (!r.publicationStatus && r.isFake !== true);
-            return isPublished;
-        });
+        // Filter strictly to published customer reviews (including legacy compatibility)
+        let publishedReviews = allDocs.filter(isPubliclyPublishedReview);
 
         // Filter by rating if specified
         if (ratingFilter && ratingFilter !== "ALL") {

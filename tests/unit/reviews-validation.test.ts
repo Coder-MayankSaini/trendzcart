@@ -4,6 +4,7 @@ import {
     validateReviewImportPayload,
     validateSingleReviewItem,
     calculateProductRatingStats,
+    isPubliclyPublishedReview,
     sanitizeReviewText,
     containsHtmlOrScript,
 } from "../../src/lib/reviews/validation.ts";
@@ -306,5 +307,41 @@ describe("Review Bulk Import Validation Unit Tests (TASK 022)", () => {
         assert.equal(stats.reviewCount, 0);
         assert.equal(stats.averageRating, 0.0);
         assert.deepEqual(stats.ratingDistribution, { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 });
+    });
+
+    it("VAL-018: isPubliclyPublishedReview should accept published reviews and genuine legacy reviews", () => {
+        // Explicitly published
+        assert.equal(isPubliclyPublishedReview({ rating: 5, publicationStatus: "published" }), true);
+        assert.equal(isPubliclyPublishedReview({ rating: 4, publicationStatus: "published", verifiedPurchase: true }), true);
+
+        // Genuine legacy customer review (created pre-TASK 022 without publicationStatus)
+        assert.equal(isPubliclyPublishedReview({ rating: 5, userId: "cust_123", isFake: false }), true);
+        assert.equal(isPubliclyPublishedReview({ rating: 4, isFake: false }), true);
+    });
+
+    it("VAL-019: isPubliclyPublishedReview should strictly reject unpublished, archived, fake, and simulated reviews", () => {
+        // Explicitly unpublished or archived or rejected
+        assert.equal(isPubliclyPublishedReview({ rating: 5, publicationStatus: "unpublished" }), false);
+        assert.equal(isPubliclyPublishedReview({ rating: 5, publicationStatus: "archived" }), false);
+        assert.equal(isPubliclyPublishedReview({ rating: 5, publicationStatus: "rejected" }), false);
+        assert.equal(isPubliclyPublishedReview({ rating: 5, publicationStatus: "draft" }), false);
+
+        // Simulated test data
+        assert.equal(isPubliclyPublishedReview({ rating: 5, sourceType: "simulated-test" }), false);
+        assert.equal(isPubliclyPublishedReview({ rating: 5, isSimulation: true }), false);
+        assert.equal(isPubliclyPublishedReview({ rating: 5, publicationStatus: "published", sourceType: "simulated-test" }), false);
+        assert.equal(isPubliclyPublishedReview({ rating: 5, publicationStatus: "published", isSimulation: true }), false);
+
+        // Editorial notes
+        assert.equal(isPubliclyPublishedReview({ rating: 5, editorialNote: true }), false);
+
+        // Fake / synthetic test entries (like legacy test data in Firestore)
+        assert.equal(isPubliclyPublishedReview({ rating: 5, isFake: true }), false);
+        assert.equal(isPubliclyPublishedReview({ rating: 5, isFake: true, publicationStatus: "published" }), false);
+
+        // Invalid inputs
+        assert.equal(isPubliclyPublishedReview(null), false);
+        assert.equal(isPubliclyPublishedReview(undefined), false);
+        assert.equal(isPubliclyPublishedReview("not-an-object"), false);
     });
 });

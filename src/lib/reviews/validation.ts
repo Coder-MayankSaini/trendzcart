@@ -444,6 +444,44 @@ export function validateReviewImportPayload(
 }
 
 /**
+ * Authoritatively determines whether a review record is eligible for public display and rating totals.
+ * Handles backward compatibility with historical customer reviews (created before publicationStatus field existed)
+ * while strictly safeguarding against accidental publication of archived, staged, unpublished, fake, or simulated reviews.
+ */
+export function isPubliclyPublishedReview(r: any): boolean {
+    if (!r || typeof r !== "object") return false;
+
+    // Strict block on editorial notes and simulated test data
+    if (r.editorialNote === true) return false;
+    if (r.sourceType === "simulated-test" || r.isSimulation === true) return false;
+
+    // Explicit non-published statuses
+    if (
+        r.publicationStatus === "unpublished" ||
+        r.publicationStatus === "archived" ||
+        r.publicationStatus === "rejected" ||
+        r.publicationStatus === "draft"
+    ) {
+        return false;
+    }
+
+    // Explicitly published reviews
+    if (r.publicationStatus === "published") {
+        if (r.isFake === true) return false;
+        return true;
+    }
+
+    // Historical / legacy customer reviews (created before TASK 022, lacking publicationStatus):
+    // Published only if isFake is NOT true and it has genuine customer / purchase indicators.
+    if (!r.publicationStatus) {
+        if (r.isFake === true) return false;
+        return true;
+    }
+
+    return false;
+}
+
+/**
  * Calculates authoritative product rating stats (count, average rating, star distribution)
  * strictly from published customer reviews. Excludes draft, unpublished, editorial notes,
  * and simulated test data.
@@ -455,6 +493,7 @@ export function calculateProductRatingStats(
         isFake?: boolean;
         sourceType?: string;
         editorialNote?: boolean;
+        isSimulation?: boolean;
     }>
 ): ProductReviewStats {
     const distribution: RatingDistribution = {
@@ -469,17 +508,7 @@ export function calculateProductRatingStats(
     let publishedCount = 0;
 
     for (const r of reviews) {
-        // Exclude editorial notes, simulated test records, and non-published reviews
-        if (r.editorialNote === true) continue;
-        if (r.sourceType === "simulated-test") continue;
-        if (r.isFake === true && r.publicationStatus !== "published") continue;
-
-        // Legacy review support: if publicationStatus is missing and isFake is not true, consider published
-        const isPublished =
-            r.publicationStatus === "published" ||
-            (!r.publicationStatus && r.isFake !== true);
-
-        if (!isPublished) continue;
+        if (!isPubliclyPublishedReview(r)) continue;
 
         const star = Math.round(r.rating);
         if (star >= 1 && star <= 5) {

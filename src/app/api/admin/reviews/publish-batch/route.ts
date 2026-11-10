@@ -37,6 +37,19 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        // 0. Safe transition release gate:
+        // Blocks review publishing if temporarily disabled during initial production deployment window
+        // prior to deploying restrictive Firestore security rules.
+        if (process.env.ADMIN_REVIEW_PUBLISHING_ENABLED === "false") {
+            return NextResponse.json(
+                {
+                    error: "Review import and publishing is temporarily paused during production security transition. Deploy hardened Firestore rules before enabling review publishing.",
+                    transitionPaused: true,
+                },
+                { status: 503, headers }
+            );
+        }
+
         const rawProductId = body?.productId;
         if (!rawProductId || typeof rawProductId !== "string" || !rawProductId.trim()) {
             return NextResponse.json(
