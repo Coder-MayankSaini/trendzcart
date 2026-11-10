@@ -55,8 +55,8 @@ The repository root contained three original image files uploaded by the owner:
 |---|---|---|---|---|
 | **Horizontal Brand Logo** | `/brand/bazaarvilla-logo-horizontal.webp` | 385 x 96 px | 9.6 KB | Primary Navbar & Footer Branding |
 | **Horizontal Brand Logo (PNG)** | `/brand/bazaarvilla-logo-horizontal.png` | 385 x 96 px | 46.2 KB | Lossless Fallback |
-| **Desktop Promotional Banner** | `/brand/bazaarvilla-banner-desktop.webp` | 1600 x 609 px | 85.1 KB | Desktop & Tablet Homepage Hero |
-| **Desktop Banner (JPEG Fallback)** | `/brand/bazaarvilla-banner-desktop.jpeg` | 1600 x 609 px | 102.5 KB | High-Quality Fallback |
+| **Desktop Promotional Banner (New 70% Off)** | `/brand/bazaarvilla-banner-desktop.webp` | 2000 x 761 px | 184 KB | Desktop & Tablet Homepage Hero |
+| **Desktop Banner (JPEG Fallback)** | `/brand/bazaarvilla-banner-desktop.jpeg` | 2000 x 761 px | 271 KB | High-Quality Fallback |
 | **Standalone B Mascot** | `/brand/bazaarvilla-mascot.webp` | 1065 x 864 px | 68.9 KB | Mobile Hero & Brand Spotlights |
 | **Standalone B Mascot (PNG)** | `/brand/bazaarvilla-mascot.png` | 1065 x 864 px | 205.6 KB | Lossless Mascot Reference |
 | **Official Wordmark** | `/brand/bazaarvilla-wordmark.webp` | 1071 x 200 px | 28.8 KB | Standalone Typography Asset |

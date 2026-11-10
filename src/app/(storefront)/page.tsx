@@ -5,11 +5,12 @@ import { adminDb } from "@/lib/firebase/admin";
 export const revalidate = 60;
 
 const marqueeItems = [
-  "DELIVERY ACROSS INDIA",
+  "70% OFF ON PRODUCTS",
+  "SALE LIVE NOW",
   "CASH ON DELIVERY AVAILABLE",
+  "DELIVERY ACROSS INDIA",
   "SECURE PAYMENTS VIA RAZORPAY",
-  "CURATED LIFESTYLE ESSENTIALS",
-  "7-DAY SUPPORT ASSISTANCE",
+  "SHOP SMART • LIVE BETTER",
   "QUALITY ASSURED",
 ];
 
@@ -121,12 +122,12 @@ export default async function Home() {
           {/* Desktop Banner Hero */}
           <div className="hp-hero-desktop">
             <div className="hp-hero-copy">
-              <span className="hp-hero-badge">✨ Curated Essentials &amp; Custom Picks</span>
+              <span className="hp-hero-badge">🔥 Sale Live Now • Up to 70% Off</span>
               <h1 className="hp-hero-title">
                 Discover something <span>you&apos;ll love</span>.
               </h1>
               <p className="hp-hero-subtitle">
-                Everyday finds, thoughtful gifts, and more — all at Bazaarvilla.
+                Shop smart, live better. Everyday finds, thoughtful gifts, and custom picks — all at Bazaarvilla.
               </p>
               <div className="hp-hero-actions">
                 <Link href="/products" className="hp-btn-primary">
@@ -141,9 +142,9 @@ export default async function Home() {
             <div className="hp-hero-banner-container">
               <Image
                 src="/brand/bazaarvilla-banner-desktop.webp"
-                alt="Bazaarvilla official shopping banner — Cash On Delivery, Easy Returns, Fast Delivery"
-                width={1600}
-                height={609}
+                alt="Bazaarvilla official shopping banner — 70% Off On Every Product, Sale Live Now"
+                width={2000}
+                height={761}
                 priority
                 sizes="(max-width: 1280px) 100vw, 1280px"
                 className="hp-hero-banner-img"
