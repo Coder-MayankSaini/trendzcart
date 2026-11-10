@@ -99,17 +99,13 @@ Sampled directly from the official branding artwork and tuned for WCAG AA/AAA ac
 - Preserved all authentication state, admin navigation, cart count badge, dark mode toggle, and mobile drawer functionality.
 
 ### 5.2 Homepage Hero Redesign (`src/app/(storefront)/page.tsx`)
-- **Desktop Showcase:**
-  - Header badge: `✨ Curated Essentials & Custom Picks` with light mint background.
-  - Headline: `Discover something you'll love.` with gradient green text accent.
-  - Subtitle: `Everyday finds, thoughtful gifts, and more — all at Bazaarvilla.`
-  - Action buttons: Primary `Shop Now →` (`#006B3C` with shadow) and secondary outline `Browse Categories`.
-  - Banner Showcase: Renders the full 1600x609 promotional banner in an elegant rounded container (`border-radius: 20px`, soft green-tinted shadow), preserving the aspect ratio without cropping embedded graphics or text.
-- **Mobile Hero:**
-  - Solves the embedded-text illegibility issue by rendering a dedicated mobile layout on screens `< 768px`.
-  - Prominently showcases the standalone B mascot (`bazaarvilla-mascot.webp`, 180px width).
-  - Clean HTML heading and subtitle matching desktop copy.
-  - Full-width touch-friendly CTA buttons (`min-height: 48px`).
+- **Direct Visual Banner Hero (All Extra Text Removed):**
+  - Removed separate heading, subtitle, and badge overlays per owner instruction so the rich banner artwork speaks for itself without text redundancy.
+  - The promotional banner (`bazaarvilla-banner-desktop.webp`, 2000×761 px) functions directly as the hero showcase background.
+  - Positioned the two call-to-action buttons directly over the banner:
+    - Primary CTA: **Shop Now →** (`#006B3C` with green border and deep shadow)
+    - Secondary CTA: **Discover Categories** (`rgba(255, 255, 255, 0.95)` with green border and high-contrast styling)
+  - Responsive overlay adapts seamlessly: spacious on desktop/tablet, compact on mobile (`max-width: 480px`).
 
 ### 5.3 Category Discovery Section
 - Clean 3-column responsive grid (desktop), 2-column (tablet), and responsive cards (mobile).

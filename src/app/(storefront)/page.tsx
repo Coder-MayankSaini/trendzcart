@@ -116,70 +116,26 @@ export default async function Home() {
 
   return (
     <div className="home-page">
-      {/* ===== HERO SECTION ===== */}
+      {/* ===== HERO BANNER SECTION ===== */}
       <section className="hp-hero-refresh">
         <div className="hp-container">
-          {/* Desktop Banner Hero */}
-          <div className="hp-hero-desktop">
-            <div className="hp-hero-copy">
-              <span className="hp-hero-badge">🔥 Sale Live Now • Up to 70% Off</span>
-              <h1 className="hp-hero-title">
-                Discover something <span>you&apos;ll love</span>.
-              </h1>
-              <p className="hp-hero-subtitle">
-                Shop smart, live better. Everyday finds, thoughtful gifts, and custom picks — all at Bazaarvilla.
-              </p>
-              <div className="hp-hero-actions">
-                <Link href="/products" className="hp-btn-primary">
-                  Shop Now →
-                </Link>
-                <Link href="/categories" className="hp-btn-outline">
-                  Browse Categories
-                </Link>
-              </div>
-            </div>
-
-            <div className="hp-hero-banner-container">
-              <Image
-                src="/brand/bazaarvilla-banner-desktop.webp"
-                alt="Bazaarvilla official shopping banner — 70% Off On Every Product, Sale Live Now"
-                width={2000}
-                height={761}
-                priority
-                sizes="(max-width: 1280px) 100vw, 1280px"
-                className="hp-hero-banner-img"
-              />
-            </div>
-          </div>
-
-          {/* Mobile Hero */}
-          <div className="hp-hero-mobile">
-            <div className="hp-hero-mobile-mascot-box">
-              <Image
-                src="/brand/bazaarvilla-mascot.webp"
-                alt="Bazaarvilla Mascot"
-                width={220}
-                height={178}
-                priority
-                className="hp-hero-mobile-mascot-img"
-              />
-            </div>
-            <div className="hp-hero-mobile-content">
-              <span className="hp-hero-badge">Welcome to Bazaarvilla</span>
-              <h1 className="hp-hero-title-mobile">
-                Discover something <span>you&apos;ll love</span>.
-              </h1>
-              <p className="hp-hero-subtitle-mobile">
-                Everyday finds, thoughtful gifts, and more — all at Bazaarvilla.
-              </p>
-              <div className="hp-hero-actions-mobile">
-                <Link href="/products" className="hp-btn-primary hp-btn-full">
-                  Shop Now →
-                </Link>
-                <Link href="/categories" className="hp-btn-outline hp-btn-full">
-                  Browse Categories
-                </Link>
-              </div>
+          <div className="hp-hero-banner-container">
+            <Image
+              src="/brand/bazaarvilla-banner-desktop.webp"
+              alt="Bazaarvilla 70% Off On Every Product, Sale Live Now"
+              width={2000}
+              height={761}
+              priority
+              sizes="(max-width: 1280px) 100vw, 1280px"
+              className="hp-hero-banner-img"
+            />
+            <div className="hp-hero-actions-overlay">
+              <Link href="/products" className="hp-btn-primary hp-btn-hero">
+                Shop Now →
+              </Link>
+              <Link href="/categories" className="hp-btn-outline hp-btn-hero-outline">
+                Discover Categories
+              </Link>
             </div>
           </div>
         </div>
