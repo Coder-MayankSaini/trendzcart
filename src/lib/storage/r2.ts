@@ -371,21 +371,26 @@ export async function deleteR2Object(key: string): Promise<boolean> {
 
 /**
  * Constructs public asset URL (for products, categories, reviews).
+ * Uses path-based routing (/api/media/public/{key}) to ensure CDN edge caches
+ * (such as Netlify Edge) correctly treat each distinct storage key as an independent cache entity.
  */
 export function getPublicAssetUrl(key: string): string {
     if (!key) return '';
 
+    const cleanKey = key.replace(/^\/+/, '');
     const customDomain = getR2PublicDomain();
     if (customDomain) {
         const base = customDomain.replace(/\/$/, '');
-        return `${base}/${key}`;
+        return `${base}/${cleanKey}`;
     }
 
-    return `/api/media/public?key=${encodeURIComponent(key)}`;
+    return `/api/media/public/${cleanKey}`;
 }
 
 /**
  * Extracts storage key from a public URL, download URL, or direct path.
+ * Supports both path-based (/api/media/public/products/...) and query-based (/api/media/public?key=...) formats,
+ * as well as custom domains and legacy Firebase storage URLs.
  */
 export function extractStorageKey(input: string): string | null {
     if (!input || typeof input !== 'string') return null;
@@ -401,10 +406,16 @@ export function extractStorageKey(input: string): string | null {
         return trimmed.split('?')[0];
     }
 
-    // Media proxy URL: /api/media/public?key=... or /api/media/download?key=...
+    // Path-based media proxy URL: /api/media/public/{key} or /api/media/download/{key}
+    const pathProxyMatch = trimmed.match(/\/api\/media\/(?:public|download)\/((?:products|categories|reviews|customizations)\/.+)/i);
+    if (pathProxyMatch && pathProxyMatch[1]) {
+        return decodeURIComponent(pathProxyMatch[1]).split('?')[0];
+    }
+
+    // Media proxy URL with query string: /api/media/public?key=... or /api/media/download?key=...
     const mediaProxyMatch = trimmed.match(/\/api\/media\/(?:public|download)\?key=([^&#]+)/i);
     if (mediaProxyMatch && mediaProxyMatch[1]) {
-        return decodeURIComponent(mediaProxyMatch[1]);
+        return decodeURIComponent(mediaProxyMatch[1]).split('?')[0];
     }
 
     // Custom domain URL: https://media.bazaarvilla.com/{key}
@@ -418,9 +429,9 @@ export function extractStorageKey(input: string): string | null {
     }
 
     // Legacy Firebase storage URL fallback extraction:
-    const legacyMatch = trimmed.match(/\/o\/(customizations(?:%2F|\/)[^?&#]+)/i);
+    const legacyMatch = trimmed.match(/\/o\/((?:customizations|products|categories|reviews)(?:%2F|\/)[^?&#]+)/i);
     if (legacyMatch && legacyMatch[1]) {
-        return decodeURIComponent(legacyMatch[1]);
+        return decodeURIComponent(legacyMatch[1].replace(/%2F/gi, '/')).split('?')[0];
     }
 
     return null;

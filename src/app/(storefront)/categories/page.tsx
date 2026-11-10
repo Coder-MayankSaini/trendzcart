@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { collection, getDocs, query } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
+const FALLBACK_CATEGORY_SVG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='338' viewBox='0 0 600 338' fill='none'%3E%3Crect width='600' height='338' fill='%23f1f5f9'/%3E%3Ctext x='300' y='175' text-anchor='middle' fill='%2394a3b8' font-family='system-ui' font-size='18' font-weight='600'%3EBazaarvilla Category%3C/text%3E%3C/svg%3E";
+
 interface Category {
     id: string;
     name: string;
@@ -64,7 +66,7 @@ export default function CategoriesPage() {
                                         style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
                                         onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
                                         onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
+                                        onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_CATEGORY_SVG; }}
                                     />
                                 ) : (
                                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No Image</div>

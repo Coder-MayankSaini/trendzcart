@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getR2Client, getR2BucketName, _mockStorage } from "@/lib/storage/r2";
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 
+export const dynamic = "force-dynamic";
+
 // Safe SVG fallback for missing or unavailable legacy images
 const FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" fill="none">
   <rect width="400" height="400" fill="#f1f5f9"/>
@@ -19,12 +21,18 @@ export async function GET(req: NextRequest) {
         if (!key) {
             return new NextResponse(FALLBACK_SVG, {
                 status: 200,
-                headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
+                headers: {
+                    "Content-Type": "image/svg+xml",
+                    "Cache-Control": "public, max-age=3600",
+                    "Vary": "Accept-Encoding, key",
+                    "Netlify-Vary": "query=key",
+                },
             });
         }
 
-        // Only allow public namespaces
-        const cleanKey = key.trim();
+        // Only allow public namespaces (products, categories, reviews)
+        // Customizations are strictly private and accessible only via /api/media/download
+        const cleanKey = decodeURIComponent(key).trim().replace(/^\/+/, "");
         if (
             !cleanKey.startsWith("products/") &&
             !cleanKey.startsWith("categories/") &&
@@ -36,7 +44,7 @@ export async function GET(req: NextRequest) {
         const client = getR2Client();
 
         if (!client) {
-            // Check mock storage
+            // Check mock storage (for local development and integration tests)
             const mock = _mockStorage.get(cleanKey);
             if (mock && mock.data) {
                 return new NextResponse(new Uint8Array(mock.data), {
@@ -44,12 +52,19 @@ export async function GET(req: NextRequest) {
                     headers: {
                         "Content-Type": mock.contentType || "image/jpeg",
                         "Cache-Control": "public, max-age=31536000, immutable",
+                        "Vary": "Accept-Encoding, key",
+                        "Netlify-Vary": "query=key",
                     },
                 });
             }
             return new NextResponse(FALLBACK_SVG, {
                 status: 200,
-                headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
+                headers: {
+                    "Content-Type": "image/svg+xml",
+                    "Cache-Control": "public, max-age=3600",
+                    "Vary": "Accept-Encoding, key",
+                    "Netlify-Vary": "query=key",
+                },
             });
         }
 
@@ -64,7 +79,12 @@ export async function GET(req: NextRequest) {
         if (!byteArray) {
             return new NextResponse(FALLBACK_SVG, {
                 status: 200,
-                headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
+                headers: {
+                    "Content-Type": "image/svg+xml",
+                    "Cache-Control": "public, max-age=3600",
+                    "Vary": "Accept-Encoding, key",
+                    "Netlify-Vary": "query=key",
+                },
             });
         }
 
@@ -73,12 +93,19 @@ export async function GET(req: NextRequest) {
             headers: {
                 "Content-Type": s3Response.ContentType || "image/jpeg",
                 "Cache-Control": "public, max-age=31536000, immutable",
+                "Vary": "Accept-Encoding, key",
+                "Netlify-Vary": "query=key",
             },
         });
     } catch {
         return new NextResponse(FALLBACK_SVG, {
             status: 200,
-            headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
+            headers: {
+                "Content-Type": "image/svg+xml",
+                "Cache-Control": "public, max-age=3600",
+                "Vary": "Accept-Encoding, key",
+                "Netlify-Vary": "query=key",
+            },
         });
     }
 }

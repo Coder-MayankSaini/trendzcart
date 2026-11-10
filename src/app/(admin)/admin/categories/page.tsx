@@ -23,6 +23,7 @@ export default function AdminCategories() {
     const [formData, setFormData] = useState<Partial<Category>>({});
     const [error, setError] = useState<string | null>(null);
     const [imageFile, setImageFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState<string>("");
     const [uploading, setUploading] = useState(false);
 
     useEffect(() => {
@@ -38,15 +39,33 @@ export default function AdminCategories() {
         return () => unsub();
     }, []);
 
+    const handleClose = () => {
+        if (previewUrl && previewUrl.startsWith("blob:")) {
+            try { URL.revokeObjectURL(previewUrl); } catch {}
+        }
+        setIsEditing(false);
+        setFormData({});
+        setImageFile(null);
+        setPreviewUrl("");
+    };
+
     const handleAddNew = () => {
+        if (previewUrl && previewUrl.startsWith("blob:")) {
+            try { URL.revokeObjectURL(previewUrl); } catch {}
+        }
         setFormData({ id: uuidv4(), name: "", description: "", image: "", showOnHome: false, order: categories.length });
         setImageFile(null);
+        setPreviewUrl("");
         setIsEditing(true);
     };
 
     const handleEdit = (cat: Category) => {
+        if (previewUrl && previewUrl.startsWith("blob:")) {
+            try { URL.revokeObjectURL(previewUrl); } catch {}
+        }
         setFormData({ ...cat });
         setImageFile(null);
+        setPreviewUrl(cat.image || "");
         setIsEditing(true);
     };
 
@@ -58,6 +77,36 @@ export default function AdminCategories() {
             console.error(err);
             alert("Failed to delete category.");
         }
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) {
+            alert(`File "${file.name}" exceeds 10MB limit.`);
+            e.target.value = "";
+            return;
+        }
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type.toLowerCase())) {
+            alert(`File "${file.name}" has unsupported format '${file.type}'. Only JPEG, PNG, and WebP are allowed.`);
+            e.target.value = "";
+            return;
+        }
+        if (previewUrl && previewUrl.startsWith("blob:")) {
+            try { URL.revokeObjectURL(previewUrl); } catch {}
+        }
+        setImageFile(file);
+        setPreviewUrl(URL.createObjectURL(file));
+        e.target.value = "";
+    };
+
+    const handleRemoveImage = () => {
+        if (previewUrl && previewUrl.startsWith("blob:")) {
+            try { URL.revokeObjectURL(previewUrl); } catch {}
+        }
+        setImageFile(null);
+        setPreviewUrl("");
+        setFormData(prev => ({ ...prev, image: "" }));
     };
 
     const handleSave = async (e: React.FormEvent) => {
@@ -111,7 +160,7 @@ export default function AdminCategories() {
                     body: JSON.stringify({ sessionId, key }),
                 });
 
-                imageUrl = publicUrl || `/api/media/public?key=${encodeURIComponent(key)}`;
+                imageUrl = publicUrl || `/api/media/public/${key}`;
             }
 
             await setDoc(doc(db, "categories", id), {
@@ -122,12 +171,17 @@ export default function AdminCategories() {
                 showOnHome: formData.showOnHome || false,
                 order: formData.order ?? categories.length,
             });
+
+            if (previewUrl && previewUrl.startsWith("blob:")) {
+                try { URL.revokeObjectURL(previewUrl); } catch {}
+            }
             setIsEditing(false);
             setFormData({});
             setImageFile(null);
-        } catch (err) {
-            console.error(err);
-            alert("Failed to save category.");
+            setPreviewUrl("");
+        } catch (err: any) {
+            console.error("AdminCategories handleSave error:", err);
+            alert("Failed to save category: " + (err.message || "Unknown error"));
         } finally {
             setUploading(false);
         }
@@ -173,7 +227,7 @@ export default function AdminCategories() {
                         </h2>
                         <button
                             type="button"
-                            onClick={() => setIsEditing(false)}
+                            onClick={handleClose}
                             className="admin-btn admin-btn-secondary admin-btn-sm"
                             disabled={uploading}
                         >
@@ -224,33 +278,45 @@ export default function AdminCategories() {
                         <div className="admin-form-group">
                             <label>Category Image</label>
                             <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "12px" }}>
-                                {(imageFile || formData.image) && (
-                                    <div style={{ width: "90px", height: "90px", borderRadius: "14px", overflow: "hidden", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)", flexShrink: 0 }}>
+                                {(previewUrl || formData.image) && (
+                                    <div style={{ position: "relative", width: "90px", height: "90px", borderRadius: "14px", overflow: "hidden", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)", flexShrink: 0 }}>
                                         <img
-                                            src={imageFile ? URL.createObjectURL(imageFile) : formData.image}
+                                            src={previewUrl || formData.image}
                                             alt="Category preview"
                                             style={{ width: "100%", height: "100%", objectFit: "cover" }}
                                         />
+                                        <button
+                                            type="button"
+                                            onClick={handleRemoveImage}
+                                            style={{
+                                                position: "absolute", top: "4px", right: "4px",
+                                                width: "22px", height: "22px", borderRadius: "50%",
+                                                backgroundColor: "rgba(239, 68, 68, 0.9)", color: "#ffffff",
+                                                border: "none", cursor: "pointer", display: "flex",
+                                                alignItems: "center", justifyContent: "center", fontSize: "12px",
+                                                lineHeight: 1
+                                            }}
+                                            title="Remove category image"
+                                        >
+                                            &times;
+                                        </button>
                                     </div>
                                 )}
                                 <div style={{ flex: 1, minWidth: "220px" }}>
                                     <label style={{
                                         display: "inline-flex", alignItems: "center", justifyContent: "center",
                                         padding: "10px 18px", borderRadius: "12px", border: "1px solid var(--border-color)",
-                                        backgroundColor: "var(--bg-primary)", cursor: "pointer", color: "var(--text-primary)",
-                                        fontSize: "0.88rem", fontWeight: 600, gap: "8px", minHeight: "44px"
+                                        backgroundColor: "var(--bg-primary)", cursor: uploading ? "not-allowed" : "pointer", color: "var(--text-primary)",
+                                        fontSize: "0.88rem", fontWeight: 600, gap: "8px", minHeight: "44px", opacity: uploading ? 0.6 : 1
                                     }}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
                                         Upload Image File
                                         <input
                                             type="file"
-                                            accept="image/*"
+                                            accept="image/jpeg,image/png,image/webp"
+                                            disabled={uploading}
                                             style={{ display: "none" }}
-                                            onChange={(e) => {
-                                                if (e.target.files?.[0]) {
-                                                    setImageFile(e.target.files[0]);
-                                                }
-                                            }}
+                                            onChange={handleFileChange}
                                         />
                                     </label>
                                     <div style={{ marginTop: "8px", fontSize: "0.78rem", color: "var(--text-secondary)" }}>
@@ -261,7 +327,14 @@ export default function AdminCategories() {
                                         className="admin-form-input"
                                         style={{ marginTop: "4px" }}
                                         value={formData.image || ""}
-                                        onChange={(e) => { setFormData({ ...formData, image: e.target.value }); setImageFile(null); }}
+                                        onChange={(e) => {
+                                            if (previewUrl && previewUrl.startsWith("blob:")) {
+                                                try { URL.revokeObjectURL(previewUrl); } catch {}
+                                            }
+                                            setImageFile(null);
+                                            setPreviewUrl("");
+                                            setFormData({ ...formData, image: e.target.value });
+                                        }}
                                         placeholder="https://..."
                                     />
                                 </div>
@@ -291,7 +364,7 @@ export default function AdminCategories() {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setIsEditing(false)}
+                                onClick={handleClose}
                                 className="admin-btn admin-btn-secondary"
                                 disabled={uploading}
                             >
@@ -303,7 +376,7 @@ export default function AdminCategories() {
                         <div className="admin-mobile-sticky-actions">
                             <button
                                 type="button"
-                                onClick={() => setIsEditing(false)}
+                                onClick={handleClose}
                                 className="admin-btn admin-btn-secondary"
                                 disabled={uploading}
                             >

@@ -37,7 +37,15 @@ async function uploadFileToR2(file: File, folder: string, subId?: string): Promi
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${idToken}` },
         body: JSON.stringify({ sessionId, key }),
     });
-    return publicUrl || `/api/media/public?key=${encodeURIComponent(key)}`;
+    return publicUrl || `/api/media/public/${key}`;
+}
+
+export interface GalleryItem {
+    id: string;
+    src: string;
+    file?: File;
+    isExisting: boolean;
+    existingThumb?: string;
 }
 
 interface Product {
@@ -70,9 +78,10 @@ export default function AdminProducts() {
     const [categories, setCategories] = useState<CategoryOption[]>([]);
     const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState<Partial<Product>>({});
-    const [imageFiles, setImageFiles] = useState<File[]>([]);
-    const [heroIndex, setHeroIndex] = useState(0);
-    const [newFilePreviews, setNewFilePreviews] = useState<string[]>([]);
+    const [galleryItems, setGalleryItems] = useState<GalleryItem[]>([]);
+    const [featuredImageId, setFeaturedImageId] = useState<string>("");
+    const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
@@ -133,7 +142,27 @@ export default function AdminProducts() {
         });
     }, [products, searchQuery, selectedCategory, selectedVisibility]);
 
+    const cleanupGalleryBlobUrls = (items: GalleryItem[]) => {
+        items.forEach(item => {
+            if (!item.isExisting && item.src.startsWith("blob:")) {
+                try {
+                    URL.revokeObjectURL(item.src);
+                } catch {}
+            }
+        });
+    };
+
+    const handleCloseEdit = () => {
+        cleanupGalleryBlobUrls(galleryItems);
+        setGalleryItems([]);
+        setFeaturedImageId("");
+        setUploadProgress(null);
+        setUploadError(null);
+        setIsEditing(false);
+    };
+
     const handleAddNew = () => {
+        cleanupGalleryBlobUrls(galleryItems);
         setFormData({
             id: crypto.randomUUID(),
             name: "",
@@ -153,19 +182,30 @@ export default function AdminProducts() {
             customizationType: null,
             createdAt: Date.now(),
         });
-        setImageFiles([]);
-        setNewFilePreviews([]);
-        setHeroIndex(0);
+        setGalleryItems([]);
+        setFeaturedImageId("");
+        setUploadProgress(null);
+        setUploadError(null);
         setIsAddingNewCategory(false);
         setNewCategoryName("");
         setIsEditing(true);
     };
 
     const handleEdit = (prod: Product) => {
-        setFormData(prod);
-        setImageFiles([]);
-        setNewFilePreviews([]);
-        setHeroIndex(0);
+        cleanupGalleryBlobUrls(galleryItems);
+        setFormData({ ...prod });
+        const existingImages = Array.isArray(prod.images) ? prod.images : (prod.images ? [prod.images] : []);
+        const existingThumbnails = Array.isArray(prod.thumbnails) ? prod.thumbnails : [];
+        const items: GalleryItem[] = existingImages.map((url, i) => ({
+            id: `existing-${i}-${url}`,
+            src: url,
+            isExisting: true,
+            existingThumb: existingThumbnails[i] || url,
+        }));
+        setGalleryItems(items);
+        setFeaturedImageId(items.length > 0 ? items[0].id : "");
+        setUploadProgress(null);
+        setUploadError(null);
         setIsAddingNewCategory(false);
         setNewCategoryName("");
         setIsEditing(true);
@@ -185,70 +225,127 @@ export default function AdminProducts() {
     const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
-        setImageFiles(prev => [...prev, ...files]);
-        const previews = files.map(f => URL.createObjectURL(f));
-        setNewFilePreviews(prev => [...prev, ...previews]);
-    };
+        setUploadError(null);
 
-    const removeExistingImage = (idx: number) => {
-        const updated = [...(formData.images || [])];
-        updated.splice(idx, 1);
+        const validItems: GalleryItem[] = [];
+        const invalidErrors: string[] = [];
+        const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
 
-        const upThumb = formData.thumbnails ? [...formData.thumbnails] : undefined;
-        if (upThumb && upThumb.length > idx) {
-            upThumb.splice(idx, 1);
+        for (const file of files) {
+            if (file.size > 10 * 1024 * 1024) {
+                invalidErrors.push(`"${file.name}" exceeds 10MB limit (${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
+                continue;
+            }
+            if (!allowedTypes.includes(file.type.toLowerCase())) {
+                invalidErrors.push(`"${file.name}" has unsupported format '${file.type || "unknown"}'. Only JPEG, PNG, and WebP are allowed.`);
+                continue;
+            }
+            validItems.push({
+                id: `new-${crypto.randomUUID()}`,
+                src: URL.createObjectURL(file),
+                file,
+                isExisting: false,
+            });
         }
 
-        setFormData({ ...formData, images: updated, thumbnails: upThumb });
-        const totalExisting = updated.length;
-        if (heroIndex >= totalExisting + newFilePreviews.length) {
-            setHeroIndex(0);
+        if (invalidErrors.length > 0) {
+            setUploadError(invalidErrors.join("; "));
         }
+
+        if (validItems.length > 0) {
+            setGalleryItems(prev => {
+                const combined = [...prev, ...validItems];
+                if (!featuredImageId && combined.length > 0) {
+                    setFeaturedImageId(combined[0].id);
+                }
+                return combined;
+            });
+        }
+
+        // Reset the file input so selecting the same file again fires onChange
+        e.target.value = "";
     };
 
-    const removeNewFile = (idx: number) => {
-        const updatedFiles = [...imageFiles];
-        const updatedPreviews = [...newFilePreviews];
-        updatedFiles.splice(idx, 1);
-        URL.revokeObjectURL(updatedPreviews[idx]);
-        updatedPreviews.splice(idx, 1);
-        setImageFiles(updatedFiles);
-        setNewFilePreviews(updatedPreviews);
-        const existingCount = (formData.images || []).length;
-        const total = existingCount + updatedPreviews.length;
-        if (heroIndex >= total) setHeroIndex(0);
+    const removeGalleryItem = (id: string) => {
+        setGalleryItems(prev => {
+            const itemToRemove = prev.find(item => item.id === id);
+            if (itemToRemove && !itemToRemove.isExisting && itemToRemove.src.startsWith("blob:")) {
+                try {
+                    URL.revokeObjectURL(itemToRemove.src);
+                } catch {}
+            }
+            const filtered = prev.filter(item => item.id !== id);
+            if (featuredImageId === id) {
+                setFeaturedImageId(filtered.length > 0 ? filtered[0].id : "");
+            }
+            return filtered;
+        });
+    };
+
+    const moveGalleryItem = (index: number, direction: "left" | "right") => {
+        setGalleryItems(prev => {
+            const targetIndex = direction === "left" ? index - 1 : index + 1;
+            if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+            const updated = [...prev];
+            const [moved] = updated.splice(index, 1);
+            updated.splice(targetIndex, 0, moved);
+            return updated;
+        });
     };
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setUploading(true);
+        setUploadError(null);
+        setUploadProgress(null);
+
         try {
-            const newUrls: string[] = [];
-            const newThumbUrls: string[] = [];
-            for (const file of imageFiles) {
+            const productId = formData.id || crypto.randomUUID();
+
+            // 1. Process and upload any new image files
+            const newFilesToUpload = galleryItems.filter(item => !item.isExisting && item.file);
+            const totalToUpload = newFilesToUpload.length;
+            const uploadedMap = new Map<string, { fullUrl: string; thumbUrl: string }>();
+
+            let uploadedCount = 0;
+            for (const item of newFilesToUpload) {
+                uploadedCount++;
+                setUploadProgress(`Optimizing & uploading image ${uploadedCount} of ${totalToUpload}...`);
+
+                const file = item.file!;
                 const optionsFull = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                 const compressedFile = await imageCompression(file, optionsFull);
 
                 const optionsThumb = { maxSizeMB: 0.1, maxWidthOrHeight: 600, useWebWorker: true };
                 const thumbFile = await imageCompression(file, optionsThumb);
 
-                const url = await uploadFileToR2(compressedFile, "products", formData.id);
-                newUrls.push(url);
+                const fullUrl = await uploadFileToR2(compressedFile, "products", productId);
+                const thumbUrl = await uploadFileToR2(thumbFile, "products", productId);
 
-                const thumbUrl = await uploadFileToR2(thumbFile, "products", formData.id);
-                newThumbUrls.push(thumbUrl);
+                uploadedMap.set(item.id, { fullUrl, thumbUrl });
             }
 
-            const allImages = [...(formData.images || []), ...newUrls];
-            const allThumbnails = [...(formData.thumbnails || []), ...newThumbUrls];
-
-            if (heroIndex > 0 && heroIndex < allImages.length) {
-                const [hero] = allImages.splice(heroIndex, 1);
-                allImages.unshift(hero);
+            // 2. Build final ordered image arrays with 1-to-1 thumbnail synchronization
+            // Locate the featured item and place it at index 0
+            const finalOrderedItems = [...galleryItems];
+            const heroIdx = finalOrderedItems.findIndex(item => item.id === featuredImageId);
+            if (heroIdx > 0) {
+                const [heroItem] = finalOrderedItems.splice(heroIdx, 1);
+                finalOrderedItems.unshift(heroItem);
             }
-            if (heroIndex > 0 && heroIndex < allThumbnails.length) {
-                const [heroThumb] = allThumbnails.splice(heroIndex, 1);
-                allThumbnails.unshift(heroThumb);
+
+            const allImages: string[] = [];
+            const allThumbnails: string[] = [];
+
+            for (const item of finalOrderedItems) {
+                if (item.isExisting) {
+                    allImages.push(item.src);
+                    allThumbnails.push(item.existingThumb || item.src);
+                } else if (uploadedMap.has(item.id)) {
+                    const uploaded = uploadedMap.get(item.id)!;
+                    allImages.push(uploaded.fullUrl);
+                    allThumbnails.push(uploaded.thumbUrl);
+                }
             }
 
             let finalCategory = formData.category || "";
@@ -274,6 +371,7 @@ export default function AdminProducts() {
 
             const payload = {
                 ...formData,
+                id: productId,
                 images: allImages,
                 thumbnails: allThumbnails,
                 category: finalCategory,
@@ -281,28 +379,22 @@ export default function AdminProducts() {
                 slug: formData.slug || formData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
                 updatedAt: Date.now(),
             };
-            if (!payload.id) return;
-            await setDoc(doc(db, "products", payload.id), payload, { merge: true });
+
+            await setDoc(doc(db, "products", productId), payload, { merge: true });
+
+            cleanupGalleryBlobUrls(galleryItems);
             setIsEditing(false);
-            setImageFiles([]);
-            setNewFilePreviews([]);
-            setHeroIndex(0);
-        } catch (err) {
-            console.error(err);
-            alert("Failed to save product.");
+            setGalleryItems([]);
+            setFeaturedImageId("");
+            setUploadProgress(null);
+        } catch (err: any) {
+            console.error("AdminProducts handleSave error:", err);
+            setUploadError(err.message || "Failed to save product. Please check network connection and try again.");
+            alert("Failed to save product: " + (err.message || "Unknown error"));
         } finally {
             setUploading(false);
+            setUploadProgress(null);
         }
-    };
-
-    const getAllPreviews = () => {
-        const existing = (formData.images || []).map((url, i) => ({
-            src: url, isExisting: true, index: i
-        }));
-        const newPrev = newFilePreviews.map((url, i) => ({
-            src: url, isExisting: false, index: i
-        }));
-        return [...existing, ...newPrev];
     };
 
     const handleFakeReviewSubmit = async (e: React.FormEvent) => {
@@ -345,8 +437,6 @@ export default function AdminProducts() {
     // PRODUCT EDIT / CREATION FORM VIEW
     // =========================================================================
     if (isEditing) {
-        const previews = getAllPreviews();
-
         return (
             <div className="animate-fade-in" style={{ maxWidth: "800px", margin: "0 auto" }}>
                 <AdminPageHeader
@@ -355,7 +445,7 @@ export default function AdminProducts() {
                 >
                     <button
                         type="button"
-                        onClick={() => { setIsEditing(false); setImageFiles([]); setNewFilePreviews([]); }}
+                        onClick={handleCloseEdit}
                         className="admin-btn admin-btn-secondary admin-btn-sm"
                         disabled={uploading}
                     >
@@ -564,55 +654,95 @@ export default function AdminProducts() {
                     <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }}>
                         <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
                             <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>4</span>
-                            Product Media Gallery
+                            Product Media Gallery ({galleryItems.length})
                         </h3>
                         <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "16px" }}>
-                            Upload product images via Cloudflare R2. Tap &quot;Set Hero&quot; to pick the main storefront thumbnail.
+                            Upload product images via Cloudflare R2. Tap &quot;Set Hero&quot; to pick the main storefront thumbnail. Use arrows to reorder.
                         </p>
 
+                        {uploadError && (
+                            <div style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", padding: "12px 16px", borderRadius: "12px", marginBottom: "16px", fontSize: "0.85rem", border: "1px solid rgba(239, 68, 68, 0.2)" }}>
+                                {uploadError}
+                            </div>
+                        )}
+
+                        {uploadProgress && (
+                            <div style={{ backgroundColor: "rgba(0, 107, 60, 0.1)", color: "var(--accent)", padding: "12px 16px", borderRadius: "12px", marginBottom: "16px", fontSize: "0.88rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "10px", border: "1px solid rgba(0, 107, 60, 0.2)" }}>
+                                <div className="co-spinner" style={{ width: 18, height: 18 }} />
+                                {uploadProgress}
+                            </div>
+                        )}
+
                         {/* Image previews grid */}
-                        {previews.length > 0 && (
+                        {galleryItems.length > 0 && (
                             <div className="admin-image-preview-grid">
-                                {previews.map((item, globalIdx) => (
-                                    <div
-                                        key={globalIdx}
-                                        className={`admin-image-preview-card ${heroIndex === globalIdx ? "hero" : ""}`}
-                                    >
-                                        <img src={item.src} alt={`Upload ${globalIdx + 1}`} />
+                                {galleryItems.map((item, index) => {
+                                    const isHero = featuredImageId ? item.id === featuredImageId : index === 0;
+                                    return (
+                                        <div
+                                            key={item.id}
+                                            className={`admin-image-preview-card ${isHero ? "hero" : ""}`}
+                                        >
+                                            <img src={item.src} alt={`Product gallery image ${index + 1}`} />
 
-                                        {heroIndex === globalIdx && (
-                                            <span style={{
-                                                position: "absolute", top: "6px", left: "6px",
-                                                padding: "3px 8px", borderRadius: "6px",
-                                                backgroundColor: "var(--accent)", color: "#ffffff",
-                                                fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase"
-                                            }}>
-                                                Hero
-                                            </span>
-                                        )}
+                                            {isHero && (
+                                                <span style={{
+                                                    position: "absolute", top: "6px", left: "6px",
+                                                    padding: "3px 8px", borderRadius: "6px",
+                                                    backgroundColor: "var(--accent)", color: "#ffffff",
+                                                    fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase"
+                                                }}>
+                                                    Hero
+                                                </span>
+                                            )}
 
-                                        <div className="admin-image-card-actions">
-                                            {heroIndex !== globalIdx && (
+                                            <div className="admin-image-card-actions">
+                                                {!isHero && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFeaturedImageId(item.id)}
+                                                        className="admin-image-card-btn"
+                                                        style={{ backgroundColor: "#ffffff", color: "#000000" }}
+                                                        title="Set as featured product image"
+                                                    >
+                                                        Set Hero
+                                                    </button>
+                                                )}
+                                                {index > 0 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveGalleryItem(index, "left")}
+                                                        className="admin-image-card-btn"
+                                                        style={{ backgroundColor: "#ffffff", color: "#000000", padding: "4px 8px" }}
+                                                        title="Move earlier in gallery"
+                                                    >
+                                                        ←
+                                                    </button>
+                                                )}
+                                                {index < galleryItems.length - 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => moveGalleryItem(index, "right")}
+                                                        className="admin-image-card-btn"
+                                                        style={{ backgroundColor: "#ffffff", color: "#000000", padding: "4px 8px" }}
+                                                        title="Move later in gallery"
+                                                    >
+                                                        →
+                                                    </button>
+                                                )}
                                                 <button
                                                     type="button"
-                                                    onClick={() => setHeroIndex(globalIdx)}
+                                                    onClick={() => removeGalleryItem(item.id)}
                                                     className="admin-image-card-btn"
-                                                    style={{ backgroundColor: "#ffffff", color: "#000000" }}
+                                                    style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
+                                                    title="Remove image from gallery"
                                                 >
-                                                    Set Hero
+                                                    Remove
                                                 </button>
-                                            )}
-                                            <button
-                                                type="button"
-                                                onClick={() => item.isExisting ? removeExistingImage(item.index) : removeNewFile(item.index)}
-                                                className="admin-image-card-btn"
-                                                style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
-                                            >
-                                                Remove
-                                            </button>
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
 
@@ -620,8 +750,8 @@ export default function AdminProducts() {
                         <label style={{
                             display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
                             padding: "24px 16px", borderRadius: "14px", border: "2px dashed var(--border-color)",
-                            backgroundColor: "var(--bg-primary)", cursor: "pointer", gap: "8px", textAlign: "center",
-                            transition: "border-color 0.2s ease"
+                            backgroundColor: "var(--bg-primary)", cursor: uploading ? "not-allowed" : "pointer", gap: "8px", textAlign: "center",
+                            transition: "border-color 0.2s ease", opacity: uploading ? 0.6 : 1
                         }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--accent)" }}>
                                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -629,15 +759,16 @@ export default function AdminProducts() {
                                 <polyline points="21 15 16 10 5 21" />
                             </svg>
                             <span style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                                {previews.length === 0 ? "Tap to select photo library or camera" : "+ Add more images"}
+                                {galleryItems.length === 0 ? "Tap to select photo library or camera" : "+ Add more images"}
                             </span>
                             <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-                                Supports JPEG, PNG, WebP (auto-compressed before R2 upload)
+                                Supports JPEG, PNG, WebP (up to 10MB per file, auto-optimized before R2 upload)
                             </span>
                             <input
                                 type="file"
-                                accept="image/*"
+                                accept="image/jpeg,image/png,image/webp"
                                 multiple
+                                disabled={uploading}
                                 style={{ display: "none" }}
                                 onChange={handleFilesSelected}
                             />
@@ -713,7 +844,7 @@ export default function AdminProducts() {
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "16px", borderTop: "1px solid var(--border-color)" }}>
                         <button
                             type="button"
-                            onClick={() => { setIsEditing(false); setImageFiles([]); setNewFilePreviews([]); }}
+                            onClick={handleCloseEdit}
                             className="admin-btn admin-btn-secondary"
                             disabled={uploading}
                         >
@@ -724,7 +855,7 @@ export default function AdminProducts() {
                             className="admin-btn admin-btn-primary"
                             disabled={uploading}
                         >
-                            {uploading ? "Saving & Uploading..." : "Save Product"}
+                            {uploading ? (uploadProgress || "Saving Product...") : "Save Product"}
                         </button>
                     </div>
 
@@ -732,7 +863,7 @@ export default function AdminProducts() {
                     <div className="admin-mobile-sticky-actions">
                         <button
                             type="button"
-                            onClick={() => { setIsEditing(false); setImageFiles([]); setNewFilePreviews([]); }}
+                            onClick={handleCloseEdit}
                             className="admin-btn admin-btn-secondary"
                             disabled={uploading}
                         >
@@ -743,7 +874,7 @@ export default function AdminProducts() {
                             className="admin-btn admin-btn-primary"
                             disabled={uploading}
                         >
-                            {uploading ? "Saving..." : "Save Product"}
+                            {uploading ? (uploadProgress || "Saving...") : "Save Product"}
                         </button>
                     </div>
                 </form>
