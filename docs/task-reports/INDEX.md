@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/024-product-category-media-isolation-fix`  
+**Current Active Git Branch:** `task/025-admin-product-gallery-layout-fix`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 024 MEDIA REPAIR PUBLISHED TO PRODUCTION** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af2f4b739ed72801cec0792`; product multi-image and category media isolation 100% verified live)
+**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 025 COMPLETED LOCALLY (AWAITING OWNER APPROVAL)** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af2f4b739ed72801cec0792`; product multi-image gallery repaired across 320px–1440px viewports; 293 unique tests passing; production deployment paused pending owner review)
 
 ---
 
@@ -54,13 +54,14 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-022** | Bulk Review Management & Extended Storefront Controls | **ON HOLD (UNRELEASED)** | `task/022-bulk-reviews-admin-management` (`6739c9e`) | - | Implemented locally but explicitly placed on hold; not approved or deployed to production. Branch safely preserved. |
 | **TASK-023** | Product Purchase Activity Counter | **POSTPONED** | - | - | Postponed by store owner; not started or executed. |
 | **TASK-024** | Bazaarvilla Product Image Gallery, Multi-Upload & Category Image Isolation Repair | **COMPLETED & PUBLISHED** | `task/024-product-category-media-isolation-fix` (`965631f`) | [TASK-024-product-category-media-isolation-fix.md](./TASK-024-product-category-media-isolation-fix.md) | Diagnosed and proved root cause of image duplication and cross-entity sharing (Netlify Edge CDN query stripping + admin index state); implemented path-based public media delivery `/api/media/public/[...key]`, stable item UUID tracking in admin gallery, synchronized thumbnails, client validation, memory cleanup, and SVG fallback data URIs; authored 25 regression tests (MEDIA-001 to MEDIA-025); verified 100% pass across all 288 automated tests (30 unit, 258 integration including 38 rules); published Netlify production deploy `6af2f4b739ed72801cec0792` (0 secrets detected); verified 5/5 distinct product images and category isolation live on `https://bazaarvilla.com`. |
+| **TASK-025** | Bazaarvilla Admin Product Image Gallery UI Layout Repair | **COMPLETED LOCALLY — AWAITING OWNER APPROVAL** | `task/025-admin-product-gallery-layout-fix` | [TASK-025-admin-product-gallery-layout-fix.md](./TASK-025-admin-product-gallery-layout-fix.md) | Diagnosed and proved root cause of hero blank space (global `.hero` padding leakage of 240px onto admin cards) and overlapping action buttons; re-architected gallery cards with self-contained 1:1 preview box, neutral background, `object-fit: contain`, position chips, hero badge, and dedicated footer actions; optimized mobile viewports (<= 430px) with 44px symmetric touch targets; upgraded dropzone UI; authored 5 unit tests (GALLERY-001 to GALLERY-005); verified 293 unique tests (35 unit + 258 integration); captured 11 CDP screenshots across 320px–1440px; production build clean (32 routes). |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is on active task branch `task/024-product-category-media-isolation-fix`.
+  - Git working tree is on active task branch `task/025-admin-product-gallery-layout-fix`.
   - Razorpay merchant account approval confirmed and configured in Live Mode (`rzp_live_Ty8CuwoSSBGpHi`).
   - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af2d712ca7b7b4abba505b7`).
   - Netlify secret scanning is active (`SECRETS_SCAN_ENABLED=true`) with targeted exclusions (`SECRETS_SCAN_OMIT_KEYS`, `SECRETS_SCAN_OMIT_PATHS`), verified passing on remote build (104 files scanned, 0 leaks).
@@ -77,12 +78,19 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
-    - `npm test`: 30/30 unit tests passing (including 5 responsive admin navigation and touch target tests).
+    - `npm test`: 35/35 unit tests passing (including 5 gallery layout and isolation tests GALLERY-001 to GALLERY-005, and 5 responsive admin tests).
     - `npm run test:rules`: 38/38 rules and authorization tests passing (subset of integration suite).
     - `npm run test:integration`: 258/258 integration tests across 20 suites passing (including MEDIA-001 to MEDIA-025).
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 32/32 Next.js routes compiling cleanly with Turbopack.
-    - Total unique automated tests: **288 passing** (30 unit + 258 integration).
+    - Total unique automated tests: **293 passing** (35 unit + 258 integration).
+  - TASK 025 Gallery Repair Status:
+    - Root cause mathematically diagnosed and extinguished: global `.hero` padding leakage (+240px) scoped away from admin gallery cards with explicit `!important` resets.
+    - Action buttons moved out of image overlay into a dedicated card footer, eliminating all overlapping and text clipping.
+    - Responsive mobile breakpoints optimized (<= 430px) with 44px symmetric icon touch hitboxes (`[ < ] [ > ] [ 🗑 ]`).
+    - Modernized upload dropzone with Bazaarvilla green accents, guidelines, and format indicators.
+    - Visual layout and state persistence verified via 11 CDP screenshots across 320px, 375px, 430px, 768px, 1024px, and 1440px in `docs/screenshots/task-025/`.
+    - Production deployment safely paused awaiting owner visual review and approval.
   - TASK 024 Media Repair Status:
     - Path-based delivery route `/api/media/public/[...key]` published to production (Netlify Deploy ID: `6af2f4b739ed72801cec0792`).
     - Root cause mathematically proven and remediated (Netlify Edge CDN query stripping eliminated).

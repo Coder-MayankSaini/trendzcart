@@ -40,6 +40,8 @@ async function uploadFileToR2(file: File, folder: string, subId?: string): Promi
     return publicUrl || `/api/media/public/${key}`;
 }
 
+const FALLBACK_DATA_URI = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400' fill='none'%3E%3Crect width='400' height='400' fill='%23f1f5f9'/%3E%3Ctext x='200' y='210' text-anchor='middle' fill='%2394a3b8' font-family='system-ui' font-size='16'%3EBazaarvilla Image%3C/text%3E%3C/svg%3E";
+
 export interface GalleryItem {
     id: string;
     src: string;
@@ -657,7 +659,7 @@ export default function AdminProducts() {
                             Product Media Gallery ({galleryItems.length})
                         </h3>
                         <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "16px" }}>
-                            Upload product images via Cloudflare R2. Tap &quot;Set Hero&quot; to pick the main storefront thumbnail. Use arrows to reorder.
+                            Upload product images via Cloudflare R2. The primary image is marked with a HERO badge and used as the storefront thumbnail. Use arrows to reorder.
                         </p>
 
                         {uploadError && (
@@ -673,72 +675,110 @@ export default function AdminProducts() {
                             </div>
                         )}
 
-                        {/* Image previews grid */}
+                        {/* Image Previews Grid */}
                         {galleryItems.length > 0 && (
-                            <div className="admin-image-preview-grid">
+                            <div className="admin-gallery-grid" data-testid="admin-gallery-grid">
                                 {galleryItems.map((item, index) => {
                                     const isHero = featuredImageId ? item.id === featuredImageId : index === 0;
                                     return (
                                         <div
                                             key={item.id}
-                                            className={`admin-image-preview-card ${isHero ? "hero" : ""}`}
+                                            className={`admin-gallery-card ${isHero ? "is-hero" : ""}`}
+                                            data-testid={`gallery-card-${index}`}
                                         >
-                                            <img src={item.src} alt={`Product gallery image ${index + 1}`} />
+                                            {/* 1. Preview Area (1:1 Ratio) */}
+                                            <div className="admin-gallery-preview-wrapper">
+                                                <img
+                                                    src={item.src}
+                                                    alt={`Product gallery image ${index + 1}`}
+                                                    className="admin-gallery-preview-img"
+                                                    onError={(e) => {
+                                                        (e.currentTarget as HTMLImageElement).src = FALLBACK_DATA_URI;
+                                                    }}
+                                                />
 
-                                            {isHero && (
-                                                <span style={{
-                                                    position: "absolute", top: "6px", left: "6px",
-                                                    padding: "3px 8px", borderRadius: "6px",
-                                                    backgroundColor: "var(--accent)", color: "#ffffff",
-                                                    fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase"
-                                                }}>
-                                                    Hero
-                                                </span>
-                                            )}
-
-                                            <div className="admin-image-card-actions">
-                                                {!isHero && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setFeaturedImageId(item.id)}
-                                                        className="admin-image-card-btn"
-                                                        style={{ backgroundColor: "#ffffff", color: "#000000" }}
-                                                        title="Set as featured product image"
-                                                    >
-                                                        Set Hero
-                                                    </button>
+                                                {/* Optional HERO Badge */}
+                                                {isHero && (
+                                                    <span className="admin-gallery-hero-badge" aria-label="Hero Image">
+                                                        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+                                                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                                        </svg>
+                                                        HERO
+                                                    </span>
                                                 )}
-                                                {index > 0 && (
+
+                                                {/* Position Index Chip */}
+                                                <span className="admin-gallery-index-chip" aria-hidden="true">
+                                                    #{index + 1}
+                                                </span>
+                                            </div>
+
+                                            {/* 2. Action Controls Footer beneath Preview */}
+                                            <div className="admin-gallery-card-footer">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setFeaturedImageId(item.id)}
+                                                    disabled={isHero}
+                                                    className={`admin-gallery-btn admin-gallery-btn-hero ${isHero ? "active" : ""}`}
+                                                    title={isHero ? "Currently selected storefront hero image" : "Set as primary storefront hero image"}
+                                                    aria-label={isHero ? `Image ${index + 1} is featured hero` : `Set image ${index + 1} as featured hero`}
+                                                >
+                                                    {isHero ? (
+                                                        <>
+                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                                                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                                            </svg>
+                                                            Featured Hero
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                                                            </svg>
+                                                            Set as Hero
+                                                        </>
+                                                    )}
+                                                </button>
+
+                                                <div className="admin-gallery-btn-group">
                                                     <button
                                                         type="button"
                                                         onClick={() => moveGalleryItem(index, "left")}
-                                                        className="admin-image-card-btn"
-                                                        style={{ backgroundColor: "#ffffff", color: "#000000", padding: "4px 8px" }}
+                                                        disabled={index === 0}
+                                                        className="admin-gallery-btn admin-gallery-btn-nav"
                                                         title="Move earlier in gallery"
+                                                        aria-label={`Move image ${index + 1} earlier`}
                                                     >
-                                                        ←
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="15 18 9 12 15 6" />
+                                                        </svg>
                                                     </button>
-                                                )}
-                                                {index < galleryItems.length - 1 && (
                                                     <button
                                                         type="button"
                                                         onClick={() => moveGalleryItem(index, "right")}
-                                                        className="admin-image-card-btn"
-                                                        style={{ backgroundColor: "#ffffff", color: "#000000", padding: "4px 8px" }}
+                                                        disabled={index === galleryItems.length - 1}
+                                                        className="admin-gallery-btn admin-gallery-btn-nav"
                                                         title="Move later in gallery"
+                                                        aria-label={`Move image ${index + 1} later`}
                                                     >
-                                                        →
+                                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="9 18 15 12 9 6" />
+                                                        </svg>
                                                     </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeGalleryItem(item.id)}
-                                                    className="admin-image-card-btn"
-                                                    style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
-                                                    title="Remove image from gallery"
-                                                >
-                                                    Remove
-                                                </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeGalleryItem(item.id)}
+                                                        className="admin-gallery-btn admin-gallery-btn-remove"
+                                                        title="Remove image from gallery"
+                                                        aria-label={`Remove image ${index + 1} from gallery`}
+                                                    >
+                                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                            <polyline points="3 6 5 6 21 6" />
+                                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                                        </svg>
+                                                        <span>Remove</span>
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     );
@@ -746,23 +786,40 @@ export default function AdminProducts() {
                             </div>
                         )}
 
-                        {/* File input label / upload button */}
-                        <label style={{
-                            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-                            padding: "24px 16px", borderRadius: "14px", border: "2px dashed var(--border-color)",
-                            backgroundColor: "var(--bg-primary)", cursor: uploading ? "not-allowed" : "pointer", gap: "8px", textAlign: "center",
-                            transition: "border-color 0.2s ease", opacity: uploading ? 0.6 : 1
-                        }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--accent)" }}>
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                <circle cx="8.5" cy="8.5" r="1.5" />
-                                <polyline points="21 15 16 10 5 21" />
-                            </svg>
-                            <span style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>
-                                {galleryItems.length === 0 ? "Tap to select photo library or camera" : "+ Add more images"}
-                            </span>
-                            <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
-                                Supports JPEG, PNG, WebP (up to 10MB per file, auto-optimized before R2 upload)
+                        {/* Add More Images Dropzone */}
+                        <label
+                            className={`admin-gallery-dropzone ${uploading ? "disabled" : ""}`}
+                            tabIndex={uploading ? -1 : 0}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    const input = e.currentTarget.querySelector("input[type=file]") as HTMLInputElement | null;
+                                    if (input) input.click();
+                                }
+                            }}
+                        >
+                            <div className="admin-gallery-dropzone-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "2px", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                    {galleryItems.length === 0 ? "Upload Product Photos" : "Add More Images"}
+                                </span>
+                                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                                    JPEG, PNG, WebP · Max 10MB per file · Auto-optimized before R2 upload
+                                </span>
+                            </div>
+                            <span className="admin-gallery-dropzone-btn">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                    <circle cx="8.5" cy="8.5" r="1.5" />
+                                    <polyline points="21 15 16 10 5 21" />
+                                </svg>
+                                {galleryItems.length === 0 ? "Select Product Photos" : "Browse More Files"}
                             </span>
                             <input
                                 type="file"
