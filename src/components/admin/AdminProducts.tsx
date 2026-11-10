@@ -850,10 +850,10 @@ export default function AdminProducts() {
                                     {galleryItems.length === 0 ? "Upload Product Photos" : "Add More Images"}
                                 </span>
                                 <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", textAlign: "center" }}>
-                                    Recommended: 4:5 portrait (1200 × 1500 px) · Square & landscape images also fully supported without cropping
+                                    Recommended: 4:5 portrait (1200 × 1500 px). Square, landscape, and other image ratios are supported. The complete image will be shown on the product detail page.
                                 </span>
-                                <span style={{ fontSize: "0.74rem", color: "var(--text-secondary)" }}>
-                                    JPEG, PNG, WebP · Max 10MB per file · Auto-optimized before R2 upload
+                                <span style={{ fontSize: "0.73rem", color: "var(--text-secondary)", textAlign: "center" }}>
+                                    Catalog cards use a cropped cover preview for a consistent grid layout · JPEG, PNG, WebP · Max 10MB · Auto-optimized to R2
                                 </span>
                             </div>
                             <span className="admin-gallery-dropzone-btn">

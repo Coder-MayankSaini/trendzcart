@@ -102,6 +102,12 @@ async function main() {
         const adminDb = app.firestore();
 
         // Seed Multi-Aspect Demonstration Product
+        const toDataUri = (filename) => {
+            const filePath = path.join(process.cwd(), "tests", "fixtures", "aspect-ratio", filename);
+            const b64 = fs.readFileSync(filePath).toString("base64");
+            return `data:image/png;base64,${b64}`;
+        };
+
         const demoProductId = "prod-containment-demo";
         const demoProduct = {
             id: demoProductId,
@@ -112,10 +118,10 @@ async function main() {
             category: "Jewelry",
             categories: ["Jewelry", "Accessories"],
             images: [
-                "/test-fixtures/landscape-16-9.png",
-                "/test-fixtures/square-1-1.png",
-                "/test-fixtures/portrait-4-5.png",
-                "/test-fixtures/tall-portrait-9-16.png",
+                toDataUri("landscape-16-9.png"),
+                toDataUri("square-1-1.png"),
+                toDataUri("portrait-4-5.png"),
+                toDataUri("tall-portrait-9-16.png"),
             ],
             description: "High-definition engraved bar necklace demonstration for aspect ratio containment testing.",
             isVisible: true,

@@ -78,11 +78,13 @@ describe("Storefront Product Image Containment & No-Crop Gallery (TASK 028)", ()
         assert.ok(cardCode.includes("style={{ objectFit }}"), "ProductCardImage Image must apply style={{ objectFit }}");
     });
 
-    it("CONTAIN-007: Admin product upload dropzone documents 4:5 recommendation and square/landscape support", () => {
+    it("CONTAIN-007: Admin product upload dropzone documents 4:5 recommendation, non-crop PDP display, and catalog cover preview", () => {
         const adminCode = fs.readFileSync(adminProductsPath, "utf8");
         assert.ok(adminCode.includes("Recommended: 4:5 portrait (1200 × 1500 px)"), "Admin dropzone must document recommended 4:5 ratio");
-        assert.ok(adminCode.includes("Square & landscape images also fully supported without cropping"), "Admin dropzone must clarify non-crop support");
-        assert.ok(adminCode.includes("Max 10MB per file"), "Admin dropzone must preserve 10MB limit guidance");
+        assert.ok(adminCode.includes("Square, landscape, and other image ratios are supported"), "Admin dropzone must clarify non-crop support");
+        assert.ok(adminCode.includes("The complete image will be shown on the product detail page"), "Admin dropzone must clarify PDP complete visibility");
+        assert.ok(adminCode.includes("Catalog cards use a cropped cover preview for a consistent grid layout"), "Admin dropzone must distinguish catalog grid cover previews");
+        assert.ok(adminCode.includes("Max 10MB"), "Admin dropzone must preserve 10MB limit guidance");
     });
 
     it("CONTAIN-008: Mathematical containment verification for portrait, square, and landscape aspect ratios", () => {
@@ -133,5 +135,23 @@ describe("Storefront Product Image Containment & No-Crop Gallery (TASK 028)", ()
         const customizerCode = fs.readFileSync(customizerPath, "utf8");
         assert.ok(customizerCode.includes("previewUrl"), "ProductCustomizer must support previewUrl");
         assert.ok(customizerCode.includes("Custom Preview"), "ProductCustomizer must render Custom Preview img");
+    });
+
+    it("CONTAIN-011: Diagnostic aspect ratio test fixtures reside strictly in tests/fixtures/aspect-ratio/ and not public/", () => {
+        const publicFixturesDir = path.join(process.cwd(), "public", "test-fixtures");
+        assert.equal(fs.existsSync(publicFixturesDir), false, "public/test-fixtures must not exist in production storefront tree");
+
+        const testFixturesDir = path.join(process.cwd(), "tests", "fixtures", "aspect-ratio");
+        assert.ok(fs.existsSync(testFixturesDir), "tests/fixtures/aspect-ratio must exist");
+        const requiredFixtures = [
+            "landscape-16-9.png",
+            "square-1-1.png",
+            "portrait-3-4.png",
+            "portrait-4-5.png",
+            "tall-portrait-9-16.png",
+        ];
+        for (const file of requiredFixtures) {
+            assert.ok(fs.existsSync(path.join(testFixturesDir, file)), `Fixture ${file} must exist in tests/fixtures/aspect-ratio`);
+        }
     });
 });

@@ -2,7 +2,7 @@ import sharp from "sharp";
 import fs from "fs";
 import path from "path";
 
-const targetDir = path.join(process.cwd(), "public", "test-fixtures");
+const targetDir = path.join(process.cwd(), "tests", "fixtures", "aspect-ratio");
 fs.mkdirSync(targetDir, { recursive: true });
 
 function createSvgMarkup(width, height, label, color, ratioText) {
