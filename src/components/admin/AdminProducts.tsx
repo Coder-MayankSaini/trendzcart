@@ -8,6 +8,8 @@ import { auth, db } from "@/lib/firebase/config";
 import imageCompression from "browser-image-compression";
 import AdminPageHeader from "./ui/AdminPageHeader";
 import AdminBadge from "./ui/AdminBadge";
+import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
+import type { PurchaseActivityPeriod } from "@/lib/orders/purchaseActivityTypes";
 
 async function uploadFileToR2(file: File, folder: string, subId?: string): Promise<string> {
     const user = auth.currentUser;
@@ -71,6 +73,16 @@ interface Product {
     reviewCount?: number;
     averageRating?: number;
     ratingDistribution?: Record<number, number>;
+    purchaseActivity?: {
+        enabled?: boolean;
+        periodDays?: PurchaseActivityPeriod;
+        displayThreshold?: number;
+        unitsSold?: number;
+        countsByPeriod?: Record<PurchaseActivityPeriod, number>;
+        qualifyingOrdersCount?: number;
+        uniquePurchasersCount?: number;
+        lastCalculatedAt?: number;
+    };
     createdAt: number;
 }
 
@@ -97,6 +109,12 @@ export default function AdminProducts() {
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("ALL");
     const [selectedVisibility, setSelectedVisibility] = useState<"ALL" | "VISIBLE" | "HIDDEN">("ALL");
+
+    // Purchase activity simulation and recalculation states (TASK 023)
+    const [simulatedUnitsSold, setSimulatedUnitsSold] = useState<number>(24);
+    const [simulatedPeriod, setSimulatedPeriod] = useState<PurchaseActivityPeriod>(30);
+    const [isRecalculatingActivity, setIsRecalculatingActivity] = useState(false);
+    const [activityMessage, setActivityMessage] = useState<string | null>(null);
 
     useEffect(() => {
         try {
@@ -180,12 +198,21 @@ export default function AdminProducts() {
             isFeatured: false,
             sizes: [],
             customizationType: null,
+            purchaseActivity: {
+                enabled: true,
+                periodDays: 30,
+                displayThreshold: 5,
+                unitsSold: 0,
+                countsByPeriod: { 7: 0, 30: 0, 90: 0 },
+                lastCalculatedAt: 0,
+            },
             createdAt: Date.now(),
         });
         setGalleryItems([]);
         setFeaturedImageId("");
         setUploadProgress(null);
         setUploadError(null);
+        setActivityMessage(null);
         setIsAddingNewCategory(false);
         setNewCategoryName("");
         setIsEditing(true);
@@ -193,7 +220,17 @@ export default function AdminProducts() {
 
     const handleEdit = (prod: Product) => {
         cleanupGalleryBlobUrls(galleryItems);
-        setFormData({ ...prod });
+        setFormData({
+            ...prod,
+            purchaseActivity: prod.purchaseActivity || {
+                enabled: true,
+                periodDays: 30,
+                displayThreshold: 5,
+                unitsSold: 0,
+                countsByPeriod: { 7: 0, 30: 0, 90: 0 },
+                lastCalculatedAt: 0,
+            },
+        });
         const existingImages = Array.isArray(prod.images) ? prod.images : (prod.images ? [prod.images] : []);
         const existingThumbnails = Array.isArray(prod.thumbnails) ? prod.thumbnails : [];
         const items: GalleryItem[] = existingImages.map((url, i) => ({
@@ -206,9 +243,48 @@ export default function AdminProducts() {
         setFeaturedImageId(items.length > 0 ? items[0].id : "");
         setUploadProgress(null);
         setUploadError(null);
+        setActivityMessage(null);
         setIsAddingNewCategory(false);
         setNewCategoryName("");
         setIsEditing(true);
+    };
+
+    const handleRecalculateActivity = async () => {
+        if (!formData.id) return;
+        setIsRecalculatingActivity(true);
+        setActivityMessage(null);
+        try {
+            const user = auth.currentUser;
+            const token = user ? await user.getIdToken() : "";
+            const res = await fetch(`/api/admin/products/${encodeURIComponent(formData.id)}/purchase-activity`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    enabled: formData.purchaseActivity?.enabled ?? true,
+                    periodDays: formData.purchaseActivity?.periodDays ?? 30,
+                    displayThreshold: formData.purchaseActivity?.displayThreshold ?? 5,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to recalculate purchase activity");
+            }
+            if (data.activity) {
+                setFormData(prev => ({
+                    ...prev,
+                    purchaseActivity: data.activity,
+                }));
+                setActivityMessage(`Refreshed: ${data.activity.unitsSold} units verified across rolling ${data.activity.periodDays}d.`);
+            }
+        } catch (err: any) {
+            console.error("Recalculate activity failed:", err);
+            setActivityMessage(`Error: ${err?.message || "Recalculation failed"}`);
+        } finally {
+            setIsRecalculatingActivity(false);
+        }
     };
 
     const handleDelete = async (id: string) => {
@@ -859,6 +935,274 @@ export default function AdminProducts() {
                         </div>
                     </div>
 
+                    {/* SECTION 6: PRODUCT PURCHASE ACTIVITY COUNTER */}
+                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }} data-testid="section-purchase-activity">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
+                            <div>
+                                <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                                    <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>6</span>
+                                    Purchase Activity Counter
+                                </h3>
+                                <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "4px", marginBottom: 0 }}>
+                                    Configure genuine purchase activity indicators derived strictly from commercial orders.
+                                </p>
+                            </div>
+                            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--accent)", background: "var(--accent-light)", padding: "4px 8px", borderRadius: "6px" }}>
+                                Commercial Authenticity Protected
+                            </span>
+                        </div>
+
+                        {/* Visibility Toggle */}
+                        <div style={{ marginBottom: "16px" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "0.92rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={formData.purchaseActivity?.enabled ?? true}
+                                    onChange={(e) => setFormData({
+                                        ...formData,
+                                        purchaseActivity: {
+                                            ...(formData.purchaseActivity || { periodDays: 30, displayThreshold: 5, unitsSold: 0 }),
+                                            enabled: e.target.checked,
+                                        },
+                                    })}
+                                    style={{ width: "20px", height: "20px", accentColor: "var(--accent)" }}
+                                />
+                                Enable Purchase Activity Display on Storefront
+                            </label>
+                            <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginLeft: "30px", marginTop: "2px" }}>
+                                When enabled, product detail pages display an authentic sales badge (e.g. &quot;24 units sold in the past 30 days&quot;) if genuine sales meet the threshold.
+                            </p>
+                        </div>
+
+                        {/* Configuration Controls (Period & Threshold) */}
+                        <div className="admin-form-grid-2" style={{ marginBottom: "16px" }}>
+                            <div className="admin-form-group">
+                                <label htmlFor="activity-period" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    Reporting Period (Rolling Window)
+                                </label>
+                                <select
+                                    id="activity-period"
+                                    className="admin-form-input"
+                                    value={formData.purchaseActivity?.periodDays || 30}
+                                    onChange={(e) => {
+                                        const period = Number(e.target.value) as PurchaseActivityPeriod;
+                                        setFormData({
+                                            ...formData,
+                                            purchaseActivity: {
+                                                ...(formData.purchaseActivity || { enabled: true, displayThreshold: 5, unitsSold: 0 }),
+                                                periodDays: period,
+                                                unitsSold: formData.purchaseActivity?.countsByPeriod?.[period] ?? formData.purchaseActivity?.unitsSold ?? 0,
+                                            },
+                                        });
+                                    }}
+                                >
+                                    <option value={7}>Past 7 days (rolling)</option>
+                                    <option value={30}>Past 30 days (rolling - recommended)</option>
+                                    <option value={90}>Past 90 days (rolling)</option>
+                                </select>
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    Calculates units sold in the rolling past {formData.purchaseActivity?.periodDays || 30} days.
+                                </span>
+                            </div>
+
+                            <div className="admin-form-group">
+                                <label htmlFor="activity-threshold" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    Display Threshold
+                                </label>
+                                <select
+                                    id="activity-threshold"
+                                    className="admin-form-input"
+                                    value={formData.purchaseActivity?.displayThreshold ?? 5}
+                                    onChange={(e) => {
+                                        const threshold = Number(e.target.value);
+                                        setFormData({
+                                            ...formData,
+                                            purchaseActivity: {
+                                                ...(formData.purchaseActivity || { enabled: true, periodDays: 30, unitsSold: 0 }),
+                                                displayThreshold: threshold,
+                                            },
+                                        });
+                                    }}
+                                >
+                                    <option value={0}>Always show genuine count (0+ units)</option>
+                                    <option value={5}>Show only when at least 5 units sold (recommended)</option>
+                                    <option value={10}>Show only when at least 10 units sold</option>
+                                    <option value={25}>Show only when at least 25 units sold</option>
+                                </select>
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    Controls visibility only; never inflates reported numbers.
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Verified Demand & Recalculate Box */}
+                        <div
+                            style={{
+                                padding: "16px",
+                                borderRadius: "12px",
+                                background: "var(--bg-primary)",
+                                border: "1px solid var(--border-color)",
+                                marginBottom: "20px",
+                            }}
+                        >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                        Authoritative Verified Demand
+                                    </span>
+                                    <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "4px", backgroundColor: "#EAF8EE", color: "#006B3C", fontWeight: 600 }}>
+                                        Live Orders Only
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleRecalculateActivity}
+                                    className="admin-btn admin-btn-secondary admin-btn-sm"
+                                    disabled={isRecalculatingActivity || !formData.id}
+                                    style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                >
+                                    {isRecalculatingActivity ? (
+                                        <>
+                                            <div className="co-spinner" style={{ width: 14, height: 14 }} />
+                                            Recalculating...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <polyline points="23 4 23 10 17 10" />
+                                                <polyline points="1 20 1 14 7 14" />
+                                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                                            </svg>
+                                            Recalculate Counts
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
+                            {activityMessage && (
+                                <div style={{ fontSize: "0.82rem", fontWeight: 600, color: activityMessage.startsWith("Error") ? "#ef4444" : "#15803d", marginBottom: "10px", padding: "6px 10px", borderRadius: "6px", backgroundColor: activityMessage.startsWith("Error") ? "rgba(239, 68, 68, 0.1)" : "rgba(34, 197, 94, 0.1)" }}>
+                                    {activityMessage}
+                                </div>
+                            )}
+
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px" }}>
+                                <div style={{ padding: "10px", borderRadius: "8px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>Past 7 Days</div>
+                                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "2px" }}>
+                                        {formData.purchaseActivity?.countsByPeriod?.[7] ?? 0} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
+                                    </div>
+                                </div>
+                                <div style={{ padding: "10px", borderRadius: "8px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>Past 30 Days</div>
+                                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--accent)", marginTop: "2px" }}>
+                                        {formData.purchaseActivity?.countsByPeriod?.[30] ?? formData.purchaseActivity?.unitsSold ?? 0} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
+                                    </div>
+                                </div>
+                                <div style={{ padding: "10px", borderRadius: "8px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>Past 90 Days</div>
+                                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "2px" }}>
+                                        {formData.purchaseActivity?.countsByPeriod?.[90] ?? 0} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div style={{ marginTop: "10px", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                Last verified: {formData.purchaseActivity?.lastCalculatedAt ? new Date(formData.purchaseActivity.lastCalculatedAt).toLocaleString("en-IN") : "Pending calculation upon first order"}
+                            </div>
+                        </div>
+
+                        {/* Private Simulation Preview Box (Section 6.E) */}
+                        <div
+                            style={{
+                                padding: "16px",
+                                borderRadius: "12px",
+                                background: "#fffbeb",
+                                border: "1.5px solid #fde68a",
+                            }}
+                            data-testid="purchase-activity-simulation-panel"
+                        >
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#92400e" }}>
+                                        Private Simulation Preview
+                                    </span>
+                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#ca8a04", color: "#ffffff", letterSpacing: "0.03em" }}>
+                                        ADMIN PREVIEW ONLY
+                                    </span>
+                                </div>
+                                <span style={{ fontSize: "0.75rem", color: "#b45309" }}>
+                                    Never saved to storefront data
+                                </span>
+                            </div>
+                            <p style={{ fontSize: "0.78rem", color: "#92400e", marginBottom: "12px" }}>
+                                Test how different unit counts and rolling periods appear in the visual design system.
+                            </p>
+
+                            {/* Simulation Controls */}
+                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                    <label htmlFor="sim-count" style={{ fontSize: "0.8rem", fontWeight: 600, color: "#92400e" }}>
+                                        Simulated Units:
+                                    </label>
+                                    <input
+                                        id="sim-count"
+                                        type="number"
+                                        min="0"
+                                        max="9999"
+                                        value={simulatedUnitsSold}
+                                        onChange={(e) => setSimulatedUnitsSold(Math.max(0, Number(e.target.value) || 0))}
+                                        className="admin-form-input"
+                                        style={{ width: "90px", padding: "4px 8px", fontSize: "0.85rem", height: "32px", minHeight: "32px" }}
+                                    />
+                                </div>
+
+                                <div style={{ display: "flex", gap: "4px" }}>
+                                    {[1, 8, 24, 75, 150].map((sampleVal) => (
+                                        <button
+                                            key={sampleVal}
+                                            type="button"
+                                            onClick={() => setSimulatedUnitsSold(sampleVal)}
+                                            className="admin-filter-pill"
+                                            style={{
+                                                fontSize: "0.75rem",
+                                                padding: "2px 8px",
+                                                minHeight: "28px",
+                                                background: simulatedUnitsSold === sampleVal ? "#ca8a04" : "#ffffff",
+                                                color: simulatedUnitsSold === sampleVal ? "#ffffff" : "#92400e",
+                                                borderColor: "#fde68a",
+                                            }}
+                                        >
+                                            {sampleVal}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "auto" }}>
+                                    <label htmlFor="sim-period" style={{ fontSize: "0.8rem", fontWeight: 600, color: "#92400e" }}>
+                                        Period:
+                                    </label>
+                                    <select
+                                        id="sim-period"
+                                        value={simulatedPeriod}
+                                        onChange={(e) => setSimulatedPeriod(Number(e.target.value) as PurchaseActivityPeriod)}
+                                        className="admin-form-input"
+                                        style={{ width: "110px", padding: "4px 8px", fontSize: "0.85rem", height: "32px", minHeight: "32px" }}
+                                    >
+                                        <option value={7}>7 Days</option>
+                                        <option value={30}>30 Days</option>
+                                        <option value={90}>90 Days</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Rendered Live Preview Component */}
+                            <ProductPurchaseActivity
+                                isSimulated={true}
+                                simulatedCount={simulatedUnitsSold}
+                                simulatedPeriod={simulatedPeriod}
+                            />
+                        </div>
+                    </div>
+
                     {/* Desktop Actions */}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "16px", borderTop: "1px solid var(--border-color)" }}>
                         <button
@@ -1031,6 +1375,11 @@ export default function AdminProducts() {
                                                     ★ {Number(product.averageRating || 0).toFixed(1)} <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>({product.reviewCount})</span>
                                                 </span>
                                             ) : null}
+                                            {product.purchaseActivity?.unitsSold !== undefined && product.purchaseActivity.unitsSold > 0 ? (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#EAF8EE", color: "#006B3C", display: "inline-flex", alignItems: "center", gap: "3px" }} title={`${product.purchaseActivity.unitsSold} units sold in past ${product.purchaseActivity.periodDays || 30} days`}>
+                                                    🛒 {product.purchaseActivity.unitsSold} sold
+                                                </span>
+                                            ) : null}
                                         </div>
                                     </td>
                                     <td style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
@@ -1117,6 +1466,11 @@ export default function AdminProducts() {
                                             {product.reviewCount && product.reviewCount > 0 ? (
                                                 <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#d97706", display: "inline-flex", alignItems: "center", gap: "2px" }}>
                                                     ★ {Number(product.averageRating || 0).toFixed(1)} ({product.reviewCount})
+                                                </span>
+                                            ) : null}
+                                            {product.purchaseActivity?.unitsSold !== undefined && product.purchaseActivity.unitsSold > 0 ? (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#EAF8EE", color: "#006B3C", display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                                    🛒 {product.purchaseActivity.unitsSold} sold
                                                 </span>
                                             ) : null}
                                         </div>

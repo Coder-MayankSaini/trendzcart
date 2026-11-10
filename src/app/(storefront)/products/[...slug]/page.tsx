@@ -6,6 +6,8 @@ import ProductCustomizer from "@/components/storefront/ProductCustomizer";
 import ProductImageGallery from "@/components/storefront/ProductImageGallery";
 import ProductReviews from "@/components/storefront/ProductReviews";
 import ProductAllReviewsPage from "@/components/storefront/ProductAllReviewsPage";
+import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
+import { calculateAndPersistProductPurchaseActivity, CACHE_TTL_MS } from "@/lib/orders/purchaseActivity";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,22 @@ async function getProductBySlug(slug: string) {
     data?.isArchived === true
   ) {
     return null;
+  }
+
+  // Hourly bounded refresh for purchase activity counter
+  if (
+    adminDb &&
+    (!data?.purchaseActivity ||
+      typeof data.purchaseActivity.lastCalculatedAt !== "number" ||
+      Date.now() - data.purchaseActivity.lastCalculatedAt > CACHE_TTL_MS)
+  ) {
+    try {
+      const freshActivity = await calculateAndPersistProductPurchaseActivity(adminDb, doc.id);
+      data.purchaseActivity = freshActivity;
+    } catch (refreshErr) {
+      // Non-blocking fallback: continue with existing data
+      console.warn(`[PDP Purchase Activity Refresh] Warning for ${doc.id}:`, refreshErr);
+    }
   }
 
   return { id: doc.id, ...data } as any;
@@ -127,11 +145,12 @@ export default async function ProductDetailsPage({ params }: Props) {
             <span className="pdp-price">₹{Number(product.price).toLocaleString("en-IN")}</span>
             <span className="pdp-tax-note">Inclusive of all taxes</span>
           </div>
-          <div style={{ marginTop: '4px', marginBottom: '16px' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#16a34a', background: 'rgba(34, 197, 94, 0.1)', padding: '4px 10px', borderRadius: '4px' }}>
+          <div style={{ marginTop: '4px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#16a34a', background: 'rgba(34, 197, 94, 0.1)', padding: '4px 10px', borderRadius: '4px', width: 'fit-content' }}>
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 12 20 22 4 22 4 12" /><rect x="2" y="7" width="20" height="5" /><line x1="12" y1="22" x2="12" y2="7" /><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z" /><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z" /></svg>
               Cash on Delivery Available
             </span>
+            <ProductPurchaseActivity activity={product.purchaseActivity} />
           </div>
 
           <div className="pdp-divider" />

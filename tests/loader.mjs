@@ -39,6 +39,7 @@ export async function resolve(specifier, context, nextResolve) {
         }
         const resolvedPath = path.resolve(parentDir, specifier);
         const candidates = [
+            resolvedPath,
             resolvedPath + ".ts",
             resolvedPath + ".tsx",
             resolvedPath + ".js",

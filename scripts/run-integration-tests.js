@@ -72,7 +72,8 @@ const tests = [
     "tests/integration/r2-checkout.test.ts",
     "tests/integration/payment-trust-boundary.test.ts",
     "tests/integration/commercial-checkout-gate.test.ts",
-    "tests/integration/media-isolation.test.ts"
+    "tests/integration/media-isolation.test.ts",
+    "tests/integration/purchase-activity-api.test.ts"
 ];
 
 const result = spawnSync(process.execPath, ["--import", "./tests/register.mjs", "--test", "--test-concurrency=1", ...tests], {
