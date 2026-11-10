@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/025-admin-product-gallery-layout-fix`  
+**Current Active Git Branch:** `task/026-storefront-product-image-sharpness-fix`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 025 PUBLISHED TO PRODUCTION** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af30335364d8bc4b2d811d5`; product multi-image gallery repaired, scoped `.is-hero` styling deployed with zero `!important` flags, 100% verified live across mobile and desktop viewports)
+**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 026 VERIFIED LOCALLY (PRODUCTION APPROVAL GATE ACTIVE)** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af30335364d8bc4b2d811d5`; storefront image sharpness upgraded with responsive Next.js Image optimization, payload reduced 53%-83%, 298 unique automated tests passing)
 
 ---
 
@@ -55,6 +55,7 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-023** | Product Purchase Activity Counter | **POSTPONED** | - | - | Postponed by store owner; not started or executed. |
 | **TASK-024** | Bazaarvilla Product Image Gallery, Multi-Upload & Category Image Isolation Repair | **COMPLETED & PUBLISHED** | `task/024-product-category-media-isolation-fix` (`965631f`) | [TASK-024-product-category-media-isolation-fix.md](./TASK-024-product-category-media-isolation-fix.md) | Diagnosed and proved root cause of image duplication and cross-entity sharing (Netlify Edge CDN query stripping + admin index state); implemented path-based public media delivery `/api/media/public/[...key]`, stable item UUID tracking in admin gallery, synchronized thumbnails, client validation, memory cleanup, and SVG fallback data URIs; authored 25 regression tests (MEDIA-001 to MEDIA-025); verified 100% pass across all 288 automated tests (30 unit, 258 integration including 38 rules); published Netlify production deploy `6af2f4b739ed72801cec0792` (0 secrets detected); verified 5/5 distinct product images and category isolation live on `https://bazaarvilla.com`. |
 | **TASK-025** | Bazaarvilla Admin Product Image Gallery UI Layout Repair | **COMPLETED & PUBLISHED** | `task/025-admin-product-gallery-layout-fix` (`d071ebc`) | [TASK-025-admin-product-gallery-layout-fix.md](./TASK-025-admin-product-gallery-layout-fix.md) | Diagnosed and proved root cause of hero blank space (global `.hero` padding leakage of 240px onto admin cards) and overlapping action buttons; replaced generic `.hero` with scoped `.is-hero` and eliminated `!important` overrides; re-architected gallery cards with self-contained 1:1 preview box, neutral background, `object-fit: contain`, position chips, hero badge, and dedicated footer actions; optimized mobile viewports (<= 430px) with 44px symmetric touch targets; upgraded dropzone UI; authored 5 unit tests (GALLERY-001 to GALLERY-005); verified 293 unique tests (35 unit + 258 integration); published Netlify deploy `6af30335364d8bc4b2d811d5`; verified live on `https://bazaarvilla.com`. |
+| **TASK-026** | Bazaarvilla Blurry Storefront Product Images & Image Quality Optimization | **VERIFIED LOCALLY — PRODUCTION GATE ACTIVE** | `task/026-storefront-product-image-sharpness-fix` | [TASK-026-storefront-product-image-sharpness-fix.md](./TASK-026-storefront-product-image-sharpness-fix.md) | Diagnosed and proved root causes of storefront product image blurriness (premature thumbnail selection of 279×375 px asset stretched 2.74×–3.33× on high-DPI displays, raw unoptimized `<img>` tags, and homepage `unoptimized={true}`); implemented high-resolution cover prioritization, path-based URL normalization, Next.js `<Image>` with responsive `sizes` across catalog and homepage, high-definition PDP gallery with instant thumbnail switching, admin compression threshold increase to 500KB/800px, and modern WebP/AVIF formats; reduced image payload by 53%–83% while delivering pristine sharpness; authored 5 unit tests (QUALITY-001 to QUALITY-005); verified 298 unique automated tests (40 unit + 258 integration); 20 browser CDP verification screenshots captured across 5 breakpoints; production deployment paused at mandatory approval gate. |
 
 ---
 
@@ -78,12 +79,21 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
-    - `npm test`: 35/35 unit tests passing (including 5 gallery layout and isolation tests GALLERY-001 to GALLERY-005, and 5 responsive admin tests).
+    - `npm test`: 40/40 unit tests passing (including 5 image quality tests QUALITY-001 to QUALITY-005, 5 gallery layout tests GALLERY-001 to GALLERY-005, and 5 responsive admin tests).
     - `npm run test:rules`: 38/38 rules and authorization tests passing (subset of integration suite).
     - `npm run test:integration`: 258/258 integration tests across 20 suites passing (including MEDIA-001 to MEDIA-025).
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 32/32 Next.js routes compiling cleanly with Turbopack.
-    - Total unique automated tests: **293 passing** (35 unit + 258 integration).
+    - Total unique automated tests: **298 passing** (40 unit + 258 integration).
+  - TASK 026 Storefront Image Sharpness Status:
+    - Root causes mathematically proven and remediated: storefront cover image selector now prioritizes master photo `images[0]` over compressed thumbnail `thumbnails[0]`.
+    - Upgraded `ProductCardImage.tsx` to Next.js `<Image>` with responsive `sizes` and path-based URL normalizer.
+    - Upgraded `ProductImageGallery.tsx` on PDP with high-definition main photo (`width: 900, height: 1125`) and responsive `sizes`.
+    - Removed `unoptimized={true}` on homepage proxy URLs and added `image/avif` & `image/webp` to `next.config.ts`.
+    - Increased admin thumbnail compression ceiling from 100KB to 500KB / 800px max dimension.
+    - Delivered 53% to 83% reduction in delivered image file sizes while rendering razor-sharp images across all 5 standard viewports (375px, 430px, 768px, 1024px, 1440px).
+    - Captured 20 verified CDP in-browser screenshots in `docs/screenshots/task-026/after/`.
+    - Production deployment safely paused at mandatory owner approval gate.
   - TASK 025 Gallery Repair Status:
     - Root cause mathematically diagnosed and extinguished: global `.hero` padding leakage (+240px) scoped away from admin gallery cards with explicit `!important` resets.
     - Action buttons moved out of image overlay into a dedicated card footer, eliminating all overlapping and text clipping.

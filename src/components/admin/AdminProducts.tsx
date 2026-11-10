@@ -318,7 +318,7 @@ export default function AdminProducts() {
                 const optionsFull = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                 const compressedFile = await imageCompression(file, optionsFull);
 
-                const optionsThumb = { maxSizeMB: 0.1, maxWidthOrHeight: 600, useWebWorker: true };
+                const optionsThumb = { maxSizeMB: 0.5, maxWidthOrHeight: 800, useWebWorker: true };
                 const thumbFile = await imageCompression(file, optionsThumb);
 
                 const fullUrl = await uploadFileToR2(compressedFile, "products", productId);

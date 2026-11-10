@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { collection, getDocs, query } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import { normalizeMediaUrl } from "@/lib/storage/mediaUrl";
 
 const FALLBACK_CATEGORY_SVG = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='338' viewBox='0 0 600 338' fill='none'%3E%3Crect width='600' height='338' fill='%23f1f5f9'/%3E%3Ctext x='300' y='175' text-anchor='middle' fill='%2394a3b8' font-family='system-ui' font-size='18' font-weight='600'%3EBazaarvilla Category%3C/text%3E%3C/svg%3E";
 
@@ -58,14 +60,16 @@ export default function CategoriesPage() {
                 <div className="product-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '48px' }}>
                     {categories.map((category) => (
                         <Link href={`/products?category=${encodeURIComponent(category.name)}`} key={category.id} style={{ display: 'block' }} className="product-card">
-                            <div style={{ aspectRatio: '16/9', overflow: 'hidden', borderRadius: '16px', marginBottom: '24px', backgroundColor: 'var(--bg-secondary)' }}>
+                            <div style={{ aspectRatio: '16/9', overflow: 'hidden', borderRadius: '16px', marginBottom: '24px', backgroundColor: 'var(--bg-secondary)', position: 'relative' }}>
                                 {category.image ? (
-                                    <img
-                                        src={category.image}
+                                    <Image
+                                        src={normalizeMediaUrl(category.image)}
                                         alt={category.name}
-                                        style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.4s ease' }}
-                                        onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                                        onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                        fill
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                        style={{ objectFit: 'cover', transition: 'transform 0.4s ease' }}
+                                        className="cat-card-img"
+                                        unoptimized={category.image.startsWith("data:")}
                                         onError={(e) => { (e.currentTarget as HTMLImageElement).src = FALLBACK_CATEGORY_SVG; }}
                                     />
                                 ) : (

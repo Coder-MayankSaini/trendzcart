@@ -70,16 +70,17 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                 </div>
             ) : (
                 <div className="product-grid">
-                    {products.map((product) => {
-                        const thumbImage = product.thumbnails?.[0] || (product.images && product.images.length > 0 ? product.images[0] : null);
+                    {products.map((product, idx) => {
+                        const coverImage = (product.images && product.images.length > 0 ? product.images[0] : null) || product.thumbnails?.[0] || product.image || null;
                         return (
                             <Link href={`/products/${product.slug}`} key={product.id} className="product-card">
                                 <div className="product-image-container">
-                                    {thumbImage ? (
+                                    {coverImage ? (
                                         <ProductCardImage
-                                            src={thumbImage}
+                                            src={coverImage}
                                             alt={product.name}
                                             className="product-image"
+                                            priority={idx < 4}
                                         />
                                     ) : (
                                         <div className="placeholder-image">No Image</div>

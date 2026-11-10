@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { adminDb } from "@/lib/firebase/admin";
+import { normalizeMediaUrl } from "@/lib/storage/mediaUrl";
 
 export const revalidate = 60;
 
@@ -184,13 +185,13 @@ export default async function Home() {
                 <Link href={`/products?category=${encodeURIComponent(cat.name)}`} key={cat.id} className="hp-category-card">
                   {cat.image ? (
                     <Image
-                      src={cat.image}
+                      src={normalizeMediaUrl(cat.image)}
                       alt={cat.name}
-                      width={500}
-                      height={600}
+                      width={600}
+                      height={720}
                       className="hp-category-img"
                       style={{ objectFit: "cover" }}
-                      unoptimized={cat.image.startsWith("/")}
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     />
                   ) : (
                     <div className="hp-category-img" style={{ backgroundColor: 'var(--bg-secondary)' }} />
@@ -221,20 +222,26 @@ export default async function Home() {
               </Link>
             </div>
             <div className="hp-trending-grid">
-              {featuredProducts.map((product: any) => {
-                const mainImage = product.thumbnails?.[0] || product.images?.[0] || product.image || "";
+              {featuredProducts.map((product: any, idx: number) => {
+                const coverImage = normalizeMediaUrl(
+                  (product.images && product.images.length > 0 ? product.images[0] : null) ||
+                  product.thumbnails?.[0] ||
+                  product.image ||
+                  ""
+                );
                 return (
                   <Link href={`/products/${product.slug}`} key={product.id} className="hp-product-card">
                     <div className="hp-product-img-wrap">
-                      {mainImage ? (
+                      {coverImage ? (
                         <Image
-                          src={mainImage}
+                          src={coverImage}
                           alt={product.name}
-                          width={400}
-                          height={500}
+                          width={600}
+                          height={800}
+                          priority={idx < 2}
                           className="hp-product-img"
                           style={{ objectFit: "cover" }}
-                          unoptimized={typeof mainImage === "string" && mainImage.startsWith("/")}
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                         />
                       ) : (
                         <div className="hp-product-img" style={{ backgroundColor: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}>No Image</div>

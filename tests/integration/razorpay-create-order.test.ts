@@ -9,6 +9,7 @@ describe("POST /api/razorpay/create-order Integration Tests", () => {
     let capturedOptions: any = null;
 
     before(() => {
+        process.env.COMMERCIAL_CHECKOUT_ENABLED = "true";
         process.env.RAZORPAY_KEY_ID = "rzp_test_mockKeyId123";
         process.env.RAZORPAY_KEY_SECRET = "mockSecretKey456";
 

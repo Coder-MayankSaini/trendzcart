@@ -414,13 +414,17 @@ describe("TASK 024 — Product & Category Media Isolation Regression Test Suite 
         assert.notEqual(keyA, keyB);
     });
 
-    it("MEDIA-016: Product thumbnails use the correct featured image", () => {
+    it("MEDIA-016: Product cards select high-resolution featured image for sharpness with thumbnail fallback", () => {
         const images = ["/api/media/public/products/p1/hero.png", "/api/media/public/products/p1/side.png"];
         const thumbnails = ["/api/media/public/products/p1/hero_thumb.png", "/api/media/public/products/p1/side_thumb.png"];
 
-        // The card uses thumbnails[0] || images[0]
-        const cardThumb = thumbnails[0] || images[0];
-        assert.equal(cardThumb, "/api/media/public/products/p1/hero_thumb.png");
+        // Storefront cards prioritize high-resolution images[0] over compressed thumbnails[0]
+        const cardCover = (images && images.length > 0 ? images[0] : null) || thumbnails[0];
+        assert.equal(cardCover, "/api/media/public/products/p1/hero.png");
+
+        // Fallback behavior when images array is empty
+        const fallbackCover = ([] as string[])[0] || thumbnails[0];
+        assert.equal(fallbackCover, "/api/media/public/products/p1/hero_thumb.png");
     });
 
     it("MEDIA-017: Product detail gallery renders all distinct images via path route", async () => {
