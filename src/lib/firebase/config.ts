@@ -55,4 +55,11 @@ if (inEmulator && isValid && !g.__FIREBASE_EMULATORS_CONNECTED__) {
   }
 }
 
+if (inEmulator && typeof window !== "undefined") {
+  (window as any).__EMULATOR_SIGNIN__ = async (customToken: string) => {
+    const { signInWithCustomToken } = await import("firebase/auth");
+    return signInWithCustomToken(auth, customToken);
+  };
+}
+
 export default app;

@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/020-frontend-changes-brand-refresh`  
+**Current Active Git Branch:** `task/021-mobile-responsive-admin-dashboard`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — OFFICIAL GREEN BRANDING & HOMEPAGE REFRESH DEPLOYED TO PRODUCTION** (Commercial checkout active on production `https://bazaarvilla.com`; official green brand identity, 70% off promotional banner, and unified glass pill buttons live on Netlify Deploy `6af2c64ad5bd6454424b9334`)
+**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — MOBILE-RESPONSIVE ADMIN REDESIGN PREPARED ON BRANCH** (Commercial checkout active on production `https://bazaarvilla.com`; responsive admin portal awaiting owner visual approval before production deployment on Netlify Deploy `6af2c64ad5bd6454424b9334`)
 
 ---
 
@@ -50,13 +50,14 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-018** | Live Payment Verification, Next.js Image Security Optimization & Commercial Launch Execution | **COMPLETED & COMMERCIALLY LAUNCHED** | `task/017-live-cutover-commercial-launch` | [TASK-018-live-payment-verification-commercial-launch.md](./TASK-018-live-payment-verification-commercial-launch.md) | Diagnosed and resolved Next.js 16 Turbopack prerender error during remote build by configuring `images.localPatterns` and unoptimized flags for Cloudflare R2 proxy URLs; opened public checkout gate (`COMMERCIAL_CHECKOUT_ENABLED=true`); published verified production deploy `6af243583aebc6084acf5b0a` (0 secrets detected); owner executed and completed authentic live ₹1 real-money purchase (`order_TyEk5zMUs5soYA` / `pay_TyEkKKO51nzlMx`); confirmed transition to `paymentStatus: "PAID"`, `orderStatus: "Processing"`, `inventoryFinalized: true`, and `paymentRecords` captured audit entry; confirmed 100% cryptographic gateway rejection of Test Mode IDs under Live credentials; delivered live monitoring tools; all 258 automated tests passing; Bazaarvilla is fully commercial and live. |
 | **TASK-019** | Bazaarvilla Homepage Refresh & Brand Identity Baseline | **SUPERSEDED BY TASK-020** | `task/019-bazaarvilla-brand-homepage-refresh` | [TASK-019-bazaarvilla-brand-homepage-refresh.md](./TASK-019-bazaarvilla-brand-homepage-refresh.md) | Ingested and optimized initial brand assets into `public/brand/`; established green brand palette (`#006B3C`, `#159947`, `#EAF8EE`, `#182B22`); upgraded navbar with official horizontal brand mark; initial hero prototype with desktop banner and mobile mascot hero; verified 258/258 automated tests and 30 Next.js routes. |
 | **TASK-020** | Bazaarvilla Frontend Changes, Brand Identity Integration & Production Deployment | **COMPLETED & PUBLISHED** | `task/020-frontend-changes-brand-refresh` (`25ae247`) | [TASK-020-frontend-changes-brand-refresh.md](./TASK-020-frontend-changes-brand-refresh.md) | Ingested updated high-impact promotional banner (2000×761 px, "70% OFF ON EVERY PRODUCT — SALE LIVE NOW"); placed banner directly behind hero action triggers and removed redundant text overlays; unified "Shop Now →" and "Discover Categories" button styles with matching translucent white glass pill aesthetics (`.hp-btn-hero`); upgraded navbar and footer branding; 4-pillar trust section; 258/258 automated tests passing; verified Next.js production build; executed Netlify Remote Linux Container build (Deploy ID: `6af2c64ad5bd6454424b9334`); 0 secrets detected; verified all live production endpoints returning HTTP 200 OK with active commercial checkout. |
+| **TASK-021** | Bazaarvilla Mobile-Responsive Admin Dashboard & Management Experience | **COMPLETED LOCALLY — AWAITING OWNER VISUAL APPROVAL** | `task/021-mobile-responsive-admin-dashboard` | [TASK-021-mobile-responsive-admin-dashboard.md](./TASK-021-mobile-responsive-admin-dashboard.md) | Comprehensive mobile-first redesign of all admin portals (`/admin/*`) across 320px–1440px viewports; persistent desktop sidebar + mobile slide-out navigation drawer (`AdminMobileDrawer`) with focus trapping and scroll lock; responsive 1/2/4-column KPI dashboard grid; mobile product cards and 5-section creation form with numeric keyboards and 44px touch targets; mobile order fulfillment cards with click-to-call phone links, address drawer, and private R2 customer customization viewer; responsive categories and coupons; 263 unique automated tests passing (30 unit, 38 rules, 233 integration); 30/30 Next.js routes compiled cleanly; authentic before/after screenshots captured; stopped before production deploy for owner visual review. |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is on active release branch `task/020-frontend-changes-brand-refresh`.
+  - Git working tree is on active task branch `task/021-mobile-responsive-admin-dashboard`.
   - Razorpay merchant account approval confirmed and configured in Live Mode (`rzp_live_Ty8CuwoSSBGpHi`).
   - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af2c64ad5bd6454424b9334`).
   - Netlify secret scanning is active (`SECRETS_SCAN_ENABLED=true`) with targeted exclusions (`SECRETS_SCAN_OMIT_KEYS`, `SECRETS_SCAN_OMIT_PATHS`), verified passing on remote build (98 files scanned, 0 leaks).
@@ -73,12 +74,12 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
-    - `npm test`: 25/25 unit tests passing.
+    - `npm test`: 30/30 unit tests passing (including 5 new responsive admin navigation and touch target tests).
     - `npm run test:rules`: 38/38 rules and authorization tests passing (subset of integration suite).
     - `npm run test:integration`: 233/233 integration tests across 19 suites passing.
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 30/30 Next.js routes compiling cleanly.
-    - Total unique automated tests: **258 passing** (25 unit + 233 integration).
+    - Total unique automated tests: **263 passing** (30 unit + 233 integration).
   - Live Production Smoke Tests:
     - 7/7 live checks passing on `https://bazaarvilla.com` (public config gate, COD 503, prepaid 503, Terms branding, Privacy branding, Contact branding, About branding).
     - `node scripts/verify-customization-r2-lifecycle.mjs`: **100% PASS** on guest/registered customization upload, completion, and admin private media boundaries.

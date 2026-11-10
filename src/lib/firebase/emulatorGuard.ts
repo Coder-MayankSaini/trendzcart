@@ -55,7 +55,7 @@ export function assertEmulatorSafety(options?: { requireAuth?: boolean; requireS
     }
 
     // 2. Verify Firestore Emulator Host points strictly to localhost / loopback
-    const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST;
+    const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST || process.env.NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST;
     if (!firestoreHost) {
         reasons.push(
             "SAFETY VIOLATION: FIRESTORE_EMULATOR_HOST is missing in emulator mode. Refusing to connect to production Firestore."
@@ -67,7 +67,7 @@ export function assertEmulatorSafety(options?: { requireAuth?: boolean; requireS
     }
 
     // 3. Verify Auth Emulator Host if required
-    const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
+    const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST || process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
     if (options?.requireAuth) {
         if (!authHost) {
             reasons.push("SAFETY VIOLATION: FIREBASE_AUTH_EMULATOR_HOST is missing when Auth emulator is required.");
@@ -77,7 +77,7 @@ export function assertEmulatorSafety(options?: { requireAuth?: boolean; requireS
     }
 
     // 4. Verify Storage Emulator Host if required
-    const storageHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    const storageHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_EMULATOR_HOST;
     if (options?.requireStorage) {
         if (!storageHost) {
             reasons.push("SAFETY VIOLATION: FIREBASE_STORAGE_EMULATOR_HOST is missing when Storage emulator is required.");

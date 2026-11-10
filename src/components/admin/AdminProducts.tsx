@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import Image from "next/image";
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/config";
 import imageCompression from "browser-image-compression";
+import AdminPageHeader from "./ui/AdminPageHeader";
+import AdminBadge from "./ui/AdminBadge";
 
 async function uploadFileToR2(file: File, folder: string, subId?: string): Promise<string> {
     const user = auth.currentUser;
@@ -53,7 +56,7 @@ interface Product {
     isCustomized: boolean;
     isFeatured: boolean;
     customizationType: "requires_name" | "requires_picture" | null;
-    sizes?: string[]; // Array of sizes e.g. ["S", "M", "L", "XL"]
+    sizes?: string[];
     createdAt: number;
 }
 
@@ -61,19 +64,6 @@ interface CategoryOption {
     id: string;
     name: string;
 }
-
-const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', borderRadius: '12px',
-    border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)',
-    color: 'var(--text-primary)', fontSize: '0.9rem', fontFamily: 'inherit',
-    outline: 'none', transition: 'border-color 0.2s ease',
-};
-
-const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '0.8rem', fontWeight: 600,
-    color: 'var(--text-secondary)', marginBottom: '6px',
-    textTransform: 'uppercase', letterSpacing: '0.04em',
-};
 
 export default function AdminProducts() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -88,6 +78,12 @@ export default function AdminProducts() {
     const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState("");
 
+    // Search and filter states
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedCategory, setSelectedCategory] = useState("ALL");
+    const [selectedVisibility, setSelectedVisibility] = useState<"ALL" | "VISIBLE" | "HIDDEN">("ALL");
+
+    // Fake review states
     const [addingReviewForProduct, setAddingReviewForProduct] = useState<string | null>(null);
     const [fakeReviewForm, setFakeReviewForm] = useState({ userName: "", rating: 5, comment: "" });
     const [fakeReviewImages, setFakeReviewImages] = useState<File[]>([]);
@@ -109,7 +105,6 @@ export default function AdminProducts() {
         }
     }, []);
 
-    // Fetch categories for the dropdown
     useEffect(() => {
         const unsub = onSnapshot(collection(db, "categories"), (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, name: (doc.data() as any).name })) as CategoryOption[];
@@ -118,14 +113,45 @@ export default function AdminProducts() {
         return () => unsub();
     }, []);
 
+    // Filtered products list
+    const filteredProducts = useMemo(() => {
+        return products.filter((p) => {
+            const matchesSearch = !searchQuery.trim() ||
+                p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                p.category?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (p.categories || []).some(c => c.toLowerCase().includes(searchQuery.toLowerCase()));
+
+            const matchesCategory = selectedCategory === "ALL" ||
+                p.category === selectedCategory ||
+                (p.categories || []).includes(selectedCategory);
+
+            const matchesVisibility = selectedVisibility === "ALL" ||
+                (selectedVisibility === "VISIBLE" && p.isVisible) ||
+                (selectedVisibility === "HIDDEN" && !p.isVisible);
+
+            return matchesSearch && matchesCategory && matchesVisibility;
+        });
+    }, [products, searchQuery, selectedCategory, selectedVisibility]);
+
     const handleAddNew = () => {
         setFormData({
-            id: crypto.randomUUID(), name: "", slug: "", description: "",
-            price: 0, images: [], thumbnails: [], category: "", categories: [], tags: [],
-            inventory: 10, isVisible: true, isCustomized: false,
+            id: crypto.randomUUID(),
+            name: "",
+            slug: "",
+            description: "",
+            price: 0,
+            images: [],
+            thumbnails: [],
+            category: "",
+            categories: [],
+            tags: [],
+            inventory: 10,
+            isVisible: true,
+            isCustomized: false,
             isFeatured: false,
             sizes: [],
-            customizationType: null, createdAt: Date.now(),
+            customizationType: null,
+            createdAt: Date.now(),
         });
         setImageFiles([]);
         setNewFilePreviews([]);
@@ -139,7 +165,7 @@ export default function AdminProducts() {
         setFormData(prod);
         setImageFiles([]);
         setNewFilePreviews([]);
-        setHeroIndex(0); // hero is always images[0]
+        setHeroIndex(0);
         setIsAddingNewCategory(false);
         setNewCategoryName("");
         setIsEditing(true);
@@ -147,8 +173,12 @@ export default function AdminProducts() {
 
     const handleDelete = async (id: string) => {
         if (confirm("Are you sure you want to delete this product?")) {
-            try { await deleteDoc(doc(db, "products", id)); }
-            catch (err) { console.error(err); alert("Failed to delete product."); }
+            try {
+                await deleteDoc(doc(db, "products", id));
+            } catch (err) {
+                console.error(err);
+                alert("Failed to delete product.");
+            }
         }
     };
 
@@ -156,7 +186,6 @@ export default function AdminProducts() {
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
         setImageFiles(prev => [...prev, ...files]);
-        // Generate previews for the new files
         const previews = files.map(f => URL.createObjectURL(f));
         setNewFilePreviews(prev => [...prev, ...previews]);
     };
@@ -171,7 +200,6 @@ export default function AdminProducts() {
         }
 
         setFormData({ ...formData, images: updated, thumbnails: upThumb });
-        // Adjust hero index if needed
         const totalExisting = updated.length;
         if (heroIndex >= totalExisting + newFilePreviews.length) {
             setHeroIndex(0);
@@ -186,7 +214,6 @@ export default function AdminProducts() {
         updatedPreviews.splice(idx, 1);
         setImageFiles(updatedFiles);
         setNewFilePreviews(updatedPreviews);
-        // Adjust hero index
         const existingCount = (formData.images || []).length;
         const total = existingCount + updatedPreviews.length;
         if (heroIndex >= total) setHeroIndex(0);
@@ -196,32 +223,25 @@ export default function AdminProducts() {
         e.preventDefault();
         setUploading(true);
         try {
-            // Upload all new files
             const newUrls: string[] = [];
             const newThumbUrls: string[] = [];
             for (const file of imageFiles) {
-                // Compress full image
                 const optionsFull = { maxSizeMB: 1, maxWidthOrHeight: 1920, useWebWorker: true };
                 const compressedFile = await imageCompression(file, optionsFull);
 
-                // Compress thumbnail
                 const optionsThumb = { maxSizeMB: 0.1, maxWidthOrHeight: 600, useWebWorker: true };
                 const thumbFile = await imageCompression(file, optionsThumb);
 
-                // Upload high quality to R2
                 const url = await uploadFileToR2(compressedFile, "products", formData.id);
                 newUrls.push(url);
 
-                // Upload thumbnail to R2
                 const thumbUrl = await uploadFileToR2(thumbFile, "products", formData.id);
                 newThumbUrls.push(thumbUrl);
             }
 
-            // Combine existing images + newly uploaded
             const allImages = [...(formData.images || []), ...newUrls];
             const allThumbnails = [...(formData.thumbnails || []), ...newThumbUrls];
 
-            // Reorder: move hero image to index 0
             if (heroIndex > 0 && heroIndex < allImages.length) {
                 const [hero] = allImages.splice(heroIndex, 1);
                 allImages.unshift(hero);
@@ -234,7 +254,6 @@ export default function AdminProducts() {
             let finalCategory = formData.category || "";
             let finalCategories = formData.categories ? [...formData.categories] : [];
 
-            // Re-sync single category into categories array if it exists but wasn't in the array
             if (finalCategory && !finalCategories.includes(finalCategory)) {
                 finalCategories.push(finalCategory);
             }
@@ -276,7 +295,6 @@ export default function AdminProducts() {
         }
     };
 
-    // Get all preview items for display (existing URLs + new file previews)
     const getAllPreviews = () => {
         const existing = (formData.images || []).map((url, i) => ({
             src: url, isExisting: true, index: i
@@ -314,163 +332,272 @@ export default function AdminProducts() {
             setAddingReviewForProduct(null);
             setFakeReviewForm({ userName: "", rating: 5, comment: "" });
             setFakeReviewImages([]);
-            alert("Fake review added successfully!");
+            alert("Review added successfully!");
         } catch (err) {
             console.error(err);
-            alert("Failed to add fake review.");
+            alert("Failed to add review.");
         } finally {
             setFakeReviewUploading(false);
         }
     };
 
-    // ====================== EDIT / ADD FORM ======================
+    // =========================================================================
+    // PRODUCT EDIT / CREATION FORM VIEW
+    // =========================================================================
     if (isEditing) {
         const previews = getAllPreviews();
 
         return (
-            <div className="animate-fade-in" style={{ maxWidth: '720px' }}>
-                <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '32px' }}>
-                    {formData.name ? 'Edit Product' : 'Add New Product'}
-                </h2>
-                <form onSubmit={handleSave} style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '24px', border: '1px solid var(--border-color)', padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <div>
-                        <label style={labelStyle}>Product Name</label>
-                        <input type="text" required style={inputStyle} value={formData.name || ""} onChange={e => setFormData({ ...formData, name: e.target.value })} />
-                    </div>
-                    <div>
-                        <label style={labelStyle}>Slug (URL endpoint)</label>
-                        <input type="text" style={{ ...inputStyle, color: 'var(--text-secondary)' }} value={formData.slug || ""} onChange={e => setFormData({ ...formData, slug: e.target.value })} placeholder="auto-generated-from-name" />
-                    </div>
-                    <div>
-                        <label style={labelStyle}>Description</label>
-                        <textarea rows={4} style={{ ...inputStyle, resize: 'vertical' }} value={formData.description || ""} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-                    </div>
-                    <div>
-                        <label style={labelStyle}>Sizes (Comma separated e.g. S, M, L, XL)</label>
-                        <input type="text" style={inputStyle} value={(formData.sizes || []).join(", ")} onChange={e => {
-                            const val = e.target.value;
-                            const newSizes = val.split(",").map(s => s.trim()).filter(s => s !== "");
-                            setFormData({ ...formData, sizes: newSizes });
-                        }} placeholder="S, M, L, XL" />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <div>
-                            <label style={labelStyle}>Price (₹)</label>
-                            <input type="number" required style={inputStyle} value={formData.price || 0} onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} />
+            <div className="animate-fade-in" style={{ maxWidth: "800px", margin: "0 auto" }}>
+                <AdminPageHeader
+                    title={formData.name ? `Edit: ${formData.name}` : "Create New Product"}
+                    subtitle="Configure product catalog information, stock inventory, and media gallery."
+                >
+                    <button
+                        type="button"
+                        onClick={() => { setIsEditing(false); setImageFiles([]); setNewFilePreviews([]); }}
+                        className="admin-btn admin-btn-secondary admin-btn-sm"
+                        disabled={uploading}
+                    >
+                        &larr; Back to Products
+                    </button>
+                </AdminPageHeader>
+
+                <form onSubmit={handleSave} className="admin-form-card">
+                    {/* SECTION 1: BASIC DETAILS */}
+                    <div style={{ marginBottom: "24px" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>1</span>
+                            Product Information
+                        </h3>
+
+                        <div className="admin-form-group">
+                            <label htmlFor="prod-name">Product Name *</label>
+                            <input
+                                id="prod-name"
+                                type="text"
+                                required
+                                className="admin-form-input"
+                                value={formData.name || ""}
+                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                placeholder="e.g. Bazaarvilla Signature Green Hoodie"
+                            />
                         </div>
-                        <div>
-                            <label style={labelStyle}>Inventory Count</label>
-                            <input type="number" required style={inputStyle} value={formData.inventory || 0} onChange={e => setFormData({ ...formData, inventory: Number(e.target.value) })} />
+
+                        <div className="admin-form-group">
+                            <label htmlFor="prod-slug">Slug (URL Endpoint)</label>
+                            <input
+                                id="prod-slug"
+                                type="text"
+                                className="admin-form-input"
+                                value={formData.slug || ""}
+                                onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+                                placeholder="auto-generated-from-name"
+                            />
+                        </div>
+
+                        <div className="admin-form-group">
+                            <label htmlFor="prod-desc">Description</label>
+                            <textarea
+                                id="prod-desc"
+                                rows={4}
+                                className="admin-form-textarea"
+                                value={formData.description || ""}
+                                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                                placeholder="Describe the materials, fit, care instructions, and highlights..."
+                            />
                         </div>
                     </div>
-                    <div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                            <label style={{ ...labelStyle, marginBottom: 0 }}>Category</label>
+
+                    {/* SECTION 2: PRICING, INVENTORY & SIZES */}
+                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>2</span>
+                            Pricing & Stock Inventory
+                        </h3>
+
+                        <div className="admin-form-grid-2">
+                            <div className="admin-form-group">
+                                <label htmlFor="prod-price">Price (₹ INR) *</label>
+                                <input
+                                    id="prod-price"
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="1"
+                                    min="0"
+                                    required
+                                    className="admin-form-input"
+                                    value={formData.price ?? 0}
+                                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                                />
+                            </div>
+
+                            <div className="admin-form-group">
+                                <label htmlFor="prod-inventory">Inventory Count *</label>
+                                <input
+                                    id="prod-inventory"
+                                    type="number"
+                                    inputMode="numeric"
+                                    step="1"
+                                    min="0"
+                                    required
+                                    className="admin-form-input"
+                                    value={formData.inventory ?? 0}
+                                    onChange={(e) => setFormData({ ...formData, inventory: Number(e.target.value) })}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="admin-form-group">
+                            <label htmlFor="prod-sizes">Available Sizes (Comma-separated)</label>
+                            <input
+                                id="prod-sizes"
+                                type="text"
+                                className="admin-form-input"
+                                value={(formData.sizes || []).join(", ")}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    const newSizes = val.split(",").map(s => s.trim()).filter(s => s !== "");
+                                    setFormData({ ...formData, sizes: newSizes });
+                                }}
+                                placeholder="S, M, L, XL, XXL"
+                            />
+                            <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
+                                {["S", "M", "L", "XL", "XXL", "Free Size"].map((preset) => {
+                                    const hasSize = (formData.sizes || []).includes(preset);
+                                    return (
+                                        <button
+                                            key={preset}
+                                            type="button"
+                                            className={`admin-filter-pill ${hasSize ? "active" : ""}`}
+                                            style={{ minHeight: "32px", fontSize: "0.75rem", padding: "4px 10px" }}
+                                            onClick={() => {
+                                                const current = new Set(formData.sizes || []);
+                                                if (current.has(preset)) current.delete(preset);
+                                                else current.add(preset);
+                                                setFormData({ ...formData, sizes: Array.from(current) });
+                                            }}
+                                        >
+                                            {preset}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECTION 3: CATEGORY SELECTION */}
+                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                            <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                                <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>3</span>
+                                Categories
+                            </h3>
                             <button
                                 type="button"
                                 onClick={() => setIsAddingNewCategory(!isAddingNewCategory)}
-                                style={{ fontSize: '0.75rem', color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                                className="admin-btn admin-btn-secondary admin-btn-sm"
                             >
-                                {isAddingNewCategory ? "Select Existing" : "+ New Category"}
+                                {isAddingNewCategory ? "Cancel" : "+ New Category"}
                             </button>
                         </div>
+
                         {isAddingNewCategory ? (
-                            <input
-                                type="text"
-                                style={inputStyle}
-                                value={newCategoryName}
-                                onChange={e => setNewCategoryName(e.target.value)}
-                                placeholder="Enter new category name..."
-                                required={isAddingNewCategory}
-                            />
+                            <div className="admin-form-group">
+                                <label htmlFor="new-cat-name">New Category Name</label>
+                                <input
+                                    id="new-cat-name"
+                                    type="text"
+                                    className="admin-form-input"
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    placeholder="Enter category name (e.g. Winterwear)..."
+                                    required={isAddingNewCategory}
+                                />
+                            </div>
                         ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px', padding: '12px', border: '1px solid var(--border-color)', borderRadius: '12px', backgroundColor: 'var(--bg-primary)' }}>
-                                {categories.length === 0 && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>No categories found</span>}
-                                {categories.map(cat => (
-                                    <label key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-primary)' }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={(formData.categories || []).includes(cat.name) || formData.category === cat.name}
-                                            onChange={(e) => {
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", padding: "14px", borderRadius: "14px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)" }}>
+                                {categories.length === 0 && (
+                                    <span style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                                        No categories found. Click &quot;+ New Category&quot; above to create one.
+                                    </span>
+                                )}
+                                {categories.map((cat) => {
+                                    const isSelected = (formData.categories || []).includes(cat.name) || formData.category === cat.name;
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            className={`admin-filter-pill ${isSelected ? "active" : ""}`}
+                                            onClick={() => {
                                                 const current = new Set([...(formData.categories || [])]);
                                                 if (formData.category) current.add(formData.category);
 
-                                                if (e.target.checked) {
-                                                    current.add(cat.name);
-                                                    setFormData({ ...formData, categories: Array.from(current), category: formData.category || cat.name });
-                                                } else {
+                                                if (isSelected) {
                                                     current.delete(cat.name);
                                                     const newArr = Array.from(current);
-                                                    setFormData({ ...formData, categories: newArr, category: newArr.length > 0 ? newArr[0] : "" });
+                                                    setFormData({
+                                                        ...formData,
+                                                        categories: newArr,
+                                                        category: newArr.length > 0 ? newArr[0] : "",
+                                                    });
+                                                } else {
+                                                    current.add(cat.name);
+                                                    setFormData({
+                                                        ...formData,
+                                                        categories: Array.from(current),
+                                                        category: formData.category || cat.name,
+                                                    });
                                                 }
                                             }}
-                                            style={{ accentColor: 'var(--accent)' }}
-                                        />
-                                        {cat.name}
-                                    </label>
-                                ))}
+                                        >
+                                            {isSelected && "✓ "}
+                                            {cat.name}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
-                    <div>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-primary)', marginTop: '8px' }}>
-                            <input type="checkbox" checked={formData.isFeatured || false} onChange={e => setFormData({ ...formData, isFeatured: e.target.checked })} style={{ width: '18px', height: '18px', accentColor: 'var(--accent)' }} />
-                            Feature on Home Page ("Most Popular Picks")
-                        </label>
-                    </div>
 
-                    {/* ===== MULTI-IMAGE UPLOAD SECTION ===== */}
-                    <div>
-                        <label style={labelStyle}>Product Images</label>
-                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                            Upload multiple images. Click &quot;Set as Hero&quot; to choose the main thumbnail image.
+                    {/* SECTION 4: PRODUCT IMAGES (CLOUDFLARE R2) */}
+                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>4</span>
+                            Product Media Gallery
+                        </h3>
+                        <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "16px" }}>
+                            Upload product images via Cloudflare R2. Tap &quot;Set Hero&quot; to pick the main storefront thumbnail.
                         </p>
 
                         {/* Image previews grid */}
                         {previews.length > 0 && (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '12px', marginBottom: '16px' }}>
+                            <div className="admin-image-preview-grid">
                                 {previews.map((item, globalIdx) => (
-                                    <div key={globalIdx} style={{
-                                        position: 'relative',
-                                        borderRadius: '12px',
-                                        overflow: 'hidden',
-                                        border: heroIndex === globalIdx ? '3px solid var(--accent)' : '1px solid var(--border-color)',
-                                        aspectRatio: '1',
-                                        background: 'var(--bg-primary)',
-                                    }}>
-                                        <img
-                                            src={item.src}
-                                            alt={`Product image ${globalIdx + 1}`}
-                                            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                                        />
-                                        {/* Hero badge */}
+                                    <div
+                                        key={globalIdx}
+                                        className={`admin-image-preview-card ${heroIndex === globalIdx ? "hero" : ""}`}
+                                    >
+                                        <img src={item.src} alt={`Upload ${globalIdx + 1}`} />
+
                                         {heroIndex === globalIdx && (
                                             <span style={{
-                                                position: 'absolute', top: '6px', left: '6px',
-                                                padding: '2px 8px', borderRadius: '6px',
-                                                backgroundColor: 'var(--accent)', color: '#fff',
-                                                fontSize: '0.65rem', fontWeight: 700,
-                                                letterSpacing: '0.04em', textTransform: 'uppercase',
+                                                position: "absolute", top: "6px", left: "6px",
+                                                padding: "3px 8px", borderRadius: "6px",
+                                                backgroundColor: "var(--accent)", color: "#ffffff",
+                                                fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase"
                                             }}>
                                                 Hero
                                             </span>
                                         )}
-                                        {/* Actions overlay */}
-                                        <div style={{
-                                            position: 'absolute', bottom: 0, left: 0, right: 0,
-                                            display: 'flex', gap: '4px', padding: '6px',
-                                            background: 'linear-gradient(transparent, rgba(0,0,0,0.7))',
-                                        }}>
+
+                                        <div className="admin-image-card-actions">
                                             {heroIndex !== globalIdx && (
                                                 <button
                                                     type="button"
                                                     onClick={() => setHeroIndex(globalIdx)}
-                                                    style={{
-                                                        flex: 1, padding: '4px 6px', borderRadius: '6px',
-                                                        backgroundColor: 'rgba(255,255,255,0.9)', color: '#0f172a',
-                                                        fontSize: '0.65rem', fontWeight: 700, border: 'none',
-                                                        cursor: 'pointer', fontFamily: 'inherit',
-                                                    }}
+                                                    className="admin-image-card-btn"
+                                                    style={{ backgroundColor: "#ffffff", color: "#000000" }}
                                                 >
                                                     Set Hero
                                                 </button>
@@ -478,12 +605,8 @@ export default function AdminProducts() {
                                             <button
                                                 type="button"
                                                 onClick={() => item.isExisting ? removeExistingImage(item.index) : removeNewFile(item.index)}
-                                                style={{
-                                                    padding: '4px 8px', borderRadius: '6px',
-                                                    backgroundColor: 'rgba(239,68,68,0.9)', color: '#fff',
-                                                    fontSize: '0.65rem', fontWeight: 700, border: 'none',
-                                                    cursor: 'pointer', fontFamily: 'inherit',
-                                                }}
+                                                className="admin-image-card-btn"
+                                                style={{ backgroundColor: "#ef4444", color: "#ffffff" }}
                                             >
                                                 Remove
                                             </button>
@@ -493,57 +616,134 @@ export default function AdminProducts() {
                             </div>
                         )}
 
-                        {/* File input for adding more images */}
+                        {/* File input label / upload button */}
                         <label style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            padding: '24px', borderRadius: '12px',
-                            border: '2px dashed var(--border-color)',
-                            backgroundColor: 'var(--bg-primary)',
-                            cursor: 'pointer', transition: 'border-color 0.2s ease',
-                            color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500,
-                            gap: '8px',
+                            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                            padding: "24px 16px", borderRadius: "14px", border: "2px dashed var(--border-color)",
+                            backgroundColor: "var(--bg-primary)", cursor: "pointer", gap: "8px", textAlign: "center",
+                            transition: "border-color 0.2s ease"
                         }}>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
-                            {previews.length === 0 ? 'Click to upload product images' : 'Add more images'}
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--accent)" }}>
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                <polyline points="21 15 16 10 5 21" />
+                            </svg>
+                            <span style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                                {previews.length === 0 ? "Tap to select photo library or camera" : "+ Add more images"}
+                            </span>
+                            <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                                Supports JPEG, PNG, WebP (auto-compressed before R2 upload)
+                            </span>
                             <input
                                 type="file"
                                 accept="image/*"
                                 multiple
-                                style={{ display: 'none' }}
+                                style={{ display: "none" }}
                                 onChange={handleFilesSelected}
                             />
                         </label>
                     </div>
 
-                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
-                        <p style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '12px' }}>Advanced Options</p>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: 'var(--text-primary)', fontWeight: 500, cursor: 'pointer' }}>
-                            <input type="checkbox" checked={formData.isVisible || false} onChange={e => setFormData({ ...formData, isVisible: e.target.checked })} />
-                            Visible on Storefront
-                        </label>
-                        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', color: 'var(--text-primary)', fontWeight: 500, cursor: 'pointer' }}>
-                            <input type="checkbox" checked={formData.isCustomized || false} onChange={e => setFormData({ ...formData, isCustomized: e.target.checked })} />
-                            Customizable Product?
-                        </label>
-                        {formData.isCustomized && (
-                            <div style={{ marginLeft: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                                    <input type="radio" name="customType" checked={formData.customizationType === "requires_name"} onChange={() => setFormData({ ...formData, customizationType: "requires_name" })} />
-                                    Requires Text/Name
-                                </label>
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                                    <input type="radio" name="customType" checked={formData.customizationType === "requires_picture"} onChange={() => setFormData({ ...formData, customizationType: "requires_picture" })} />
-                                    Requires Picture Upload
-                                </label>
-                            </div>
-                        )}
+                    {/* SECTION 5: OPTIONS & VISIBILITY */}
+                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }}>
+                        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>5</span>
+                            Visibility & Customization
+                        </h3>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "0.92rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={formData.isVisible || false}
+                                    onChange={(e) => setFormData({ ...formData, isVisible: e.target.checked })}
+                                    style={{ width: "20px", height: "20px", accentColor: "var(--accent)" }}
+                                />
+                                Visible on Storefront (publicly purchasable)
+                            </label>
+
+                            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "0.92rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={formData.isFeatured || false}
+                                    onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
+                                    style={{ width: "20px", height: "20px", accentColor: "var(--accent)" }}
+                                />
+                                Feature on Homepage (&quot;Most Popular Picks&quot;)
+                            </label>
+
+                            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "0.92rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={formData.isCustomized || false}
+                                    onChange={(e) => setFormData({ ...formData, isCustomized: e.target.checked })}
+                                    style={{ width: "20px", height: "20px", accentColor: "var(--accent)" }}
+                                />
+                                Customizable Product (engraving / photo printing)
+                            </label>
+
+                            {formData.isCustomized && (
+                                <div style={{ marginLeft: "28px", padding: "12px 16px", borderRadius: "12px", backgroundColor: "var(--bg-primary)", border: "1px solid var(--border-color)", display: "flex", flexDirection: "column", gap: "8px" }}>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.88rem", color: "var(--text-primary)", cursor: "pointer" }}>
+                                        <input
+                                            type="radio"
+                                            name="customType"
+                                            checked={formData.customizationType === "requires_name"}
+                                            onChange={() => setFormData({ ...formData, customizationType: "requires_name" })}
+                                            style={{ accentColor: "var(--accent)" }}
+                                        />
+                                        Requires Name / Text Engraving
+                                    </label>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.88rem", color: "var(--text-primary)", cursor: "pointer" }}>
+                                        <input
+                                            type="radio"
+                                            name="customType"
+                                            checked={formData.customizationType === "requires_picture"}
+                                            onChange={() => setFormData({ ...formData, customizationType: "requires_picture" })}
+                                            style={{ accentColor: "var(--accent)" }}
+                                        />
+                                        Requires Customer Photo Upload
+                                    </label>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px' }}>
-                        <button type="button" onClick={() => { setIsEditing(false); setImageFiles([]); setNewFilePreviews([]); }} style={{ padding: '12px 24px', borderRadius: '14px', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+
+                    {/* Desktop Actions */}
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "16px", borderTop: "1px solid var(--border-color)" }}>
+                        <button
+                            type="button"
+                            onClick={() => { setIsEditing(false); setImageFiles([]); setNewFilePreviews([]); }}
+                            className="admin-btn admin-btn-secondary"
+                            disabled={uploading}
+                        >
                             Cancel
                         </button>
-                        <button type="submit" disabled={uploading} style={{ padding: '12px 24px', borderRadius: '14px', backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: 'none', opacity: uploading ? 0.6 : 1 }}>
-                            {uploading ? "Uploading..." : "Save Product"}
+                        <button
+                            type="submit"
+                            className="admin-btn admin-btn-primary"
+                            disabled={uploading}
+                        >
+                            {uploading ? "Saving & Uploading..." : "Save Product"}
+                        </button>
+                    </div>
+
+                    {/* Mobile Sticky Actions Bar */}
+                    <div className="admin-mobile-sticky-actions">
+                        <button
+                            type="button"
+                            onClick={() => { setIsEditing(false); setImageFiles([]); setNewFilePreviews([]); }}
+                            className="admin-btn admin-btn-secondary"
+                            disabled={uploading}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="admin-btn admin-btn-primary"
+                            disabled={uploading}
+                        >
+                            {uploading ? "Saving..." : "Save Product"}
                         </button>
                     </div>
                 </form>
@@ -551,103 +751,354 @@ export default function AdminProducts() {
         );
     }
 
-    // ====================== PRODUCT LIST ======================
+    // =========================================================================
+    // PRODUCT LIST VIEW
+    // =========================================================================
     return (
-        <div className="animate-fade-in" style={{ position: 'relative' }}>
+        <div className="animate-fade-in" style={{ position: "relative" }}>
+            {/* Fake review modal */}
             {addingReviewForProduct && (
-                <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{ backgroundColor: 'var(--bg-primary)', padding: '24px', borderRadius: '16px', width: '90%', maxWidth: '500px', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '16px' }}>Add Fake Review</h3>
-                        <form onSubmit={handleFakeReviewSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div>
-                                <label style={labelStyle}>Reviewer Name</label>
-                                <input type="text" style={inputStyle} value={fakeReviewForm.userName} onChange={e => setFakeReviewForm({ ...fakeReviewForm, userName: e.target.value })} placeholder="e.g. John Doe" />
+                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+                    <div className="admin-card" style={{ width: "100%", maxWidth: "480px", maxHeight: "90vh", overflowY: "auto", margin: 0, padding: "24px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                            <h3 style={{ fontSize: "1.2rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>Add Seed Review</h3>
+                            <button
+                                type="button"
+                                onClick={() => setAddingReviewForProduct(null)}
+                                style={{ fontSize: "1.5rem", color: "var(--text-secondary)", lineHeight: 1 }}
+                            >
+                                &times;
+                            </button>
+                        </div>
+                        <form onSubmit={handleFakeReviewSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                                <label>Reviewer Name</label>
+                                <input
+                                    type="text"
+                                    className="admin-form-input"
+                                    value={fakeReviewForm.userName}
+                                    onChange={(e) => setFakeReviewForm({ ...fakeReviewForm, userName: e.target.value })}
+                                    placeholder="e.g. John Doe"
+                                    required
+                                />
                             </div>
-                            <div>
-                                <label style={labelStyle}>Rating (1-5)</label>
-                                <input type="number" min="1" max="5" style={inputStyle} value={fakeReviewForm.rating} onChange={e => setFakeReviewForm({ ...fakeReviewForm, rating: Number(e.target.value) })} />
+                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                                <label>Rating (1 to 5 Stars)</label>
+                                <select
+                                    className="admin-form-select"
+                                    value={fakeReviewForm.rating}
+                                    onChange={(e) => setFakeReviewForm({ ...fakeReviewForm, rating: Number(e.target.value) })}
+                                >
+                                    <option value={5}>★★★★★ (5 Stars)</option>
+                                    <option value={4}>★★★★☆ (4 Stars)</option>
+                                    <option value={3}>★★★☆☆ (3 Stars)</option>
+                                    <option value={2}>★★☆☆☆ (2 Stars)</option>
+                                    <option value={1}>★☆☆☆☆ (1 Star)</option>
+                                </select>
                             </div>
-                            <div>
-                                <label style={labelStyle}>Comment</label>
-                                <textarea style={{ ...inputStyle, resize: 'vertical' }} rows={3} value={fakeReviewForm.comment} onChange={e => setFakeReviewForm({ ...fakeReviewForm, comment: e.target.value })}></textarea>
+                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                                <label>Comment</label>
+                                <textarea
+                                    className="admin-form-textarea"
+                                    rows={3}
+                                    value={fakeReviewForm.comment}
+                                    onChange={(e) => setFakeReviewForm({ ...fakeReviewForm, comment: e.target.value })}
+                                    placeholder="Customer feedback on quality, sizing, and shipping..."
+                                    required
+                                />
                             </div>
-                            <div>
-                                <label style={labelStyle}>Images (Optional)</label>
-                                <input type="file" multiple accept="image/*" onChange={e => setFakeReviewImages(Array.from(e.target.files || []))} />
+                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
+                                <label>Review Photos (Optional)</label>
+                                <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    onChange={(e) => setFakeReviewImages(Array.from(e.target.files || []))}
+                                    className="admin-form-input"
+                                    style={{ padding: "8px" }}
+                                />
                             </div>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-                                <button type="button" onClick={() => setAddingReviewForProduct(null)} style={{ padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
-                                <button type="submit" disabled={fakeReviewUploading} style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 600, cursor: 'pointer' }}>
-                                    {fakeReviewUploading ? 'Uploading...' : 'Submit'}
+                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setAddingReviewForProduct(null)}
+                                    className="admin-btn admin-btn-secondary admin-btn-sm"
+                                    disabled={fakeReviewUploading}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="admin-btn admin-btn-primary admin-btn-sm"
+                                    disabled={fakeReviewUploading}
+                                >
+                                    {fakeReviewUploading ? "Uploading..." : "Publish Review"}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Products</h1>
-                <button onClick={handleAddNew} style={{ padding: '12px 24px', borderRadius: '999px', backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: 'none', transition: 'all 0.2s ease' }}>
+
+            <AdminPageHeader
+                title="Product Catalog"
+                subtitle={`Manage your store inventory (${products.length} total products)`}
+            >
+                <button
+                    type="button"
+                    onClick={handleAddNew}
+                    className="admin-btn admin-btn-primary"
+                    aria-label="Add new product to catalog"
+                >
                     + Add Product
                 </button>
-            </div>
+            </AdminPageHeader>
 
             {error && (
-                <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '16px 20px', borderRadius: '12px', marginBottom: '24px', fontSize: '0.9rem', fontWeight: 500, border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                <div style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", padding: "16px 20px", borderRadius: "16px", marginBottom: "24px", fontSize: "0.9rem", fontWeight: 500, border: "1px solid rgba(239, 68, 68, 0.2)" }}>
                     {error}
                 </div>
             )}
 
-            <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '24px', border: '1px solid var(--border-color)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {/* Product Card Container */}
+            <div className="admin-card">
+                {/* Search & Filter Bar */}
+                <div className="admin-filter-bar">
+                    <div className="admin-search-wrapper">
+                        <svg className="admin-search-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                        <input
+                            type="search"
+                            className="admin-search-input"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Search by product name or category..."
+                            aria-label="Search products"
+                        />
+                    </div>
+
+                    <div className="admin-filter-pills">
+                        <button
+                            type="button"
+                            className={`admin-filter-pill ${selectedVisibility === "ALL" ? "active" : ""}`}
+                            onClick={() => setSelectedVisibility("ALL")}
+                        >
+                            All ({products.length})
+                        </button>
+                        <button
+                            type="button"
+                            className={`admin-filter-pill ${selectedVisibility === "VISIBLE" ? "active" : ""}`}
+                            onClick={() => setSelectedVisibility("VISIBLE")}
+                        >
+                            Visible
+                        </button>
+                        <button
+                            type="button"
+                            className={`admin-filter-pill ${selectedVisibility === "HIDDEN" ? "active" : ""}`}
+                            onClick={() => setSelectedVisibility("HIDDEN")}
+                        >
+                            Hidden
+                        </button>
+                        {categories.map((cat) => (
+                            <button
+                                key={cat.id}
+                                type="button"
+                                className={`admin-filter-pill ${selectedCategory === cat.name ? "active" : ""}`}
+                                onClick={() => setSelectedCategory(selectedCategory === cat.name ? "ALL" : cat.name)}
+                            >
+                                {cat.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Desktop View: Table (>= 768px) */}
+                <div className="admin-table-container">
+                    <table className="admin-table">
+                        <thead>
                             <tr>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Image</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Name</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Price</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Stock</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Images</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Status</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)', textAlign: 'right' }}>Actions</th>
+                                <th style={{ width: "64px" }}>Media</th>
+                                <th>Product Name</th>
+                                <th>Category</th>
+                                <th>Price</th>
+                                <th>Stock</th>
+                                <th>Status</th>
+                                <th style={{ textAlign: "right" }}>Actions</th>
                             </tr>
                         </thead>
-                        <tbody style={{ fontSize: '0.9rem' }}>
-                            {products.length === 0 && (
+                        <tbody>
+                            {filteredProducts.length === 0 && (
                                 <tr>
-                                    <td colSpan={7} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                                        No products found. Add one to get started.
+                                    <td colSpan={7} style={{ padding: "48px 20px", textAlign: "center", color: "var(--text-secondary)" }}>
+                                        No products match your search or filters.
                                     </td>
                                 </tr>
                             )}
-                            {products.map(product => (
-                                <tr key={product.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.2s ease' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                    <td style={{ padding: '16px 24px' }}>
-                                        <div style={{ width: '48px', height: '48px', backgroundColor: 'var(--bg-primary)', borderRadius: '12px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
-                                            {product.images?.[0] ? <img src={product.images[0]} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
+                            {filteredProducts.map((product) => (
+                                <tr key={product.id}>
+                                    <td>
+                                        <div style={{ width: "48px", height: "48px", backgroundColor: "var(--bg-primary)", borderRadius: "10px", overflow: "hidden", border: "1px solid var(--border-color)", position: "relative" }}>
+                                            {product.images?.[0] ? (
+                                                <img src={product.images[0]} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                            ) : (
+                                                <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", fontSize: "0.7rem" }}>No img</div>
+                                            )}
                                         </div>
                                     </td>
-                                    <td style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                        {product.name}
-                                        {product.isCustomized && <span style={{ marginLeft: '8px', padding: '2px 8px', borderRadius: '999px', fontSize: '0.7rem', fontWeight: 700, backgroundColor: 'var(--text-primary)', color: 'var(--bg-primary)' }}>Custom</span>}
+                                    <td>
+                                        <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{product.name}</div>
+                                        <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
+                                            {product.isCustomized && (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
+                                                    Custom
+                                                </span>
+                                            )}
+                                            {product.isFeatured && (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
+                                                    Featured
+                                                </span>
+                                            )}
+                                        </div>
                                     </td>
-                                    <td style={{ padding: '16px 24px', color: 'var(--text-primary)' }}>₹{product.price}</td>
-                                    <td style={{ padding: '16px 24px', color: 'var(--text-primary)' }}>{product.inventory}</td>
-                                    <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>{product.images?.length || 0}</td>
-                                    <td style={{ padding: '16px 24px' }}>
-                                        <span style={{ padding: '4px 12px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, backgroundColor: product.isVisible ? 'rgba(34, 197, 94, 0.1)' : 'var(--border-color)', color: product.isVisible ? '#16a34a' : 'var(--text-secondary)' }}>
-                                            {product.isVisible ? 'Visible' : 'Hidden'}
+                                    <td style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                                        {product.category || (product.categories && product.categories[0]) || "—"}
+                                    </td>
+                                    <td style={{ fontWeight: 700, color: "var(--accent)" }}>
+                                        ₹{(product.price || 0).toLocaleString("en-IN")}
+                                    </td>
+                                    <td>
+                                        <span style={{
+                                            fontWeight: 600,
+                                            color: product.inventory <= 0 ? "#ef4444" : product.inventory < 5 ? "#ca8a04" : "var(--text-primary)"
+                                        }}>
+                                            {product.inventory} units
                                         </span>
                                     </td>
-                                    <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                                        <button onClick={() => setAddingReviewForProduct(product.id)} style={{ color: '#10b981', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginRight: '16px', fontFamily: 'inherit' }}>+ Review</button>
-                                        <button onClick={() => handleEdit(product)} style={{ color: 'var(--accent)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', marginRight: '16px', fontFamily: 'inherit' }}>Edit</button>
-                                        <button onClick={() => handleDelete(product.id)} style={{ color: '#ef4444', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>Delete</button>
+                                    <td>
+                                        <AdminBadge variant={product.isVisible ? "visible" : "hidden"}>
+                                            {product.isVisible ? "Visible" : "Hidden"}
+                                        </AdminBadge>
+                                    </td>
+                                    <td style={{ textAlign: "right" }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setAddingReviewForProduct(product.id)}
+                                            className="admin-btn admin-btn-secondary admin-btn-sm"
+                                            style={{ marginRight: "6px" }}
+                                        >
+                                            + Review
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleEdit(product)}
+                                            className="admin-btn admin-btn-primary admin-btn-sm"
+                                            style={{ marginRight: "6px" }}
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDelete(product.id)}
+                                            className="admin-btn admin-btn-danger admin-btn-sm"
+                                        >
+                                            Delete
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile View: Responsive Product Cards (< 768px) */}
+                <div className="admin-mobile-cards-list">
+                    {filteredProducts.length === 0 && (
+                        <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--text-secondary)" }}>
+                            No products match your search or filters.
+                        </div>
+                    )}
+                    {filteredProducts.map((product) => (
+                        <div key={product.id} className="admin-mobile-item-card">
+                            <div className="admin-mobile-card-top">
+                                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                                    <div style={{ width: "64px", height: "64px", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)", flexShrink: 0 }}>
+                                        {product.images?.[0] ? (
+                                            <img src={product.images[0]} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                        ) : (
+                                            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-secondary)", fontSize: "0.75rem" }}>No image</div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", margin: 0, lineHeight: 1.3 }}>
+                                            {product.name}
+                                        </h4>
+                                        <div style={{ display: "flex", gap: "6px", marginTop: "4px", flexWrap: "wrap", alignItems: "center" }}>
+                                            <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
+                                                {product.category || (product.categories && product.categories[0]) || "General"}
+                                            </span>
+                                            {product.isCustomized && (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
+                                                    Custom
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <AdminBadge variant={product.isVisible ? "visible" : "hidden"}>
+                                    {product.isVisible ? "Visible" : "Hidden"}
+                                </AdminBadge>
+                            </div>
+
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0" }}>
+                                <div>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block" }}>Stock</span>
+                                    <span style={{
+                                        fontSize: "0.9rem",
+                                        fontWeight: 700,
+                                        color: product.inventory <= 0 ? "#ef4444" : product.inventory < 5 ? "#ca8a04" : "var(--text-primary)"
+                                    }}>
+                                        {product.inventory} available
+                                    </span>
+                                </div>
+                                <div style={{ textAlign: "right" }}>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block" }}>Price</span>
+                                    <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--accent)" }}>
+                                        ₹{(product.price || 0).toLocaleString("en-IN")}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="admin-mobile-card-actions">
+                                <button
+                                    type="button"
+                                    onClick={() => handleEdit(product)}
+                                    className="admin-btn admin-btn-primary admin-btn-sm"
+                                    style={{ flex: 2 }}
+                                >
+                                    Edit Product
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setAddingReviewForProduct(product.id)}
+                                    className="admin-btn admin-btn-secondary admin-btn-sm"
+                                    style={{ flex: 1 }}
+                                >
+                                    + Review
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDelete(product.id)}
+                                    className="admin-btn admin-btn-danger admin-btn-sm"
+                                    style={{ padding: "6px 10px" }}
+                                    aria-label={`Delete ${product.name}`}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>
