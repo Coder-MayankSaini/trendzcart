@@ -223,3 +223,34 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 2. **Periodic Gateway Reconciliation:** Netlify scheduled function `reservation-cleanup` runs continuously every 5 minutes to release expired cart reservations.
 3. **Firebase Plan Monitoring:** Monitor Firestore and Cloud Storage usage under the Spark plan; consider upgrading to Blaze (Pay-as-you-go) if transaction volume increases.
 4. **Log & Webhook Auditing:** Periodically review `paymentWebhookEvents` and `paymentRecords` in Firestore to verify continuous capture reconciliation.
+
+---
+
+## 7. Future Feature Backlog & Engineering Roadmap
+
+The following upcoming features are documented in the authoritative project backlog for future milestones. In accordance with architectural dependencies, the flexible product variant schema must precede the CSV bulk importer to ensure full variant support from inception. None of these features are implemented in TASK 023.
+
+### 1. Upcoming — Product Image Containment
+- **Full Display:** Product detail main and gallery images must display completely without cropping using `object-fit: contain`.
+- **Aspect Ratio Recommendation:** Maintain the 4:5 recommendation (`1200 × 1500 px`) for optimal vertical framing.
+- **Visual Quality:** Preserve high-DPI responsive rendering and pristine sharpness across all mobile and desktop viewports without degrading blur filters or distortion.
+
+### 2. Upcoming — Flexible Product Sizes and Variants
+- **Apparel Size Options:** Standard apparel sizes: XS, S, M, L, XL, XXL, and Free Size.
+- **Named & Metric Sizes:** Support named descriptor sizes (e.g. Small, Medium, Large) and explicit physical dimensions per size (e.g., Large — `26 × 26 cm`).
+- **Customizable Labels:** Allow arbitrary custom size and attribute labels per product category.
+- **Multi-Attribute Variants:** Support color variants combined with sizes (multi-attribute variant matrix).
+- **Variant-Level Inventory & Pricing:** Each variant supports its own distinct SKU, price override, inventory stock count, and optional variant-specific image.
+- **Server-Side Trust Boundary:** Comprehensive server-side variant verification during cart additions, order creation (`/api/orders/create`), and Razorpay checkout (`/api/razorpay/create-order`).
+
+### 3. Upcoming — CSV Bulk Product Import
+- **Compatibility:** Shopify-compatible CSV column mapping alongside an authoritative downloadable Bazaarvilla CSV template.
+- **Batch Processing:** Support bulk product creation and catalog updates with pre-import schema validation and interactive preview.
+- **Variant & Dimension Integration:** Full support for multi-variant products, dimensions, and size attributes powered by the flexible variant schema.
+- **Secure Image Ingestion:** Automated ingestion and validation of product images directly to Cloudflare R2 (`bazaarvilla-media`) with MIME checking and size limits.
+- **Audit & Protection:** Duplicate detection, row-level error reporting, and non-destructive batch audit logs.
+
+> [!IMPORTANT]
+> **Implementation Sequence Dependency:**  
+> The flexible product variant schema must be designed, implemented, and verified **prior** to implementing the CSV bulk product importer so that the importer inherently supports single and multi-variant products without schema retrofitting.
+

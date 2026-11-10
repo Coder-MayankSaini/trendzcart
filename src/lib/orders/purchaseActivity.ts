@@ -21,6 +21,9 @@ import {
 // Re-export all client-safe isomorphic types, constants, and utilities
 export * from "./purchaseActivityTypes";
 
+// In-flight calculation deduplication map to prevent concurrent executions for the same product
+const inflightRecalculations = new Map<string, Promise<ProductPurchaseActivityData>>();
+
 /**
  * Calculates fresh purchase activity stats for a product from Firestore orders,
  * updates the cached purchaseActivity field on the product document, and returns
@@ -31,68 +34,85 @@ export async function calculateAndPersistProductPurchaseActivity(
     productId: string,
     configOverride?: Partial<ProductPurchaseActivityConfig>
 ): Promise<ProductPurchaseActivityData> {
-    const productRef = db.collection("products").doc(productId);
-    const productSnap = await productRef.get();
-
-    if (!productSnap.exists) {
-        throw new Error(`Product not found: ${productId}`);
+    // Deduplicate concurrent recalculations for the same product when no explicit configOverride is provided
+    if (!configOverride && inflightRecalculations.has(productId)) {
+        return inflightRecalculations.get(productId)!;
     }
 
-    const productData = productSnap.data() || {};
-    const existingActivity = productData.purchaseActivity || {};
+    const calculationPromise = (async () => {
+        const productRef = db.collection("products").doc(productId);
+        const productSnap = await productRef.get();
 
-    const config: ProductPurchaseActivityConfig = {
-        enabled: configOverride?.enabled ?? existingActivity.enabled ?? true,
-        periodDays: configOverride?.periodDays ?? existingActivity.periodDays ?? DEFAULT_ACTIVITY_PERIOD,
-        displayThreshold: configOverride?.displayThreshold ?? existingActivity.displayThreshold ?? DEFAULT_DISPLAY_THRESHOLD,
-    };
+        if (!productSnap.exists) {
+            throw new Error(`Product not found: ${productId}`);
+        }
 
-    // Bounded query: Read orders from the past 90 days
-    const ninetyDaysAgo = new Date(Date.now() - 92 * 24 * 60 * 60 * 1000); // 92 days with buffer
-    const ordersSnap = await db
-        .collection("orders")
-        .where("createdAt", ">=", ninetyDaysAgo)
-        .get();
+        const productData = productSnap.data() || {};
+        const existingActivity = productData.purchaseActivity || {};
 
-    const orders = ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const config: ProductPurchaseActivityConfig = {
+            enabled: configOverride?.enabled ?? existingActivity.enabled ?? true,
+            periodDays: configOverride?.periodDays ?? existingActivity.periodDays ?? DEFAULT_ACTIVITY_PERIOD,
+            displayThreshold: configOverride?.displayThreshold ?? existingActivity.displayThreshold ?? DEFAULT_DISPLAY_THRESHOLD,
+        };
 
-    const stats = calculateUnitsSoldForProduct(
-        orders,
-        productId,
-        config.periodDays,
-        Date.now()
-    );
+        // Bounded query: Read orders from the past 90 days with a safety limit of 1000 documents
+        const ninetyDaysAgo = new Date(Date.now() - 92 * 24 * 60 * 60 * 1000); // 92 days with buffer
+        const ordersSnap = await db
+            .collection("orders")
+            .where("createdAt", ">=", ninetyDaysAgo)
+            .limit(1000)
+            .get();
 
-    const now = Date.now();
-    const isVisible = evaluateStorefrontVisibility(config, stats.unitsSold);
-    const displayLabel = formatPurchaseActivityBadge(stats.unitsSold, config.periodDays);
+        const orders = ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
-    const fullActivityData: ProductPurchaseActivityData = {
-        ...config,
-        productId,
-        unitsSold: stats.unitsSold,
-        countsByPeriod: stats.countsByPeriod,
-        qualifyingOrdersCount: stats.qualifyingOrdersCount,
-        uniquePurchasersCount: stats.uniquePurchasersCount,
-        lastCalculatedAt: now,
-        displayLabel,
-        isVisibleOnStorefront: isVisible,
-    };
+        const stats = calculateUnitsSoldForProduct(
+            orders,
+            productId,
+            config.periodDays,
+            Date.now()
+        );
 
-    // Persist to product document for 0-extra-read storefront performance
-    await productRef.update({
-        purchaseActivity: {
-            enabled: config.enabled,
-            periodDays: config.periodDays,
-            displayThreshold: config.displayThreshold,
+        const now = Date.now();
+        const isVisible = evaluateStorefrontVisibility(config, stats.unitsSold);
+        const displayLabel = formatPurchaseActivityBadge(stats.unitsSold, config.periodDays);
+
+        const fullActivityData: ProductPurchaseActivityData = {
+            ...config,
+            productId,
             unitsSold: stats.unitsSold,
             countsByPeriod: stats.countsByPeriod,
             qualifyingOrdersCount: stats.qualifyingOrdersCount,
             uniquePurchasersCount: stats.uniquePurchasersCount,
             lastCalculatedAt: now,
-        },
-        updatedAt: now,
-    });
+            displayLabel,
+            isVisibleOnStorefront: isVisible,
+        };
 
-    return fullActivityData;
+        // Persist to product document for 0-extra-read storefront performance
+        await productRef.update({
+            purchaseActivity: {
+                enabled: config.enabled,
+                periodDays: config.periodDays,
+                displayThreshold: config.displayThreshold,
+                unitsSold: stats.unitsSold,
+                countsByPeriod: stats.countsByPeriod,
+                qualifyingOrdersCount: stats.qualifyingOrdersCount,
+                uniquePurchasersCount: stats.uniquePurchasersCount,
+                lastCalculatedAt: now,
+            },
+            updatedAt: now,
+        });
+
+        return fullActivityData;
+    })();
+
+    if (!configOverride) {
+        inflightRecalculations.set(productId, calculationPromise);
+        calculationPromise.finally(() => {
+            inflightRecalculations.delete(productId);
+        });
+    }
+
+    return calculationPromise;
 }

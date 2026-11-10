@@ -115,9 +115,13 @@ export function isOrderEligibleForPurchaseActivity(order: any): boolean {
     const paymentMethod = (order.paymentMethod || "RAZORPAY").toUpperCase();
 
     if (paymentMethod === "COD") {
-        // Cash on Delivery orders are eligible when placed/confirmed and not cancelled
-        const validCodStatuses = ["Processing", "Completed", "Delivered", "Shipped"];
-        return validCodStatuses.includes(order.orderStatus);
+        // Truth-in-advertising: For "units sold", an unpaid/unfulfilled COD order in "Processing"
+        // or "Shipped" is NOT a completed sale. A COD order is only eligible once delivered or paid.
+        if (order.paymentStatus === "PAID") {
+            return true;
+        }
+        const completedCodStatuses = ["Completed", "Delivered"];
+        return completedCodStatuses.includes(order.orderStatus);
     }
 
     if (paymentMethod === "RAZORPAY" || paymentMethod === "PREPAID") {

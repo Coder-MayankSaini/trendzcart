@@ -168,8 +168,8 @@ describe("Product Purchase Activity API & Security Integration Tests (TASK 023)"
         await adminDb!.collection("orders").doc("ord_cod_2").set({
             id: "ord_cod_2",
             paymentMethod: "COD",
-            paymentStatus: "PENDING",
-            orderStatus: "Processing",
+            paymentStatus: "PAID",
+            orderStatus: "Delivered",
             createdAt: tenDaysAgo,
             items: [{ productId: commercialProductId, quantity: 5, price: 1499 }],
         });

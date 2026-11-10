@@ -209,8 +209,8 @@ describe("Product Purchase Activity Engine Unit Tests (TASK 023)", () => {
     });
 
     // 11. Eligible COD order handling
-    it("ACT-011: should include active or delivered COD orders but exclude cancelled COD orders", () => {
-        const validCodProcessing = {
+    it("ACT-011: should include delivered or paid COD orders but strictly exclude unpaid unfulfilled or cancelled COD orders", () => {
+        const unfulfilledCodProcessing = {
             id: "ord_cod_processing",
             paymentMethod: "COD",
             paymentStatus: "PENDING",
@@ -235,12 +235,15 @@ describe("Product Purchase Activity Engine Unit Tests (TASK 023)", () => {
             items: [{ productId: targetProductId, quantity: 5, price: 999 }],
         };
 
-        assert.equal(isOrderEligibleForPurchaseActivity(validCodProcessing), true);
+        // Unpaid unfulfilled COD in Processing is NOT a completed sale
+        assert.equal(isOrderEligibleForPurchaseActivity(unfulfilledCodProcessing), false);
+        // Completed/delivered COD order IS a completed sale
         assert.equal(isOrderEligibleForPurchaseActivity(validCodDelivered), true);
+        // Cancelled COD is excluded
         assert.equal(isOrderEligibleForPurchaseActivity(cancelledCod), false);
 
-        const result = calculateUnitsSoldForProduct([validCodProcessing, validCodDelivered, cancelledCod], targetProductId, 30, fixedNow);
-        assert.equal(result.unitsSold, 5); // 3 + 2, excluding 5 cancelled
+        const result = calculateUnitsSoldForProduct([unfulfilledCodProcessing, validCodDelivered, cancelledCod], targetProductId, 30, fixedNow);
+        assert.equal(result.unitsSold, 2); // 2 units from delivered sale (unfulfilled processing excluded, cancelled excluded)
     });
 
     // 12. Repeated webhook delivery not double-counted (idempotency)
