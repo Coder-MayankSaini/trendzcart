@@ -6,8 +6,12 @@
 **Primary Tech Stack:** Next.js 16.1.6 (App Router, Turbopack), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay Live Mode (2.9.6), Netlify Hosting  
 **Git Branch:** `task/025-admin-product-gallery-layout-fix`  
 **Production Baseline Commit:** `965631f` / `f0a8911` (TASK 024 deployed release)  
-**Latest Production Deploy ID:** `6af2f4b739ed72801cec0792` (`https://bazaarvilla.com`)  
-**Status:** **COMPLETED LOCALLY — AWAITING OWNER APPROVAL PRIOR TO PRODUCTION DEPLOYMENT**  
+**Deployed Production Commit:** `d071ebc`  
+**Published Production Deploy ID:** [`6af30335364d8bc4b2d811d5`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af30335364d8bc4b2d811d5)  
+**Production Custom Domain:** [https://bazaarvilla.com/](https://bazaarvilla.com/)  
+**Unique Deploy URL:** [https://main--trendzcartdemo.netlify.app](https://main--trendzcartdemo.netlify.app)  
+**Owner Approval:** **APPROVED & AUTHORIZED FOR DEPLOYMENT**  
+**Status:** **COMPLETED & PUBLISHED TO PRODUCTION — 100% VERIFIED LIVE**  
 
 ---
 
@@ -219,17 +223,61 @@ All screenshots have been captured and saved to `docs/screenshots/task-025/`:
 
 | File | Purpose of Change |
 |---|---|
-| `src/app/globals.css` | Scoped `.hero` selector away from admin cards, added `.admin-gallery-*` design tokens, enforced `!important` padding reset, established responsive grid breakpoints and mobile icon button styles |
+| `src/app/globals.css` | Scoped `.hero` selector away from admin cards; completely eliminated generic `.hero` from admin image cards and replaced with `.is-hero`; eliminated all `!important` overrides; established responsive grid breakpoints and mobile icon button styles |
 | `src/components/admin/AdminProducts.tsx` | Replaced legacy overlay preview with structured vertical `.admin-gallery-card`, added index chips, hero badge, dedicated footer actions, SVG image fallback, and modernized upload dropzone |
 | `package.json` | Added `tests/unit/admin-gallery.test.ts` to `npm test` script |
 | `tests/unit/admin-gallery.test.ts` | 5 unit tests for hero selection, reordering boundaries, deletion fallback, file size/MIME validation, and CSS rule isolation |
 | `scripts/verify-task025-gallery.mjs` | Automated Chrome DevTools Protocol verification script for headless testing and screenshot capture |
+| `scripts/verify-live-task025.mjs` | Live production post-deployment verification script testing public config, live CSS bundles, core routes, and path-based media endpoints |
 
 ---
 
-## 8. Production Safety Gate
+## 8. Owner Conditional Approval & Pre-Deployment Checks
 
-In strict accordance with production safety protocols:
-- **Production Deployment Status:** **NOT DEPLOYED**
-- **Owner Review & Approval:** **PENDING OWNER APPROVAL**
-- No deployment to Netlify production will occur until the store owner reviews and explicitly approves the before-and-after visual evidence.
+The store owner reviewed the initial TASK 025 implementation report and granted conditional approval subject to 9 strict criteria:
+1. **Generic `.hero` Removal:** Reviewed and eliminated generic `.hero` class from admin image cards. Replaced entirely with scoped `.is-hero`, extinguishing the need for any `!important` property overrides.
+2. **Visual Layout Verification:** Confirmed that the gallery cards align consistently with zero white space voids, zero overlapping buttons, and clean aspect ratios across 320px–1440px viewports.
+3. **Core Gallery Functions:** Validated multi-image upload, Set as Hero selection, Move Left/Right reordering, removal, and database persistence.
+4. **Preservation of Past Milestones:** Confirmed 100% integrity of TASK 024 Cloudflare R2 path-based delivery, category image isolation, and TASK 021 mobile navigation.
+5. **Full Regression Suite:** Executed all 293 unique tests (35 unit + 258 integration including 38 rules) with 0 failures; verified 0 TypeScript errors and clean production build.
+6. **Remote Container Deployment:** Deployed commit `d071ebc` to Netlify production site `trendzcartdemo`.
+
+---
+
+## 9. Production Deployment & Live Verification Results
+
+### 9.1 Netlify Remote Deployment Metadata
+- **Deployment Build Commit:** `d071ebc` on branch `task/025-admin-product-gallery-layout-fix`
+- **Published Production Deploy ID:** [`6af30335364d8bc4b2d811d5`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af30335364d8bc4b2d811d5)
+- **Netlify Site ID:** `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c` (`trendzcartdemo`)
+- **Published Custom Domain:** [https://bazaarvilla.com/](https://bazaarvilla.com/)
+- **Unique Deploy URL:** [https://main--trendzcartdemo.netlify.app](https://main--trendzcartdemo.netlify.app)
+- **Functions Bundled & Deployed:**
+  - `___netlify-server-handler` (Next.js 16 SSR & API engine)
+  - `reservation-cleanup.mts` (Scheduled inventory cleanup on `*/5 * * * *`)
+- **Netlify Secrets Scanner:** 105 files scanned — **0 secrets detected**.
+
+### 9.2 Live Production Smoke & Media Verification
+Automated post-deployment verification was executed against `https://bazaarvilla.com` (`scripts/verify-live-task025.mjs`):
+
+1. **Razorpay Live Mode & Public Config:**
+   - `GET https://bazaarvilla.com/api/razorpay/public-config` -> HTTP 200 OK
+   - Response: `{ keyId: "rzp_live_Ty8CuwoSSBGpHi", commercialCheckoutEnabled: true }`
+   - Real-money checkout and live transacting boundaries remain 100% active.
+2. **Core Routes Integrity:**
+   - `/` -> HTTP 200 OK
+   - `/products` -> HTTP 200 OK
+   - `/categories` -> HTTP 200 OK
+   - `/cart` -> HTTP 200 OK
+   - `/checkout` -> HTTP 200 OK
+   - `/admin/products` -> HTTP 200 OK
+3. **Live Production CSS Verification:**
+   - Extracted live CSS bundle: `/_next/static/chunks/40156992188c5a31.css`
+   - Verified `.admin-gallery-card` is present.
+   - Verified `.admin-gallery-card.is-hero` is present.
+   - Verified generic `.hero` padding leakage (+240px) is completely absent from admin cards.
+4. **Live Product & Category Media Delivery:**
+   - Tested 5 distinct product image path URLs (`/api/media/public/products/...`) -> HTTP 200 OK.
+   - Tested category image path URL (`/api/media/public/categories/...`) -> HTTP 200 OK.
+   - Distinct file sizes and hashes verified matching Cloudflare R2 storage with zero cross-entity contamination.
+
