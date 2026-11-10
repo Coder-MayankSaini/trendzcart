@@ -6,9 +6,12 @@
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Firebase Auth, Cloud Firestore (Spark plan), Cloudflare R2, Razorpay Live Mode (2.9.6), Netlify Hosting  
 **Git Branch:** `task/027-customizable-product-cod-restriction`  
 **Base Commit:** `16b094ebfa4eff76d903d391ee07c31a4d9a7be6` (Code) / `5018105` (TASK 023 Documentation Baseline)  
-**Latest Production Deploy ID:** [`6af34bfc4ee2926c4d5e5cdd`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af34bfc4ee2926c4d5e5cdd)  
-**Production Site:** `https://bazaarvilla.com` (Netlify Site: `trendzcartdemo`)  
-**Status:** **LOCALLY COMPLETE & VERIFIED — AWAITING EXPLICIT OWNER APPROVAL FOR PRODUCTION DEPLOYMENT**  
+**Deployed Production Commit:** [`87261bc`](https://github.com/Coder-MayankSaini/trendzcart/commit/87261bc6aa52f6b0e8305e5165fd3f0324624a69)  
+**Published Production Deploy ID:** [`6af358848c8957162298eb3c`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af358848c8957162298eb3c)  
+**Netlify Build ID:** `6af358848c8957162298eb3a`  
+**Production Site:** `https://bazaarvilla.com` (Netlify Site: `trendzcartdemo` / Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
+**Unique Deploy URL:** [https://main--trendzcartdemo.netlify.app](https://main--trendzcartdemo.netlify.app)  
+**Status:** **APPROVED, FULLY DEPLOYED TO PRODUCTION & 100% VERIFIED LIVE**  
 
 ---
 
@@ -21,15 +24,17 @@ In e-commerce operations, custom-crafted, personalized, or engraved merchandise 
 Regular products must retain their existing COD eligibility.
 
 ### Implementation Summary:
-1. **Authoritative Identification:** Personalization status is derived strictly from trusted catalog metadata in Cloud Firestore (`isCustomized: true`, `customizationType: "requires_name" | "requires_picture"`, or legacy `customizable` / `isPersonalized`). Standard products with size (`sizes: ["S", "M", "L"]`) or color options alone are NOT treated as customizable.
-2. **Frontend Checkout Experience:** When a customizable product enters the cart, the COD payment option is disabled (`cursor: not-allowed`, muted opacity, disabled radio input), an "Unavailable for Custom Items" badge is displayed, and an explanation banner appears. If COD was previously selected, the payment method automatically resets to `"RAZORPAY"`. If all customized products are removed from the cart, COD eligibility is immediately restored.
+1. **Authoritative Identification:** Personalization status is derived strictly from trusted catalog metadata in Cloud Firestore (`isCustomized: true`, `customizationType: "requires_name" | "requires_picture"`, or legacy `customizable` / `isPersonalized`) via the shared browser-safe utility `src/lib/orders/customizationEligibility.ts`. Standard products with size (`sizes: ["S", "M", "L"]`) or color options alone are NOT treated as customizable.
+2. **Frontend Checkout Experience & Anti-Flicker Protection:** When a customizable product enters the cart, the COD payment option is disabled (`cursor: not-allowed`, muted opacity, disabled radio input), an "Unavailable for Custom Items" badge is displayed, and an explanation banner appears. During asynchronous catalog verification, a neutral "Checking eligibility..." state prevents premature selection. If catalog verification fails, the checkout fails-closed. If COD was previously selected, the payment method automatically resets to `"RAZORPAY"`. If all customized products are removed from the cart, COD eligibility is immediately restored.
 3. **Cart & Storefront Notifications:**
    - **Cart Page (`/cart`):** Displays a personalized order notice informing customers that COD will be disabled at checkout.
    - **Product Detail Page (PDP):** Customizable products display `Prepaid Only (Personalized Item)` instead of `Cash on Delivery Available`. Regular products retain `Cash on Delivery Available`.
+   - **Product Customizer (`ProductCustomizer.tsx`):** Consistently activates customization input fields based on `isCustomizableProduct` and forwards full customization payload to cart.
    - **Admin Product Editor (`/admin/products`):** Provides a clear COD restriction indicator under the "Customizable Product" setting, plus `Custom` and `Prepaid Only` badges in desktop tables and mobile cards.
 4. **Mixed-Cart Protection:** If a cart contains a mix of regular products and personalized products (e.g., Regular Hoodie + Custom Photo Frame), the entire order is restricted to prepaid payment. The cart is NOT split, regular products are NOT removed, and customers complete checkout with secure online payment.
 5. **Mandatory Server-Side Enforcement (`/api/orders/create`):** Inside the atomic Firestore transaction, the server reads the actual product documents from the database. If `paymentMethod === "COD"` and any item in `items` is customizable according to trusted catalog data, the request is immediately rejected with HTTP 400 and structured error code `COD_NOT_ALLOWED_CUSTOM_PRODUCT`. This check runs during the transaction read phase BEFORE any inventory decrement, coupon modification, or order persistence. Client-supplied flags are strictly ignored.
 6. **Automated Verification:** 396 unique automated tests passing (99 unit + 297 integration including 39 security rules tests; 0 failures). 9 CDP visual QA screenshots captured across desktop and mobile viewports.
+7. **Production Verification:** Deployed via Netlify remote Linux container build. 10/10 live verification checks passed on `https://bazaarvilla.com` (0 failures).
 
 ---
 
@@ -72,34 +77,47 @@ A product is recognized as customizable / personalized if and only if its truste
 
 ---
 
-## 4. Frontend & Storefront Modifications
+## 4. Frontend & Storefront Modifications & Anti-Flicker Gates
 
-### 1. Checkout Page (`src/app/(storefront)/checkout/page.tsx`)
-- **Authoritative Cart Computation:** Uses `useMemo` to check `item.isCustomized` and `item.customizationData`. In addition, an asynchronous `useEffect` verifies cart product IDs against Cloud Firestore to handle stale local storage sessions.
-- **Automatic State Recovery:** If `hasCustomizableItem` is true and `paymentMethod === "COD"`, a reactive `useEffect` automatically switches `paymentMethod` to `"RAZORPAY"`.
+### 1. Shared Pure Utility (`src/lib/orders/customizationEligibility.ts`)
+Created a browser-safe, pure TypeScript module exporting:
+- `isCustomizableProduct(candidate)`: Single source of truth across client and server.
+- `evaluateCodEligibility(items, catalog)`: Evaluates whole-cart eligibility and formats structured explanations.
+
+### 2. Checkout Page Anti-Flicker & Fail-Closed Gates (`src/app/(storefront)/checkout/page.tsx`)
+- **Anti-Flicker State Machine:**
+  - `isCodBlocked = hasCustomizableItem`: Active immediately if client cart metadata indicates personalization or if catalog verification finds a customizable item.
+  - `isCodPendingVerification`: Active while asynchronous catalog verification is in-flight. Renders neutral `Checking eligibility...` status and keeps COD unclickable to prevent flickering.
+  - `isCodVerificationFailed`: Active if catalog verification encounters network errors or missing catalog IDs. Fails closed (`Verification unavailable`), ensuring unverified items cannot use COD.
+  - `isCodAllowed = !isCodBlocked && !isCodPendingVerification && !isCodVerificationFailed`.
+- **Automatic State Recovery:** If `!isCodAllowed && paymentMethod === "COD"`, automatically resets `paymentMethod` to `"RAZORPAY"`.
 - **Disabled COD Option UI:**
-  - `disabled={hasCustomizableItem}` applied to radio input.
+  - `disabled={!isCodAllowed}` applied to radio input.
   - Muted opacity (`0.65`), disabled cursor (`cursor: not-allowed`), neutral background.
   - Interactive click prevention: clicking the card or input does not change payment method.
-  - Badge: `Unavailable for Custom Items` rendered with high contrast (`#fee2e2` / `#b91c1c`).
-  - Subtitle updated to: `"Personalized products require upfront online payment"`.
-- **Prepaid Order Banner:** Prominent explanation banner rendered directly below payment methods:
-  > **Prepaid Only for Personalized Items:** Your cart contains customized products. Because personalized items are crafted specifically for you upon receiving the order, Cash on Delivery is disabled for this entire order. Please complete your purchase securely with online payment (UPI, Cards, NetBanking).
+  - Badges: `Unavailable for Custom Items` (red), `Checking eligibility...` (slate), `Verification unavailable` (amber).
+- **Prepaid Order Banner:** Prominent explanation banner rendered directly below payment methods when custom items are present.
 - **Responsive Compatibility:** Fully tested across desktop (1440px) and mobile (390px, 430px) viewports.
 
-### 2. Shopping Cart Page (`src/app/(storefront)/cart/page.tsx`)
-- Added order-summary notice above checkout trigger:
-  > **Personalized Order:** Cart includes custom items. Cash on Delivery is disabled; online payment (UPI/Cards) required at checkout.
+### 3. Shopping Cart Page (`src/app/(storefront)/cart/page.tsx`)
+- Uses `isCustomizableProduct` to display a personalized order notice informing customers that Cash on Delivery is disabled and online payment is required at checkout.
 
-### 3. Product Detail Page (`src/app/(storefront)/products/[...slug]/page.tsx`)
-- Replaced unconditional "Cash on Delivery Available" badge with conditional logic:
-  - If `product.isCustomized`: Displays `Prepaid Only (Personalized Item)` in sky blue (`#0369a1` on `rgba(14, 165, 233, 0.1)`).
+### 4. Product Detail Page (`src/app/(storefront)/products/[...slug]/page.tsx`)
+- Replaced unconditional "Cash on Delivery Available" badge with `isCustomizableProduct(product)` logic:
+  - If customizable: Displays `Prepaid Only (Personalized Item)` in sky blue (`#0369a1` on `rgba(14, 165, 233, 0.1)`).
   - If standard product: Retains `Cash on Delivery Available` in Bazaarvilla green (`#16a34a`).
+- Passes full product metadata (`isCustomized`, `customizationType`, `customizable`, `isPersonalized`) to `ProductCustomizer`.
 
-### 4. Admin Product Management (`src/components/admin/AdminProducts.tsx`)
+### 5. Product Customizer (`src/components/storefront/ProductCustomizer.tsx`)
+- Standardized with `isCustomizableProduct(product)`:
+  - Consistently renders customization input sections.
+  - Attaches `isCustomized: true` and customization metadata to cart items on add.
+
+### 6. Admin Product Management (`src/components/admin/AdminProducts.tsx`)
 - **Creation/Edit Form:** Added explanatory notice under the "Customizable Product" setting:
   > Cash on Delivery (COD) will be automatically disabled at checkout for orders containing this product.
 - **Desktop Table & Mobile Cards:** Displays `Custom` and `Prepaid Only` badges next to customized products.
+- **Edit Initialization (`handleEdit`):** Initializes `isCustomized: isCustomizableProduct(prod)` ensuring legacy flags are recognized in the admin editor.
 
 ---
 
@@ -151,7 +169,7 @@ if (body.paymentMethod === "COD") {
 ```
 
 ### Key Security & Transactional Guarantees:
-1. **Read Phase Execution:** Runs strictly in the Firestore transaction READ phase.
+1. **Read Phase Execution:** Runs strictly in the Firestore transaction READ phase before writes.
 2. **Zero Side Effects on Rejection:** If rejected, transaction returns early before write phase. No order document is created, 0 inventory is decremented, and coupon `timesUsed` is not incremented.
 3. **Structured Error Payload:** Returns HTTP 400 with `{ error, code: "COD_NOT_ALLOWED_CUSTOM_PRODUCT", ineligibleItems }`.
 4. **Prepaid Rail Continuity:** Razorpay prepaid orders (`paymentMethod === "RAZORPAY"`) are completely unaffected and proceed through payment capture.
@@ -226,23 +244,47 @@ All 9 visual QA screenshots were captured via Chrome DevTools Protocol (CDP) and
 
 ## 8. Subsequent Feature Backlog (Preserved)
 
-As required by TASK 027 instructions, the following roadmap features are preserved in the backlog and were NOT implemented:
-1. Product image containment with `object-fit: contain`.
-2. Flexible product sizing and color variants.
-3. Shopify-compatible CSV bulk product importer.
+As required by TASK 027 instructions, the following roadmap features are strictly preserved in the backlog:
+1. **Product image containment with `object-fit: contain`** (preserves aspect ratios across catalogs).
+2. **Flexible product sizing, dimensions, and color variants** (expanded SKU attributes).
+3. **Shopify-compatible CSV bulk product importer** (mass catalog onboarding).
 
 ---
 
-## 9. Production Deployment Readiness & Approval Gate
+## 9. Production Deployment & Live Verification Evidence
 
-### Deployment Risk Assessment:
-- **Financial Risk:** Zero. Razorpay Live Mode credentials, HMAC signature verification, and server-to-server payment verification (`verifyPaymentWithGateway`) remain completely untouched and verified.
-- **Order Security:** Improved. Transactional validation blocks non-resellable personalized products from unpaid COD processing while preserving legitimate COD checkouts for standard catalog items.
-- **Database Migrations:** Zero destructive data migrations performed; existing catalog records and customer orders are 100% preserved.
-- **Rollback Plan:** Clean Git revert to commit `16b094ebfa4eff76d903d391ee07c31a4d9a7be6` (published Netlify deploy `6af34bfc4ee2926c4d5e5cdd`).
+Conditional deployment authorization was granted by the store owner following review of the implementation, security checks, anti-flicker gates, and regression test suites.
 
-> [!IMPORTANT]
-> **Production Deployment Safety Gate:**
-> In strict compliance with Section 8 of the prompt, **no Netlify production deployment has been performed.**
-> All changes are committed and verified locally on branch `task/027-customizable-product-cod-restriction`.
-> Production deployment is safely paused awaiting explicit owner authorization.
+### Production Deployment Execution:
+- **Command:** `npx netlify deploy --remote --prod --message "TASK 027 - Customizable Product COD Restriction"`
+- **Git Commit:** [`87261bc`](https://github.com/Coder-MayankSaini/trendzcart/commit/87261bc6aa52f6b0e8305e5165fd3f0324624a69)
+- **Netlify Published Deploy ID:** [`6af358848c8957162298eb3c`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af358848c8957162298eb3c)
+- **Netlify Build ID:** `6af358848c8957162298eb3a`
+- **Secrets Scan:** 122 files scanned — 0 secrets detected.
+- **Scheduled Functions:** `reservation-cleanup` active (`*/5 * * * *`).
+- **Site Status:** Site is live ✨
+
+### Post-Deployment Live Verification Results (`scripts/verify-live-task027.mjs`):
+Executed post-deployment automated verification against live host `https://bazaarvilla.com` (**10/10 checks passed**):
+
+| # | Check Area | Description | Live Outcome | Status |
+|---|---|---|---|---|
+| **1** | **PDP Indicators** | Personalized necklace (`/products/personalized-eyes-...`) contains "Prepaid Only (Personalized Item)" and omits "Cash on Delivery Available". | HTTP 200, contains Prepaid Only=true, COD Available=false | **PASSED** |
+| **2** | **Catalog Metadata** | Live Firestore document `82b5c865-3128-4515-96e5-80f7f0eed58e` evaluated authoritatively with `isCustomizableProduct`. | Exists=true, `isCustomizableProduct=true` | **PASSED** |
+| **3** | **COD API Enforcement** | Direct `POST /api/orders/create` attempting COD order on personalized item with forged client flags. | HTTP 400, `code: "COD_NOT_ALLOWED_CUSTOM_PRODUCT"` | **PASSED** |
+| **4** | **Zero Side Effects** | Rejected COD attempt produces NO order document and leaves product inventory untouched. | Order doc created=false, inventory unchanged (10 -> 10) | **PASSED** |
+| **5** | **Mixed Cart Rule** | Algorithmic whole-cart evaluation: cart containing regular items + custom necklace is strictly ineligible. | `isEligible=false`, `code: "COD_NOT_ALLOWED_CUSTOM_PRODUCT"` | **PASSED** |
+| **6** | **Regular Cart Rule** | Cart containing only regular non-customized products retains COD eligibility. | `isEligible=true` | **PASSED** |
+| **7** | **Razorpay Live Mode** | `GET /api/razorpay/public-config` returns active Live Mode credentials with open commercial checkout. | HTTP 200, `commercialCheckoutEnabled: true`, key starts `rzp_live_` | **PASSED** |
+| **8** | **Review System (TASK 022)** | Public review retrieval API remains fully operational. | HTTP 200, array returned cleanly | **PASSED** |
+| **9** | **Purchase Counter (TASK 023)** | Public purchase activity counter API remains fully operational. | HTTP 200, sanitized metrics returned | **PASSED** |
+| **10** | **Core Storefront Routes** | Core storefront entry points (`/`, `/cart`, `/checkout`, `/categories`) return healthy responses without errors. | All routes returned HTTP 200 | **PASSED** |
+
+---
+
+## 10. Rollback & Disaster Recovery Procedures
+
+1. **Immediate Netlify Rollback:** If unexpected production anomalies occur, publish the previous verified deployment immediately:
+   - Deploy ID: [`6af34bfc4ee2926c4d5e5cdd`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af34bfc4ee2926c4d5e5cdd) (TASK 023 baseline).
+2. **Git Rollback Reference:** Revert to commit `16b094ebfa4eff76d903d391ee07c31a4d9a7be6`.
+3. **Database Integrity:** Zero destructive migrations were performed. Customer orders and catalog records remain completely intact and backwards-compatible.
