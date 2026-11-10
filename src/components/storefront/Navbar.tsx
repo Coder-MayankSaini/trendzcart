@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -36,8 +37,15 @@ export default function Navbar() {
             <div className="navbar-container">
                 {/* Logo */}
                 <div className="navbar-logo">
-                    <Link href="/">
-                        Bazaarvilla<span className="logo-dot">.</span>
+                    <Link href="/" className="navbar-logo-link" aria-label="Bazaarvilla Homepage">
+                        <Image
+                            src="/brand/bazaarvilla-logo-horizontal.webp"
+                            alt="Bazaarvilla"
+                            width={160}
+                            height={40}
+                            priority
+                            className="navbar-brand-logo"
+                        />
                     </Link>
                 </div>
 

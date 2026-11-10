@@ -1,5 +1,6 @@
 import Navbar from "@/components/storefront/Navbar";
 import Link from "next/link";
+import Image from "next/image";
 import WhatsAppFloat from "@/components/storefront/WhatsAppFloat";
 
 export default function StorefrontLayout({ children }: { children: React.ReactNode }) {
@@ -13,9 +14,17 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
                 <div className="hp-footer-grid">
                     {/* Brand Column */}
                     <div>
-                        <h3 className="hp-footer-brand-name">Bazaarvilla<span>.</span></h3>
+                        <Link href="/" className="hp-footer-logo-link" aria-label="Bazaarvilla Homepage">
+                            <Image
+                                src="/brand/bazaarvilla-logo-horizontal.webp"
+                                alt="Bazaarvilla"
+                                width={160}
+                                height={40}
+                                className="hp-footer-logo"
+                            />
+                        </Link>
                         <p className="hp-footer-tagline">
-                            Defining elegance through curated essentials. Custom apparel and personalized lifestyle collections.
+                            Everyday finds, thoughtful gifts, and custom creations. Curated essentials delivered across India.
                         </p>
                     </div>
 
@@ -45,12 +54,14 @@ export default function StorefrontLayout({ children }: { children: React.ReactNo
                         <h4 className="hp-footer-col-title">Connect</h4>
                         <ul className="hp-footer-links">
                             <li><a href="mailto:support@bazaarvilla.com" className="hp-footer-link">support@bazaarvilla.com</a></li>
+                            <li><a href="https://wa.me/918278377255" target="_blank" rel="noopener noreferrer" className="hp-footer-link">+91 8278377255 (WhatsApp)</a></li>
+                            <li style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Mon – Sat, 10 AM – 7 PM IST</li>
                         </ul>
                     </div>
                 </div>
 
                 <div className="hp-footer-bottom">
-                    <p className="hp-footer-copy">&copy; {new Date().getFullYear()} Bazaarvilla. All rights reserved.</p>
+                    <p className="hp-footer-copy">&copy; {new Date().getFullYear()} Bazaarvilla. All rights reserved. | Secure Payments via Razorpay</p>
                 </div>
             </footer>
             <WhatsAppFloat />

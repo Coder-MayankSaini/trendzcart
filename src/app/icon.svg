@@ -1,7 +1,5 @@
 <svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="256" height="256" fill="#111827" />
-  <circle cx="128" cy="128" r="100" fill="#3B82F6" />
-  <text x="128" y="165" font-family="sans-serif" font-style="italic" font-size="110" font-weight="900" fill="#ffffff" text-anchor="middle" letter-spacing="-5" style="filter: drop-shadow(0px 4px 8px rgba(0,0,0,0.3));">TK</text>
-  <path d="M70 180 L186 180 L186 195 L70 195 Z" fill="#ffffff" opacity="0.8"/>
-  <path d="M128 30 L160 50 L140 50 Z" fill="#ffffff" opacity="0.9"/>
+  <rect width="256" height="256" rx="56" fill="#006B3C" />
+  <path d="M72 52H140C166.5 52 184 68.5 184 92C184 107.5 174 120 159 125.5C178 131 190 145.5 190 164C190 189.5 170.5 204 142 204H72V52ZM108 84V112H136C148.5 112 156 104.5 156 93.5C156 82.5 148.5 75.5 136 75.5H108V84ZM108 142V172H139C152 172 161 163.5 161 151.5C161 139.5 152 131.5 139 131.5H108V142Z" fill="#FFFFFF" />
+  <circle cx="196" cy="60" r="16" fill="#159947" />
 </svg>
