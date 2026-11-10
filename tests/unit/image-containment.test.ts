@@ -93,6 +93,7 @@ describe("Storefront Product Image Containment & No-Crop Gallery (TASK 028)", ()
         const testImages = [
             { name: "Landscape 16:9", srcW: 1600, srcH: 900, ratio: 16 / 9 },
             { name: "Square 1:1", srcW: 1200, srcH: 1200, ratio: 1.0 },
+            { name: "Portrait 3:4", srcW: 900, srcH: 1200, ratio: 3 / 4 },
             { name: "Portrait 4:5", srcW: 1200, srcH: 1500, ratio: 4 / 5 },
             { name: "Tall Portrait 9:16", srcW: 900, srcH: 1600, ratio: 9 / 16 },
         ];

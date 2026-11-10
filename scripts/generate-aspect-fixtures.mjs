@@ -77,6 +77,14 @@ const fixtures = [
         ratioText: "1:1 Square",
     },
     {
+        name: "portrait-3-4.png",
+        width: 900,
+        height: 1200,
+        label: "Portrait 3:4 Aspect Ratio",
+        color: "#ec4899",
+        ratioText: "3:4 Portrait",
+    },
+    {
         name: "portrait-4-5.png",
         width: 1200,
         height: 1500,

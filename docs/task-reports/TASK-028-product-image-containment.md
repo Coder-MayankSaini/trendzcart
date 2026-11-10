@@ -62,6 +62,7 @@ When `object-fit: cover` is applied to an element with aspect ratio $A_{\text{bo
 | **16:9 Landscape** | 1600 × 900 px | 1.778 | Scaled by height ($1.0\times$) | 2000 × 1125 px | **55.0% clipped** | 27.5% clipped on left edge, 27.5% clipped on right edge. Product sides completely invisible. |
 | **4:3 Standard Photo** | 1600 × 1200 px | 1.333 | Scaled by height ($1.0\times$) | 1500 × 1125 px | **40.0% clipped** | 20.0% cropped horizontally from each side. |
 | **1:1 Square** | 1200 × 1200 px | 1.000 | Scaled by height ($1.0\times$) | 1125 × 1125 px | **20.0% clipped** | 10.0% cropped horizontally from each side (e.g., logos, packaging text cut off). |
+| **3:4 Portrait** | 900 × 1200 px | 0.750 | Scaled by width ($1.0\times$) | 900 × 1200 px | **6.25% clipped** | 3.125% cropped top and bottom under 4:5 cover frame. |
 | **4:5 Portrait** | 1200 × 1500 px | 0.800 | Exact match ($1.0\times$) | 900 × 1125 px | **0.0%** | Baseline ratio; fits perfectly. |
 | **9:16 Tall Portrait** | 900 × 1600 px | 0.5625 | Scaled by width ($1.0\times$) | 900 × 1600 px | **29.7% clipped** | 14.85% cropped from top, 14.85% cropped from bottom (e.g., apparel collars or hems cut off). |
 
@@ -131,11 +132,12 @@ To resolve this issue permanently without causing layout instability, the galler
 ## 4. Visual Evidence & Before/After QA Verification
 
 ### Diagnostic Aspect Ratio Test Fixtures:
-To empirically verify that edges and corners are 100% visible, four synthetic test fixtures were generated in `public/test-fixtures/`:
+To empirically verify that edges and corners are 100% visible, five synthetic test fixtures were generated in `public/test-fixtures/`:
 1. **16:9 Landscape (`landscape-16-9.png`):** 1600 × 900 px with blue edge border, red corner markers, and bright yellow edge text: `◀◀ LEFT EDGE (CROPPED UNDER COVER) ◀◀` and `▶▶ RIGHT EDGE (CROPPED UNDER COVER) ▶▶`.
 2. **1:1 Square (`square-1-1.png`):** 1200 × 1200 px with amber edge border, red corner markers, and yellow side markers.
-3. **4:5 Portrait (`portrait-4-5.png`):** 1200 × 1500 px with green edge border and red corner markers.
-4. **9:16 Tall Portrait (`tall-portrait-9-16.png`):** 900 × 1600 px with purple edge border, red corner markers, and top/bottom edge markers.
+3. **3:4 Portrait (`portrait-3-4.png`):** 900 × 1200 px with pink edge border, red corner markers, and full boundary framing.
+4. **4:5 Portrait (`portrait-4-5.png`):** 1200 × 1500 px with green edge border and red corner markers.
+5. **9:16 Tall Portrait (`tall-portrait-9-16.png`):** 900 × 1600 px with purple edge border, red corner markers, and top/bottom edge markers.
 
 ### Screenshot Comparison Matrix:
 
@@ -143,6 +145,7 @@ To empirically verify that edges and corners are 100% visible, four synthetic te
 |---|---|---|---|
 | **16:9 Landscape (Desktop 1440px)** | [`before-01-pdp-landscape-16-9-desktop-1440px.png`](../screenshots/task028/before-01-pdp-landscape-16-9-desktop-1440px.png) | [`after-01-pdp-landscape-16-9-desktop-1440px.png`](../screenshots/task028/after-01-pdp-landscape-16-9-desktop-1440px.png) | **100% Visible:** Left and right edge banners (`◀◀ LEFT EDGE`, `▶▶ RIGHT EDGE`) and all 4 red corners (`TL`, `TR`, `BL`, `BR`) were completely clipped off under BEFORE; fully visible and centered with clean neutral padding under AFTER. |
 | **1:1 Square (Desktop 1440px)** | [`before-02-pdp-square-1-1-desktop-1440px.png`](../screenshots/task028/before-02-pdp-square-1-1-desktop-1440px.png) | [`after-02-pdp-square-1-1-desktop-1440px.png`](../screenshots/task028/after-02-pdp-square-1-1-desktop-1440px.png) | **100% Visible:** Side markers were partially truncated under BEFORE; all 4 corners and complete borders are uncropped under AFTER. |
+| **3:4 Portrait (Desktop 1440px)** | *(Slight crop under before)* | [`after-02b-pdp-portrait-3-4-desktop-1440px.png`](../screenshots/task028/after-02b-pdp-portrait-3-4-desktop-1440px.png) | **100% Visible:** 900 × 1200 px photo fully displayed without vertical truncation, centered in 4:5 frame. |
 | **4:5 Portrait (Desktop 1440px)** | [`before-03-pdp-portrait-4-5-desktop-1440px.png`](../screenshots/task028/before-03-pdp-portrait-4-5-desktop-1440px.png) | [`after-03-pdp-portrait-4-5-desktop-1440px.png`](../screenshots/task028/after-03-pdp-portrait-4-5-desktop-1440px.png) | **100% Visible:** Baseline portrait photograph fills the 4:5 frame with zero distortion or blank space. |
 | **9:16 Tall Portrait (Desktop 1440px)** | *(Not captured in before)* | [`after-04-pdp-tall-portrait-9-16-desktop-1440px.png`](../screenshots/task028/after-04-pdp-tall-portrait-9-16-desktop-1440px.png) | **100% Visible:** Top and bottom headers completely visible, centered horizontally with neutral flanking bars. |
 | **Mobile 320px (iPhone SE)** | — | [`after-05-pdp-responsive-320px.png`](../screenshots/task028/after-05-pdp-responsive-320px.png) | **100% Visible:** Gallery container fits viewport, zero horizontal scrollbar, thumbnail row scrolls smoothly. |
@@ -151,7 +154,7 @@ To empirically verify that edges and corners are 100% visible, four synthetic te
 | **Tablet 768px (iPad Portrait)** | — | [`after-08-pdp-responsive-768px.png`](../screenshots/task028/after-08-pdp-responsive-768px.png) | **100% Visible:** Gallery column perfectly balanced with product info, contained image sharp and centered. |
 | **Laptop 1024px (Small Desktop)** | — | [`after-09-pdp-responsive-1024px.png`](../screenshots/task028/after-09-pdp-responsive-1024px.png) | **100% Visible:** 2-column PDP grid layout; images contain cleanly within gallery frame. |
 | **Desktop 1440px (Wide Display)** | — | [`after-10-pdp-responsive-1440px.png`](../screenshots/task028/after-10-pdp-responsive-1440px.png) | **100% Visible:** High-definition presentation with zero blur, zero clipping. |
-| **Gallery Thumbnail Interaction** | — | [`after-11-pdp-gallery-navigation-selected.png`](../screenshots/task028/after-11-pdp-gallery-navigation-selected.png) | **100% Verified:** Thumbnail 2 selected; green active border visible; main view instantaneously displays contained square photo; counter badge displays `2 / 4`. |
+| **Gallery Thumbnail Interaction** | — | [`after-11-pdp-gallery-navigation-selected.png`](../screenshots/task028/after-11-pdp-gallery-navigation-selected.png) | **100% Verified:** Thumbnail selected; green active border visible; main view instantaneously displays contained photo; counter badge displays clean count. |
 | **Admin Upload Guidance** | — | [`after-12-admin-products-dropzone-recommendations.png`](../screenshots/task028/after-12-admin-products-dropzone-recommendations.png) | **100% Verified:** Dropzone displays updated text: `Recommended: 4:5 portrait (1200 × 1500 px) · Square & landscape images also fully supported without cropping`. |
 
 ---

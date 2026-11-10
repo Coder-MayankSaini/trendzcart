@@ -134,6 +134,7 @@ async function main() {
             images: [
                 "/test-fixtures/landscape-16-9.png",
                 "/test-fixtures/square-1-1.png",
+                "/test-fixtures/portrait-3-4.png",
                 "/test-fixtures/portrait-4-5.png",
                 "/test-fixtures/tall-portrait-9-16.png",
             ],
@@ -249,18 +250,23 @@ async function main() {
         await capture("after-01-pdp-landscape-16-9-desktop-1440px.png");
 
         // SCENARIO 2: Desktop 1440px - Square 1:1 Image (AFTER - 100% CONTAINED & VISIBLE)
-        console.log("[Visual QA AFTER 2/12] Capturing 1:1 Square on Desktop (1440px)...");
+        console.log("[Visual QA AFTER 2/13] Capturing 1:1 Square on Desktop (1440px)...");
         await clickThumb(1);
         await capture("after-02-pdp-square-1-1-desktop-1440px.png");
 
-        // SCENARIO 3: Desktop 1440px - Portrait 4:5 Image (AFTER - Recommended Baseline)
-        console.log("[Visual QA AFTER 3/12] Capturing 4:5 Portrait on Desktop (1440px)...");
+        // SCENARIO 2b: Desktop 1440px - Portrait 3:4 Image (AFTER - 100% CONTAINED & VISIBLE)
+        console.log("[Visual QA AFTER 2b/13] Capturing 3:4 Portrait on Desktop (1440px)...");
         await clickThumb(2);
+        await capture("after-02b-pdp-portrait-3-4-desktop-1440px.png");
+
+        // SCENARIO 3: Desktop 1440px - Portrait 4:5 Image (AFTER - Recommended Baseline)
+        console.log("[Visual QA AFTER 3/13] Capturing 4:5 Portrait on Desktop (1440px)...");
+        await clickThumb(3);
         await capture("after-03-pdp-portrait-4-5-desktop-1440px.png");
 
         // SCENARIO 4: Desktop 1440px - Tall Portrait 9:16 Image (AFTER - 100% CONTAINED)
-        console.log("[Visual QA AFTER 4/12] Capturing 9:16 Tall Portrait on Desktop (1440px)...");
-        await clickThumb(3);
+        console.log("[Visual QA AFTER 4/13] Capturing 9:16 Tall Portrait on Desktop (1440px)...");
+        await clickThumb(4);
         await capture("after-04-pdp-tall-portrait-9-16-desktop-1440px.png");
 
         // SCENARIOS 5 to 10: Multi-Viewport Responsive Matrix (320px, 375px, 430px, 768px, 1024px, 1440px)
