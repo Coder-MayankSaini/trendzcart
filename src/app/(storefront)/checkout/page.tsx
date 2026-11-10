@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
 
 interface ShippingAddress {
     fullName: string;
@@ -37,60 +38,84 @@ export default function CheckoutPage() {
     });
 
     const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "COD">("RAZORPAY");
+    const [isVerifyingEligibility, setIsVerifyingEligibility] = useState(false);
+    const [verifiedProductIds, setVerifiedProductIds] = useState<Set<string>>(new Set());
     const [verifiedCustomizableIds, setVerifiedCustomizableIds] = useState<Set<string>>(new Set());
+    const [eligibilityCheckError, setEligibilityCheckError] = useState<string | null>(null);
     const [coupon, setCoupon] = useState<{ code: string; type: string; value: number } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [razorpayKeyId, setRazorpayKeyId] = useState("");
     const [isCommercialOpen, setIsCommercialOpen] = useState(true);
 
     // Live catalog verification to detect customizable products even if cart item flags were stale
+    // and prevent premature COD selection (anti-flicker and fail-closed)
     useEffect(() => {
-        if (!items || items.length === 0) return;
+        if (!items || items.length === 0) {
+            setIsVerifyingEligibility(false);
+            setVerifiedProductIds(new Set());
+            setVerifiedCustomizableIds(new Set());
+            setEligibilityCheckError(null);
+            return;
+        }
+
         let isCancelled = false;
         const checkProductCustomizability = async () => {
+            setIsVerifyingEligibility(true);
+            setEligibilityCheckError(null);
             try {
-                if (!db || typeof db.collection !== "function") {
-                    // db might be modular firestore instance
-                }
                 const productIds = Array.from(new Set(items.map((i) => i.productId).filter(Boolean)));
                 const customIds = new Set<string>();
+                const verified = new Set<string>();
+
                 for (const pid of productIds) {
                     try {
                         const ref = doc(db, "products", pid);
                         const snap = await getDoc(ref);
                         if (snap && snap.exists()) {
                             const d = snap.data();
-                            if (
-                                d?.isCustomized === true ||
-                                d?.customizationType === "requires_name" ||
-                                d?.customizationType === "requires_picture" ||
-                                d?.customizable === true ||
-                                d?.isPersonalized === true
-                            ) {
+                            if (isCustomizableProduct(d)) {
                                 customIds.add(pid);
                             }
+                            verified.add(pid);
+                        } else {
+                            throw new Error(`Product '${pid}' not found in catalog`);
                         }
-                    } catch {
-                        // Non-blocking fallback; client flags and server transactional verification remain active
+                    } catch (err: any) {
+                        console.warn(`Catalog check error for ${pid}:`, err);
+                        if (!isCancelled) {
+                            setEligibilityCheckError(err?.message || "Catalog verification failed");
+                        }
                     }
                 }
-                if (!isCancelled && customIds.size > 0) {
-                    setVerifiedCustomizableIds(customIds);
+
+                if (!isCancelled) {
+                    setVerifiedProductIds(verified);
+                    if (customIds.size > 0) {
+                        setVerifiedCustomizableIds(customIds);
+                    }
                 }
-            } catch {
-                // Ignore background check failure
+            } catch (err: any) {
+                if (!isCancelled) {
+                    setEligibilityCheckError(err?.message || "Catalog verification failed");
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsVerifyingEligibility(false);
+                }
             }
         };
+
         checkProductCustomizability();
         return () => {
             isCancelled = true;
         };
     }, [items]);
 
-    // Authoritative check if current cart contains any customizable item
+    // 1. Authoritative check if current cart contains any customizable item
     const hasCustomizableItem = useMemo(() => {
         return items.some(
             (item) =>
+                isCustomizableProduct(item as any) ||
                 item.isCustomized === true ||
                 Boolean(
                     item.customizationData &&
@@ -102,12 +127,36 @@ export default function CheckoutPage() {
         );
     }, [items, verifiedCustomizableIds]);
 
-    // Automatically force online payment if customizable items enter the cart
+    const uniqueCartProductIds = useMemo(() => {
+        return Array.from(new Set(items.map((i) => i.productId).filter(Boolean)));
+    }, [items]);
+
+    // 2. Are any products in cart still awaiting verification? (Anti-flicker gate)
+    const isCodPendingVerification = useMemo(() => {
+        if (hasCustomizableItem) return false;
+        if (items.length === 0) return false;
+        if (isVerifyingEligibility) return true;
+        const allVerified = uniqueCartProductIds.every((id) => verifiedProductIds.has(id));
+        return !allVerified && !eligibilityCheckError;
+    }, [hasCustomizableItem, items.length, isVerifyingEligibility, uniqueCartProductIds, verifiedProductIds, eligibilityCheckError]);
+
+    // 3. Did catalog verification fail? (Fail-closed gate)
+    const isCodVerificationFailed = useMemo(() => {
+        if (hasCustomizableItem) return false;
+        return Boolean(eligibilityCheckError) || (uniqueCartProductIds.some((id) => !verifiedProductIds.has(id)) && !isVerifyingEligibility);
+    }, [hasCustomizableItem, eligibilityCheckError, uniqueCartProductIds, verifiedProductIds, isVerifyingEligibility]);
+
+    // 4. Strict COD eligibility
+    const isCodAllowed = useMemo(() => {
+        return !hasCustomizableItem && !isCodPendingVerification && !isCodVerificationFailed;
+    }, [hasCustomizableItem, isCodPendingVerification, isCodVerificationFailed]);
+
+    // Automatically force online payment if COD is disallowed or pending
     useEffect(() => {
-        if (hasCustomizableItem && paymentMethod === "COD") {
+        if (!isCodAllowed && paymentMethod === "COD") {
             setPaymentMethod("RAZORPAY");
         }
-    }, [hasCustomizableItem, paymentMethod]);
+    }, [isCodAllowed, paymentMethod]);
 
     useEffect(() => {
         const script = document.createElement("script");
@@ -239,8 +288,14 @@ export default function CheckoutPage() {
         const orderId = uuidv4();
 
         if (paymentMethod === "COD") {
-            if (hasCustomizableItem) {
-                alert("Cash on Delivery is unavailable because your cart contains customized or personalized items. Please select an online payment method.");
+            if (!isCodAllowed) {
+                alert(
+                    hasCustomizableItem
+                        ? "Cash on Delivery is unavailable because your cart contains customized or personalized items. Please select an online payment method."
+                        : isCodPendingVerification
+                        ? "Please wait while we verify Cash on Delivery eligibility for your cart items."
+                        : "Cash on Delivery is currently unavailable for this cart. Please select Pay Online."
+                );
                 setPaymentMethod("RAZORPAY");
                 setIsProcessing(false);
                 return;
@@ -440,8 +495,8 @@ export default function CheckoutPage() {
                             </label>
 
                             <label
-                                className={`co-payment-card ${paymentMethod === "COD" ? "co-payment-selected" : ""} ${hasCustomizableItem ? "co-payment-disabled" : ""}`}
-                                style={hasCustomizableItem ? { opacity: 0.65, cursor: "not-allowed", borderColor: "var(--border-color)", background: "rgba(0,0,0,0.02)" } : undefined}
+                                className={`co-payment-card ${paymentMethod === "COD" ? "co-payment-selected" : ""} ${!isCodAllowed ? "co-payment-disabled" : ""}`}
+                                style={!isCodAllowed ? { opacity: 0.65, cursor: "not-allowed", borderColor: "var(--border-color)", background: "rgba(0,0,0,0.02)" } : undefined}
                                 data-testid="payment-option-cod"
                             >
                                 <input
@@ -449,9 +504,9 @@ export default function CheckoutPage() {
                                     name="payment"
                                     value="COD"
                                     checked={paymentMethod === "COD"}
-                                    disabled={hasCustomizableItem}
+                                    disabled={!isCodAllowed}
                                     onChange={() => {
-                                        if (!hasCustomizableItem) {
+                                        if (isCodAllowed) {
                                             setPaymentMethod("COD");
                                         }
                                     }}
@@ -465,10 +520,24 @@ export default function CheckoutPage() {
                                                 Unavailable for Custom Items
                                             </span>
                                         )}
+                                        {!hasCustomizableItem && isCodPendingVerification && (
+                                            <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", backgroundColor: "#f1f5f9", color: "#475569" }}>
+                                                Checking eligibility...
+                                            </span>
+                                        )}
+                                        {!hasCustomizableItem && isCodVerificationFailed && (
+                                            <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", backgroundColor: "#fef3c7", color: "#92400e" }}>
+                                                Verification unavailable
+                                            </span>
+                                        )}
                                     </div>
                                     <span className="co-payment-desc">
                                         {hasCustomizableItem
                                             ? "Personalized products require upfront online payment"
+                                            : isCodPendingVerification
+                                            ? "Verifying payment options for your cart items..."
+                                            : isCodVerificationFailed
+                                            ? "Unable to verify catalog eligibility; please choose Pay Online"
                                             : "Pay when your order arrives"}
                                     </span>
                                 </div>

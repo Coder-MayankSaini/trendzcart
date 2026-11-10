@@ -10,6 +10,7 @@ import AdminPageHeader from "./ui/AdminPageHeader";
 import AdminBadge from "./ui/AdminBadge";
 import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
 import type { PurchaseActivityPeriod } from "@/lib/orders/purchaseActivityTypes";
+import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
 
 async function uploadFileToR2(file: File, folder: string, subId?: string): Promise<string> {
     const user = auth.currentUser;
@@ -222,6 +223,7 @@ export default function AdminProducts() {
         cleanupGalleryBlobUrls(galleryItems);
         setFormData({
             ...prod,
+            isCustomized: isCustomizableProduct(prod),
             purchaseActivity: prod.purchaseActivity || {
                 enabled: true,
                 periodDays: 30,
@@ -1364,7 +1366,7 @@ export default function AdminProducts() {
                                     <td>
                                         <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{product.name}</div>
                                         <div style={{ display: "flex", gap: "6px", marginTop: "2px", alignItems: "center", flexWrap: "wrap" }}>
-                                            {product.isCustomized && (
+                                            {isCustomizableProduct(product) && (
                                                 <>
                                                     <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
                                                         Custom
@@ -1467,7 +1469,7 @@ export default function AdminProducts() {
                                             <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>
                                                 {product.category || (product.categories && product.categories[0]) || "General"}
                                             </span>
-                                            {product.isCustomized && (
+                                            {isCustomizableProduct(product) && (
                                                 <>
                                                     <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
                                                         Custom

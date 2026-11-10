@@ -7,6 +7,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
+import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
 
 export default function CartPage() {
     const { items, removeFromCart, updateQuantity, cartTotal } = useCart();
@@ -258,7 +259,7 @@ export default function CartPage() {
                             <span>₹{finalTotal.toLocaleString("en-IN")}</span>
                         </div>
 
-                        {items.some(i => i.isCustomized || Boolean(i.customizationData && (i.customizationData.name || i.customizationData.pictureUrl))) && (
+                        {items.some(i => isCustomizableProduct(i as any) || Boolean(i.customizationData && (i.customizationData.name || i.customizationData.pictureUrl || i.customizationData.storagePath))) && (
                             <div style={{
                                 marginTop: '16px',
                                 padding: '12px 14px',

@@ -8,6 +8,7 @@ import ProductReviews from "@/components/storefront/ProductReviews";
 import ProductAllReviewsPage from "@/components/storefront/ProductAllReviewsPage";
 import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
 import { calculateAndPersistProductPurchaseActivity, CACHE_TTL_MS } from "@/lib/orders/purchaseActivity";
+import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
 
 export const dynamic = "force-dynamic";
 
@@ -135,7 +136,7 @@ export default async function ProductDetailsPage({ params }: Props) {
             ))}
           </div>
 
-          {product.isCustomized && (
+          {isCustomizableProduct(product) && (
             <span className="pdp-badge-custom">Customizable</span>
           )}
 
@@ -146,7 +147,7 @@ export default async function ProductDetailsPage({ params }: Props) {
             <span className="pdp-tax-note">Inclusive of all taxes</span>
           </div>
           <div style={{ marginTop: '4px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {product.isCustomized ? (
+            {isCustomizableProduct(product) ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#0369a1', background: 'rgba(14, 165, 233, 0.1)', padding: '4px 10px', borderRadius: '4px', width: 'fit-content' }}>
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
                 Prepaid Only (Personalized Item)
@@ -173,8 +174,10 @@ export default async function ProductDetailsPage({ params }: Props) {
             name: product.name,
             price: product.price,
             image: mainImage || "",
-            isCustomized: product.isCustomized,
+            isCustomized: isCustomizableProduct(product),
             customizationType: product.customizationType || null,
+            customizable: product.customizable,
+            isPersonalized: product.isPersonalized,
             sizes: product.sizes || []
           }} />
 
