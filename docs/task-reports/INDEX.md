@@ -4,7 +4,7 @@
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
 **Current Active Git Branch:** `task/024-product-category-media-isolation-fix`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 024 MEDIA REPAIR COMPLETED LOCALLY & TESTED** (Commercial checkout active on production `https://bazaarvilla.com`; responsive admin portal published on Netlify Deploy `6af2d712ca7b7b4abba505b7`; TASK 024 awaiting owner deployment approval)
+**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 024 MEDIA REPAIR PUBLISHED TO PRODUCTION** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af2f4b739ed72801cec0792`; product multi-image and category media isolation 100% verified live)
 
 ---
 
@@ -53,7 +53,7 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-021** | Bazaarvilla Mobile-Responsive Admin Dashboard & Management Experience | **COMPLETED & PUBLISHED** | `task/021-mobile-responsive-admin-dashboard` (`411eb00`) | [TASK-021-mobile-responsive-admin-dashboard.md](./TASK-021-mobile-responsive-admin-dashboard.md) | Comprehensive mobile-first redesign of all admin portals (`/admin/*`) across 320px–1440px viewports; persistent desktop sidebar + mobile slide-out navigation drawer (`AdminMobileDrawer`) with focus trapping and scroll lock; responsive 1/2/4-column KPI dashboard grid; mobile product cards and 5-section creation form with numeric keyboards and 44px touch targets; mobile order fulfillment cards with click-to-call phone links, address drawer, and private R2 customer customization viewer; responsive categories and coupons; 263 unique automated tests passing (30 unit, 38 rules, 233 integration); 30/30 Next.js routes compiled cleanly; published to Netlify production (Deploy ID: `6af2d712ca7b7b4abba505b7`); verified 13/13 live smoke checks on `https://bazaarvilla.com`. |
 | **TASK-022** | Bulk Review Management & Extended Storefront Controls | **ON HOLD (UNRELEASED)** | `task/022-bulk-reviews-admin-management` (`6739c9e`) | - | Implemented locally but explicitly placed on hold; not approved or deployed to production. Branch safely preserved. |
 | **TASK-023** | Product Purchase Activity Counter | **POSTPONED** | - | - | Postponed by store owner; not started or executed. |
-| **TASK-024** | Bazaarvilla Product Image Gallery, Multi-Upload & Category Image Isolation Repair | **COMPLETED LOCALLY & TESTED** | `task/024-product-category-media-isolation-fix` | [TASK-024-product-category-media-isolation-fix.md](./TASK-024-product-category-media-isolation-fix.md) | Diagnosed and proved root cause of image duplication and cross-entity sharing (Netlify Edge CDN query stripping + admin index state); implemented path-based public media delivery `/api/media/public/[...key]`, stable item UUID tracking in admin gallery, synchronized thumbnails, client validation, memory cleanup, and SVG fallback data URIs; authored 25 regression tests (MEDIA-001 to MEDIA-025); verified 100% pass across all 288 automated tests (30 unit, 258 integration including 38 rules); Next.js production build succeeded with Turbopack (32 routes); captured 12 desktop/mobile screenshots. Ready for owner deployment approval. |
+| **TASK-024** | Bazaarvilla Product Image Gallery, Multi-Upload & Category Image Isolation Repair | **COMPLETED & PUBLISHED** | `task/024-product-category-media-isolation-fix` (`965631f`) | [TASK-024-product-category-media-isolation-fix.md](./TASK-024-product-category-media-isolation-fix.md) | Diagnosed and proved root cause of image duplication and cross-entity sharing (Netlify Edge CDN query stripping + admin index state); implemented path-based public media delivery `/api/media/public/[...key]`, stable item UUID tracking in admin gallery, synchronized thumbnails, client validation, memory cleanup, and SVG fallback data URIs; authored 25 regression tests (MEDIA-001 to MEDIA-025); verified 100% pass across all 288 automated tests (30 unit, 258 integration including 38 rules); published Netlify production deploy `6af2f4b739ed72801cec0792` (0 secrets detected); verified 5/5 distinct product images and category isolation live on `https://bazaarvilla.com`. |
 
 ---
 
@@ -84,12 +84,15 @@ The relaunch objective is to systematically harden backend trust boundaries, est
     - `npm run build`: 32/32 Next.js routes compiling cleanly with Turbopack.
     - Total unique automated tests: **288 passing** (30 unit + 258 integration).
   - TASK 024 Media Repair Status:
-    - Path-based delivery route `/api/media/public/[...key]` implemented.
-    - Root cause mathematically proven (Netlify Edge CDN query stripping aliased all requests to single cached object).
+    - Path-based delivery route `/api/media/public/[...key]` published to production (Netlify Deploy ID: `6af2f4b739ed72801cec0792`).
+    - Root cause mathematically proven and remediated (Netlify Edge CDN query stripping eliminated).
     - Production R2 objects verified distinct (all 11 objects hold distinct SHA-256 hashes).
     - Admin multi-image gallery state stabilized with UUID-based featured image tracking and 1-to-1 thumbnail synchronization.
     - 12 desktop and mobile verification screenshots captured in `docs/screenshots/task-024/`.
-    - Ready for owner production deployment approval.
+    - 5/5 distinct product images verified live on `https://bazaarvilla.com` (100% hash parity with R2, 0 duplicates).
+    - Category image verified 100% isolated (462,816 bytes, SHA-256 `ffb3d655...`).
+    - Legacy query-based URLs verified with `Vary: key` returning distinct images.
+    - Commercial checkout, Razorpay Live Mode, and reservation-cleanup background function operational.
   - Live Production Smoke Tests:
     - 13/13 live checks passing on `https://bazaarvilla.com` (public config gate, Razorpay live key `rzp_live_Ty8CuwoSSBGpHi`, active checkout, terms, privacy, admin dashboard, admin products, admin orders, admin categories, admin coupons, brand WebP banners and logos, responsive CSS tokens).
   - Live Production Smoke Tests:
