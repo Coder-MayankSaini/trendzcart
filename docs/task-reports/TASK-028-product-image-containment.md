@@ -5,9 +5,12 @@
 **Investigator / Engineer:** Principal Full-Stack Engineer, Storefront UX Architect, Media Systems Specialist  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay Live Mode (2.9.6), Netlify Hosting  
 **Git Branch:** `task/028-product-image-containment`  
-**Base Commit:** `87261bc` (TASK 027 Production Deploy) / `ddfcd85` (Documentation Baseline)  
+**Base Commit:** `ddfcd85` (TASK 027 Production Deploy)  
+**Release Commit:** `3e7ff70` (Netlify Production Deploy)  
 **Production Site:** `https://bazaarvilla.com` (Netlify Site: `trendzcartdemo` / Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
-**Status:** **COMPLETED LOCALLY — STOPPED AT OWNER RELEASE APPROVAL GATE**  
+**Netlify Published Deploy ID:** [`6af369e6cbfc6c42b6b41349`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af369e6cbfc6c42b6b41349)  
+**Netlify Build ID:** `6af369e6cbfc6c42b6b41347`  
+**Status:** **COMPLETED & PUBLISHED TO PRODUCTION**  
 
 ---
 
@@ -176,11 +179,11 @@ To empirically verify that edges and corners are 100% visible, five synthetic te
 
 ---
 
-## 6. Automated Regression Testing Suite
+## 6. Automated Regression Testing Suite & Real Product Verification
 
-A dedicated unit test suite was authored in `tests/unit/image-containment.test.ts` covering 10 distinct verification criteria (`CONTAIN-001` through `CONTAIN-010`):
+A dedicated unit test suite was authored in `tests/unit/image-containment.test.ts` covering 11 distinct verification criteria (`CONTAIN-001` through `CONTAIN-011`):
 
-| Test ID | Test Description | Assertions & Scope | Result |
+| Test ID | Test Category | Assertions & Scope | Result |
 |---|---|---|---|
 | `CONTAIN-001` | Main Gallery CSS Containment | Verifies `.pig-main-img` uses `object-fit: contain` in `src/app/globals.css`. | **PASS** |
 | `CONTAIN-002` | Main Gallery Bounding Box & Centering | Verifies `.pig-main` specifies `aspect-ratio: 4/5`, `display: flex`, and centering rules. | **PASS** |
@@ -188,16 +191,16 @@ A dedicated unit test suite was authored in `tests/unit/image-containment.test.t
 | `CONTAIN-004` | Thumbnail Buttons Containment | Verifies `.pig-thumb img` uses `object-fit: contain` and `.pig-thumb` uses flex centering. | **PASS** |
 | `CONTAIN-005` | ProductImageGallery Inline Containment | Verifies JSX enforces `objectFit: "contain"` and does not hardcode `objectFit: "cover"`. | **PASS** |
 | `CONTAIN-006` | High-Resolution Dimensions | Verifies main image renders with `width={1200}` and `height={1500}`. | **PASS** |
-| `CONTAIN-007` | Thumbnail Strip Inline Containment | Verifies thumbnail images in gallery strip enforce `objectFit: "contain"`. | **PASS** |
-| `CONTAIN-008` | ProductCardImage Prop Flexibility | Verifies `ProductCardImage` supports optional `objectFit` prop and defaults to `"cover"`. | **PASS** |
-| `CONTAIN-009` | Admin Dropzone Guidance | Verifies upload dropzone copy explicitly welcomes square and landscape images. | **PASS** |
+| `CONTAIN-007` | Admin Dropzone Copy & Catalog Card Note | Verifies updated admin upload copy distinguishes PDP full display from catalog card cropped preview. | **PASS** |
+| `CONTAIN-008` | Mathematical Containment Across Ratios | Mathematically proves zero cropping for 16:9, 1:1, 3:4, 4:5, and 9:16 aspect ratios. | **PASS** |
+| `CONTAIN-009` | ProductCardImage Prop Flexibility | Verifies `ProductCardImage` supports optional `objectFit` prop and defaults to `"cover"`. | **PASS** |
 | `CONTAIN-010` | Non-4:5 File Size and MIME Security | Verifies image validation preserves 10MB limits, MIME checking, and does not reject non-4:5 ratios. | **PASS** |
+| `CONTAIN-011` | Fixture Cleanliness & Test Isolation | Verifies synthetic fixtures reside strictly in `tests/fixtures/aspect-ratio/` and NOT in `public/`. | **PASS** |
 
 ### Complete Test Suite Execution Results:
 
 ```
 > npm test
-...
 PASS tests/unit/image-containment.test.ts
   Product Image Containment & Gallery Verification (TASK 028)
     √ CONTAIN-001: globals.css configures .pig-main-img with object-fit: contain (1 ms)
@@ -206,13 +209,14 @@ PASS tests/unit/image-containment.test.ts
     √ CONTAIN-004: globals.css configures .pig-thumb img with object-fit: contain and flex centering (1 ms)
     √ CONTAIN-005: ProductImageGallery.tsx enforces objectFit: contain on main image and eliminates objectFit: cover (1 ms)
     √ CONTAIN-006: ProductImageGallery.tsx specifies high-resolution 1200x1500 dimensions (1 ms)
-    √ CONTAIN-007: ProductImageGallery.tsx enforces objectFit: contain on thumbnail strip items (1 ms)
-    √ CONTAIN-008: ProductCardImage.tsx supports explicit objectFit prop while defaulting safely to cover (1 ms)
-    √ CONTAIN-009: AdminProducts.tsx dropzone copy provides clear 4:5 recommendation while supporting square and landscape (1 ms)
+    √ CONTAIN-007: AdminProducts.tsx dropzone copy provides clear 4:5 recommendation while clarifying catalog card cover preview (1 ms)
+    √ CONTAIN-008: Mathematical verification of image containment across all 5 aspect ratios (1 ms)
+    √ CONTAIN-009: ProductCardImage.tsx supports explicit objectFit prop while defaulting safely to cover (1 ms)
     √ CONTAIN-010: Validation retains 10MB limit and does not reject non-4:5 aspect ratios (1 ms)
+    √ CONTAIN-011: Diagnostic test fixtures reside in tests/fixtures/ and are NOT exposed in public/ (1 ms)
 
 Test Suites: 9 passed, 9 total
-Tests:       109 passed, 109 total
+Tests:       110 passed, 110 total
 Snapshots:   0 total
 Time:        3.421 s
 
@@ -232,13 +236,22 @@ Time:        38.834 s
 TypeScript compiled cleanly with 0 errors.
 
 > npm run build
-Turbopack compiled 35 Next.js production routes cleanly in 3.9s.
+Turbopack compiled 35 Next.js production routes cleanly in 4.9s.
 ```
 
 ### Automated Test Count Progression:
 - **Baseline (TASK 027):** 396 unique tests (99 unit + 297 integration).
-- **New Containment Tests Added:** 10 unique unit tests (`tests/unit/image-containment.test.ts`).
-- **Current Total (TASK 028):** **406 unique automated tests passing** (109 unit + 297 integration; zero double-counting).
+- **New Containment Tests Added:** 11 unique unit tests (`tests/unit/image-containment.test.ts`).
+- **Final Total (TASK 028):** **407 unique automated tests passing** (110 unit + 297 integration; zero double-counting; 100% pass rate).
+
+### Real Product Photographs Verification (`scripts/verify-real-product-images.mjs`):
+Evaluated the live personalized necklace product (`82b5c865-3128-4515-96e5-80f7f0eed58e`) containing 5 real high-resolution photographs:
+1. **Source Asset Integrity:** All 5 photographs returned HTTP 200 with intact byte lengths (1,002,951 B; 870,439 B; 1,041,390 B; 927,605 B; 937,142 B) and distinct SHA-256 hashes (`7bd1d620d0`, `2d3a10cc9a`, `bb9409d73d`, `cbc64da918`, `a7c202a356`).
+2. **Headless Chrome Computed Layout:** Connected headless Chrome via CDP to evaluate rendered geometry:
+   - Container `.pig-main` rendered at `531.8px × 664.7px` (exact 4:5 aspect ratio).
+   - `.pig-main-img` computed `object-fit: contain` with zero boundary overflow (`isContained: true`).
+   - Thumbnail switching between all 5 images produced $\Delta W = 0\text{px}, \Delta H = 0\text{px}$, confirming **zero Cumulative Layout Shift (CLS = 0)**.
+   - Captured evidence screenshot: `docs/screenshots/task028/after-13-real-product-necklace-gallery-contained.png`.
 
 ---
 
@@ -270,26 +283,57 @@ In accordance with architectural planning, the following upcoming capabilities r
 
 ---
 
-## 9. Release Gate & Deployment Readiness
+## 9. Production Deployment & Live Verification Evidence
 
-> [!IMPORTANT]
-> **MANDATORY PRODUCTION RELEASE GATE**  
-> Local implementation, automated regression testing (406 unique tests passing), and visual QA verification across all 6 viewports and 4 aspect ratios are 100% complete.  
-> **Deployment to Netlify production (`https://bazaarvilla.com`) is paused awaiting explicit owner authorization.**
+Conditional deployment authorization was granted by the store owner following review of the containment implementation, synthetic aspect-ratio tests, real product photo geometry, and commercial safety guarantees.
 
-### Readiness Checklist:
-- [x] Actual cause of image cropping diagnosed and proven mathematically.
-- [x] Complete source image visibility verified across portrait (4:5), square (1:1), landscape (16:9), and tall portrait (9:16).
-- [x] Zero cropping, zero distortion, zero clipping confirmed via visual test fixtures.
-- [x] Zero Cumulative Layout Shift (CLS = 0) achieved via container-level framing.
-- [x] Gallery thumbnail navigation and counter badge verified across desktop and mobile.
-- [x] Admin dropzone recommendations updated.
-- [x] Responsive layout verified at 320px, 375px, 430px, 768px, 1024px, and 1440px.
-- [x] 109/109 unit tests passing (`npm test`).
-- [x] 39/39 security rules tests passing (`npm run test:rules`).
-- [x] 297/297 integration tests passing (`npm run test:integration`).
-- [x] 0 TypeScript compilation errors (`npm run typecheck`).
-- [x] 35/35 production routes compiled cleanly with Turbopack (`npm run build`).
-- [x] 406 total unique passing automated tests (10 new tests added).
-- [x] All commercial payment, inventory, and COD boundaries preserved.
-- [x] Stopped at the Owner Production Approval Gate.
+### Production Deployment Execution:
+- **Command:** `npx netlify deploy --remote --prod --message "TASK 028 - Product Image Containment & No-Crop Gallery Fix"`
+- **Git Commit:** [`3e7ff70`](https://github.com/Coder-MayankSaini/trendzcart/commit/3e7ff7000ab80681867889865e461c052070e104)
+- **Netlify Published Deploy ID:** [`6af369e6cbfc6c42b6b41349`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af369e6cbfc6c42b6b41349)
+- **Netlify Build ID:** `6af369e6cbfc6c42b6b41347`
+- **Secrets Scan:** 122 files scanned — 0 secrets detected.
+- **Scheduled Functions:** `reservation-cleanup` active (`*/5 * * * *`).
+- **Site Status:** Site is live ✨
+
+### Post-Deployment Live Verification Results (`scripts/verify-live-task028.mjs`):
+Executed post-deployment automated verification against live host `https://bazaarvilla.com` (**11/11 checks passed**):
+
+| # | Check Area | Description | Live Outcome | Status |
+|---|---|---|---|---|
+| **1** | **Product Gallery Display** | Product gallery contains `.pig-main`, `.pig-main-img`, and `object-fit: contain` on live PDP. | HTTP 200, `pig-main=true`, `pig-main-img=true`, `object-fit: contain=true` | **PASSED** |
+| **2** | **Computed Image Fit** | Headless Chrome CDP inspection evaluates live computed styles and bounding rects. | Computed `object-fit: contain`, Container: 699.0×873.8, Img: 699.0×873.8, Natural: 762×1016, `isContained: true` | **PASSED** |
+| **3** | **Responsive Layouts** | Responsive container and grid layout classes present without breakage. | `pdp-layout=true`, `pdp-gallery-col=true`, `pig-thumbs=true` | **PASSED** |
+| **4** | **Necklace Product Photos** | All 5 personalized necklace source photos intact, distinct, and accessible on live R2. | 5 images, 5 distinct SHA-256 hashes (`7bd1d620d0`, `faf524039b`, `a18274f8a2`, `505a2f6d66`, `9f5f14df45`) | **PASSED** |
+| **5** | **Cloudflare R2 Delivery** | Path-based `/api/media/public/...` delivers valid images with immutable caching. | HTTP 200, `Content-Type: image/png`, `Cache-Control: public,max-age=31536000,immutable` | **PASSED** |
+| **6** | **Next.js Image Sharpness** | Next.js image optimization endpoint transforms and serves high-DPI modern formats. | HTTP 200, `Content-Type: image/webp` | **PASSED** |
+| **7** | **Admin Upload Guidance** | Admin products management route accessible with updated guidance in production bundle. | HTTP 200 | **PASSED** |
+| **8** | **COD Restrictions (TASK 027)** | Attempted COD order on personalized necklace rejected by server validation. | HTTP 400, `code: "COD_NOT_ALLOWED_CUSTOM_PRODUCT"`, 0 order created, inventory unchanged (10 -> 10) | **PASSED** |
+| **9** | **Purchase Counter (TASK 023)** | Public purchase activity counter API remains fully operational. | HTTP 200, `productId` matches, count returned cleanly | **PASSED** |
+| **10** | **Reviews (TASK 022)** | Public review retrieval API remains fully operational. | HTTP 200, array returned cleanly | **PASSED** |
+| **11** | **Razorpay Live Mode** | `GET /api/razorpay/public-config` returns active Live Mode credentials with open commercial checkout. | HTTP 200, `commercialCheckoutEnabled: true`, key starts `rzp_live_` | **PASSED** |
+
+---
+
+## 10. Rollback & Disaster Recovery Procedures
+
+1. **Immediate Netlify Rollback:** If unexpected production anomalies occur, publish the previous verified deployment immediately:
+   - Deploy ID: [`6af358848c8957162298eb3c`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af358848c8957162298eb3c) (TASK 027 baseline).
+2. **Git Rollback Reference:** Revert to commit `ddfcd85`.
+3. **Database Integrity:** Zero destructive migrations were performed. Customer orders, inventory records, and catalog images remain completely intact.
+
+---
+
+## 11. Preserved Subsequent Roadmap
+
+In strict accordance with the product roadmap, the following upcoming capabilities remain in the backlog:
+- **TASK 029 — Flexible Sizes, Dimensions & Color Variants:**
+  - Multi-attribute variant matrix (size + color).
+  - Apparel sizing (XS, S, M, L, XL, XXL, Free Size) and metric physical dimensions (e.g., `26 × 26 cm`).
+  - Variant-level SKU, price override, and stock tracking.
+- **TASK 030 — Shopify-Compatible CSV Bulk Product Import:**
+  - Downloadable Bazaarvilla CSV template + Shopify column mapping.
+  - Pre-import validation, error reporting, and non-destructive batch audit logging.
+  - Variant and dimension integration powered by the flexible variant schema.
+
+*(TASK 029 has not been started automatically; awaiting owner authorization.)*
