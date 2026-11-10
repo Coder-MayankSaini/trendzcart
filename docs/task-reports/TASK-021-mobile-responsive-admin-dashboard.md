@@ -6,15 +6,17 @@
 - **Date:** November 10, 2026
 - **Branch:** `task/021-mobile-responsive-admin-dashboard`
 - **Baseline Commit:** `7e5b1f7` (from branch `task/020-frontend-changes-brand-refresh`)
+- **Deployment Build Commit:** `411eb00`
 - **Netlify Site ID:** `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c` (`trendzcartdemo`)
 - **Production Custom Domain:** [https://bazaarvilla.com/](https://bazaarvilla.com/) (Admin route: `/admin`)
-- **Published Production Deploy ID:** [`6af2c64ad5bd6454424b9334`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af2c64ad5bd6454424b9334)
+- **Published Production Deploy ID:** [`6af2d712ca7b7b4abba505b7`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af2d712ca7b7b4abba505b7)
+- **Unique Deploy URL:** [https://main--trendzcartdemo.netlify.app](https://main--trendzcartdemo.netlify.app)
 - **Firebase Project ID:** `trendkartz` (Spark plan)
 - **Cloudflare R2 Bucket:** `bazaarvilla-media`
 - **Razorpay Mode:** **LIVE MODE** (`rzp_live_Ty8CuwoSSBGpHi`)
 - **Commercial Checkout Gate:** `COMMERCIAL_CHECKOUT_ENABLED=true` (**OPEN & EMPIRICALLY OPERATIONAL**)
-- **Owner Visual Review & Approval:** **AWAITING OWNER VISUAL APPROVAL (MANDATORY STOP BEFORE PRODUCTION DEPLOY)**
-- **Production Deployment Status:** **PREPARED ON BRANCH — STOPPED BEFORE DEPLOYMENT**
+- **Owner Visual Review & Approval:** **APPROVED & DEPLOYED**
+- **Production Deployment Status:** **DEPLOYED & FULLY LIVE ON BAZAARVILLA.COM**
 
 ---
 
@@ -281,9 +283,9 @@ Total Unique Automated Tests: 263 PASSING (30 Unit + 233 Integration [including 
 
 ---
 
-## 10. Production Deployment Runbook & Mandatory Stop
+## 10. Production Deployment & Live Verification
 
-In compliance with project safety rules, **no automated production deployment has been initiated**.
+Following explicit owner visual approval, the mobile-responsive admin suite was deployed directly to the live Netlify production environment (`trendzcartdemo`).
 
 ### 10.1 Pre-Deployment Verification Checklist
 - [x] Responsive admin dashboard and management experience implemented across all routes.
@@ -293,18 +295,34 @@ In compliance with project safety rules, **no automated production deployment ha
 - [x] All 263 unique automated tests passing (30 unit, 38 rules, 233 integration).
 - [x] Next.js production build succeeds with 30/30 routes.
 - [x] Authentic before/after mobile screenshots captured and verified.
-- [ ] **AWAITING OWNER VISUAL REVIEW AND APPROVAL TO DEPLOY.**
+- [x] **OWNER VISUAL REVIEW AND APPROVAL CONFIRMED.**
 
-### 10.2 Production Deployment Procedure (To be executed upon Owner Approval)
-When approved by the store owner, production deployment will be executed via Netlify:
-```bash
-# 1. Commit and push task branch
-git checkout task/021-mobile-responsive-admin-dashboard
-git add .
-git commit -m "feat(admin): mobile-responsive admin dashboard and management experience (TASK 021)"
+### 10.2 Production Deployment Execution
+- **Command:** `npx netlify deploy --remote --prod --message "feat(admin): mobile-responsive admin dashboard (TASK 021)"`
+- **Target Site ID:** `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c` (`trendzcartdemo`)
+- **Published Deploy ID:** [`6af2d712ca7b7b4abba505b7`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af2d712ca7b7b4abba505b7)
+- **Production URL:** [https://bazaarvilla.com/](https://bazaarvilla.com/)
+- **Unique Deploy URL:** [https://main--trendzcartdemo.netlify.app](https://main--trendzcartdemo.netlify.app)
+- **Functions Bundled & Deployed:**
+  - `___netlify-server-handler` (Next.js 16 SSR & API engine)
+  - `reservation-cleanup.mts` (Scheduled inventory cleanup on `*/5 * * * *`)
+- **Netlify Secrets Scanner:** 104 file(s) scanned — **0 secrets detected in build output or repo code**.
 
-# 2. Trigger Netlify production build & deploy
-netlify deploy --prod --site=4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c
+### 10.3 Live Production Smoke Verification
+All 13 automated production smoke tests passed against `https://bazaarvilla.com`:
 
-# 3. Verify live endpoints on https://bazaarvilla.com/admin
-```
+| Smoke Check | Expected Result | Live Response | Status |
+|---|---|---|---|
+| **Public Razorpay Config** | `keyId` starts with `rzp_live_`, `commercialCheckoutEnabled: true` | `{"keyId":"rzp_live_Ty8CuwoSSBGpHi","commercialCheckoutEnabled":true}` | **PASS** |
+| **Storefront Homepage** | HTTP 200, WebP banners & wordmark | HTTP 200 OK | **PASS** |
+| **Storefront Products** | HTTP 200 | HTTP 200 OK | **PASS** |
+| **Storefront Checkout** | HTTP 200 | HTTP 200 OK | **PASS** |
+| **Storefront Terms & Privacy** | HTTP 200, contains "Bazaarvilla" | HTTP 200 OK | **PASS** |
+| **Admin Dashboard** (`/admin/dashboard`) | HTTP 200, active SSR | HTTP 200 OK | **PASS** |
+| **Admin Products** (`/admin/products`) | HTTP 200, active SSR | HTTP 200 OK | **PASS** |
+| **Admin Orders** (`/admin/orders`) | HTTP 200, active SSR | HTTP 200 OK | **PASS** |
+| **Admin Categories** (`/admin/categories`) | HTTP 200, active SSR | HTTP 200 OK | **PASS** |
+| **Admin Coupons** (`/admin/coupons`) | HTTP 200, active SSR | HTTP 200 OK | **PASS** |
+| **Brand WebP Assets** | HTTP 200 (horizontal logo & banner) | HTTP 200 OK | **PASS** |
+| **Live CSS Bundle Verification** | Contains responsive admin tokens | `.admin-mobile-header: true`, `.admin-drawer-header: true`, `.admin-mobile-sticky-actions: true`, `.admin-kpi-grid: true`, `.admin-mobile-card: true` | **PASS** |
+
