@@ -3453,24 +3453,20 @@ button {
   background-color: var(--bg-primary);
   overflow: hidden;
   box-sizing: border-box;
-  padding: 8px !important;
-  margin: 0 !important;
+  padding: 8px;
+  margin: 0;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   min-width: 0;
   position: relative;
-  text-align: left !important;
+  text-align: left;
   aspect-ratio: auto;
 }
 
-/* Featured HERO Card Highlight */
+/* Featured HERO Card Highlight (Uses scoped .is-hero class, completely avoiding storefront .hero conflicts) */
 .admin-gallery-card.is-hero,
-.admin-gallery-card.hero,
-.admin-image-preview-card.hero {
-  border: 2px solid var(--accent) !important;
-  box-shadow: 0 0 0 3px rgba(0, 107, 60, 0.14) !important;
-  padding: 8px !important;
-  margin: 0 !important;
-  text-align: left !important;
+.admin-image-preview-card.is-hero {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px rgba(0, 107, 60, 0.14);
 }
 
 /* Preview Area with fixed 1:1 Aspect Ratio */

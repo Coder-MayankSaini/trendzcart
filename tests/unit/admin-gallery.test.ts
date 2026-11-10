@@ -132,11 +132,11 @@ describe("Admin Product Gallery UI & Logic Unit Tests (TASK 025)", () => {
         const globalsCssPath = path.join(process.cwd(), "src", "app", "globals.css");
         const globalsCss = fs.readFileSync(globalsCssPath, "utf8");
 
-        // 1. Verify storefront .hero does not apply to admin gallery cards
+        // 1. Verify storefront .hero does not apply to admin gallery cards and .is-hero is used
         assert.ok(
-            globalsCss.includes(".hero:not(.admin-gallery-card):not(.admin-image-preview-card)") ||
-            globalsCss.includes("padding: 8px !important"),
-            "globals.css must isolate .hero styling from admin gallery cards"
+            globalsCss.includes(".hero:not(.admin-gallery-card):not(.admin-image-preview-card)") &&
+            globalsCss.includes(".admin-gallery-card.is-hero"),
+            "globals.css must isolate .hero styling from admin gallery cards and use scoped .is-hero"
         );
 
         // 2. Verify admin gallery card has explicit zero margin and controlled padding
