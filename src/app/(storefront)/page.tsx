@@ -130,10 +130,10 @@ export default async function Home() {
               className="hp-hero-banner-img"
             />
             <div className="hp-hero-actions-overlay">
-              <Link href="/products" className="hp-btn-primary hp-btn-hero">
+              <Link href="/products" className="hp-btn-hero">
                 Shop Now →
               </Link>
-              <Link href="/categories" className="hp-btn-outline hp-btn-hero-outline">
+              <Link href="/categories" className="hp-btn-hero">
                 Discover Categories
               </Link>
             </div>
