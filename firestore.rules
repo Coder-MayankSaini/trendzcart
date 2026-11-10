@@ -82,6 +82,12 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // 5b. Review Import Batches
+    // Audit logs for bulk review imports. Restricted to administrators.
+    match /reviewImportBatches/{batchId} {
+      allow read, write: if isAdmin();
+    }
+
     // 6. Orders collection
     // Client SDK reads/writes strictly restricted.
     // Customer retrieval occurs exclusively through the secured /api/orders/by-ids route.

@@ -1,4 +1,4 @@
-export type NavIconType = "dashboard" | "products" | "categories" | "orders" | "coupons";
+export type NavIconType = "dashboard" | "products" | "categories" | "orders" | "coupons" | "reviews";
 
 export interface NavItem {
     label: string;
@@ -16,6 +16,11 @@ export const ADMIN_NAV_ITEMS: NavItem[] = [
         label: "Products",
         href: "/admin/products",
         icon: "products",
+    },
+    {
+        label: "Reviews",
+        href: "/admin/reviews",
+        icon: "reviews",
     },
     {
         label: "Categories",

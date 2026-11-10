@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/config";
 import imageCompression from "browser-image-compression";
@@ -67,6 +68,9 @@ interface Product {
     isFeatured: boolean;
     customizationType: "requires_name" | "requires_picture" | null;
     sizes?: string[];
+    reviewCount?: number;
+    averageRating?: number;
+    ratingDistribution?: Record<number, number>;
     createdAt: number;
 }
 
@@ -1137,7 +1141,7 @@ export default function AdminProducts() {
                                     </td>
                                     <td>
                                         <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{product.name}</div>
-                                        <div style={{ display: "flex", gap: "6px", marginTop: "2px" }}>
+                                        <div style={{ display: "flex", gap: "6px", marginTop: "2px", alignItems: "center", flexWrap: "wrap" }}>
                                             {product.isCustomized && (
                                                 <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
                                                     Custom
@@ -1148,6 +1152,11 @@ export default function AdminProducts() {
                                                     Featured
                                                 </span>
                                             )}
+                                            {product.reviewCount && product.reviewCount > 0 ? (
+                                                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#d97706", display: "inline-flex", alignItems: "center", gap: "2px" }} title={`${product.reviewCount} published reviews`}>
+                                                    ★ {Number(product.averageRating || 0).toFixed(1)} <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>({product.reviewCount})</span>
+                                                </span>
+                                            ) : null}
                                         </div>
                                     </td>
                                     <td style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
@@ -1170,14 +1179,14 @@ export default function AdminProducts() {
                                         </AdminBadge>
                                     </td>
                                     <td style={{ textAlign: "right" }}>
-                                        <button
-                                            type="button"
-                                            onClick={() => setAddingReviewForProduct(product.id)}
+                                        <Link
+                                            href={`/admin/reviews?productId=${encodeURIComponent(product.id)}`}
                                             className="admin-btn admin-btn-secondary admin-btn-sm"
-                                            style={{ marginRight: "6px" }}
+                                            style={{ marginRight: "6px", textDecoration: "none" }}
+                                            title="Manage product reviews and import batches"
                                         >
-                                            + Review
-                                        </button>
+                                            Reviews {product.reviewCount ? `(${product.reviewCount})` : ""}
+                                        </Link>
                                         <button
                                             type="button"
                                             onClick={() => handleEdit(product)}
@@ -1231,6 +1240,11 @@ export default function AdminProducts() {
                                                     Custom
                                                 </span>
                                             )}
+                                            {product.reviewCount && product.reviewCount > 0 ? (
+                                                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#d97706", display: "inline-flex", alignItems: "center", gap: "2px" }}>
+                                                    ★ {Number(product.averageRating || 0).toFixed(1)} ({product.reviewCount})
+                                                </span>
+                                            ) : null}
                                         </div>
                                     </div>
                                 </div>
@@ -1267,14 +1281,13 @@ export default function AdminProducts() {
                                 >
                                     Edit Product
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setAddingReviewForProduct(product.id)}
+                                <Link
+                                    href={`/admin/reviews?productId=${encodeURIComponent(product.id)}`}
                                     className="admin-btn admin-btn-secondary admin-btn-sm"
-                                    style={{ flex: 1 }}
+                                    style={{ flex: 1, textDecoration: "none", textAlign: "center", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                                 >
-                                    + Review
-                                </button>
+                                    Reviews {product.reviewCount ? `(${product.reviewCount})` : ""}
+                                </Link>
                                 <button
                                     type="button"
                                     onClick={() => handleDelete(product.id)}

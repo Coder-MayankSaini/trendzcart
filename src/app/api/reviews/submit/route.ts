@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { checkRateLimit, getClientIp } from "@/lib/security/rateLimiter";
+import { recalculateAndPersistProductStats } from "@/lib/reviews/adminReviews";
 
 const NO_CACHE_HEADERS = {
     "Cache-Control": "no-store, no-cache, must-revalidate, private",
@@ -220,9 +221,20 @@ export async function POST(req: NextRequest) {
             createdAt: Date.now(),
             isFake: false,
             verifiedPurchase: true,
+            publicationStatus: "published",
+            sourceType: "storefront",
+            customerConsentConfirmed: true,
+            editorialNote: false,
         };
 
         await adminDb.collection("reviews").doc(reviewId).set(reviewPayload);
+
+        // Authoritatively update product review aggregates
+        try {
+            await recalculateAndPersistProductStats(cleanProductId);
+        } catch (aggErr) {
+            console.error("[Review Submission] Error updating aggregates:", aggErr);
+        }
 
         return NextResponse.json(
             {

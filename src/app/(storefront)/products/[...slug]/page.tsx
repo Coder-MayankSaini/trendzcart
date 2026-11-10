@@ -5,6 +5,7 @@ import Link from "next/link";
 import ProductCustomizer from "@/components/storefront/ProductCustomizer";
 import ProductImageGallery from "@/components/storefront/ProductImageGallery";
 import ProductReviews from "@/components/storefront/ProductReviews";
+import ProductAllReviewsPage from "@/components/storefront/ProductAllReviewsPage";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +44,22 @@ async function getProductBySlug(slug: string) {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const resolvedParams = await params;
   const slugArray = resolvedParams.slug;
-  const slugStr = Array.isArray(slugArray) ? slugArray.map(decodeURIComponent).join('/') : decodeURIComponent(slugArray);
-  const product = await getProductBySlug(slugStr);
+  const segments = Array.isArray(slugArray) ? slugArray.map(decodeURIComponent) : [decodeURIComponent(slugArray)];
+  const isReviewsSubroute = segments.length > 1 && segments[segments.length - 1] === "reviews";
+  const baseSlug = isReviewsSubroute ? segments.slice(0, -1).join('/') : segments.join('/');
+  const product = await getProductBySlug(baseSlug);
 
   if (!product) return { title: "Product Not Found" };
+
+  if (isReviewsSubroute) {
+    return {
+      title: `Customer Reviews for ${product.name} | Bazaarvilla`,
+      description: `Read authentic customer reviews, star ratings, and feedback for ${product.name}.`,
+      openGraph: {
+        images: product.images ? [product.images[0]] : [],
+      },
+    };
+  }
 
   return {
     title: `${product.name} | Bazaarvilla`,
@@ -60,11 +73,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ProductDetailsPage({ params }: Props) {
   const resolvedParams = await params;
   const slugArray = resolvedParams.slug;
-  const slugStr = Array.isArray(slugArray) ? slugArray.map(decodeURIComponent).join('/') : decodeURIComponent(slugArray);
-  const product = await getProductBySlug(slugStr);
+  const segments = Array.isArray(slugArray) ? slugArray.map(decodeURIComponent) : [decodeURIComponent(slugArray)];
+  const isReviewsSubroute = segments.length > 1 && segments[segments.length - 1] === "reviews";
+  const baseSlug = isReviewsSubroute ? segments.slice(0, -1).join('/') : segments.join('/');
+  const product = await getProductBySlug(baseSlug);
 
   if (!product) {
     notFound();
+  }
+
+  if (isReviewsSubroute) {
+    return <ProductAllReviewsPage product={product} />;
   }
 
   const images: string[] = product.images || [];
@@ -169,7 +188,7 @@ export default async function ProductDetailsPage({ params }: Props) {
 
       <div className="pdp-layout" style={{ marginTop: '24px' }}>
         <div style={{ width: '100%' }}>
-          <ProductReviews productId={product.id} />
+          <ProductReviews productId={product.id} productSlug={product.slug || baseSlug} />
         </div>
       </div>
     </div>

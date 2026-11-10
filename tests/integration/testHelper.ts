@@ -61,6 +61,22 @@ export function createJsonPostRequest(url: string, payload: any, headers: Record
 }
 
 /**
+ * Creates a PATCH NextRequest instance suitable for testing Next.js Route Handlers.
+ */
+export function createJsonPatchRequest(url: string, payload: any, headers: Record<string, string> = {}): NextRequest {
+    const request = new Request(url, {
+        method: "PATCH",
+        headers: {
+            "Content-Type": "application/json",
+            ...headers,
+        },
+        body: JSON.stringify(payload),
+    });
+
+    return new NextRequest(request);
+}
+
+/**
  * Exchanges a Firebase Admin custom token for a genuine Firebase ID token
  * against the local Auth Emulator REST endpoint.
  */

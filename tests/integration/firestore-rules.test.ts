@@ -466,6 +466,41 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
         );
     });
 
+    // RULE-015B — Review Import Batches Audit Logs (TASK 022)
+    it("RULE-015B: Review Import Batches — audit logs restricted to admin only (TASK 022)", async () => {
+        const custADb = testEnv.authenticatedContext("cust_a").firestore();
+        const adminDb = testEnv.authenticatedContext("admin_uid", { admin: true }).firestore();
+        const unauthDb = testEnv.unauthenticatedContext().firestore();
+
+        const testBatchId = "batch_test_022";
+        const sampleBatchData = {
+            batchId: testBatchId,
+            productId: "prod_visible",
+            productName: "Visible Product",
+            adminUid: "admin_uid",
+            createdAt: Date.now(),
+            totalSubmitted: 38,
+            validEntries: 38,
+            rejectedEntries: 0,
+            publishedEntries: 38,
+            duplicateEntries: 0,
+            status: "published",
+            errorSummary: [],
+        };
+
+        // Unauthenticated access fails
+        await assertFails(getDoc(doc(unauthDb, "reviewImportBatches", testBatchId)));
+        await assertFails(setDoc(doc(unauthDb, "reviewImportBatches", testBatchId), sampleBatchData));
+
+        // Authenticated customer access fails
+        await assertFails(getDoc(doc(custADb, "reviewImportBatches", testBatchId)));
+        await assertFails(setDoc(doc(custADb, "reviewImportBatches", testBatchId), sampleBatchData));
+
+        // Verified administrator access succeeds
+        await assertSucceeds(setDoc(doc(adminDb, "reviewImportBatches", testBatchId), sampleBatchData));
+        await assertSucceeds(getDoc(doc(adminDb, "reviewImportBatches", testBatchId)));
+    });
+
     // RULE-016 — Payment Records
     it("RULE-016: Payment Records — browser client cannot read or modify internal paymentRecords", async () => {
         const custADb = testEnv.authenticatedContext("cust_a").firestore();
