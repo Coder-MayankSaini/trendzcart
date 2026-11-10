@@ -6,8 +6,10 @@
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Firebase Authentication, Cloud Firestore (Spark plan), Firebase Admin SDK, Cloudflare R2, Razorpay Live Mode (2.9.6), Netlify  
 **Git Branch:** `task/023-product-purchase-activity-counter`  
 **Base Commit:** `9a32d47` (Docs) / `0b4f897` (Code — TASK 022 Deployed Baseline)  
+**Deployed Production Commit:** `16b094ebfa4eff76d903d391ee07c31a4d9a7be6`  
+**Published Production Deploy ID:** [`6af34bfc4ee2926c4d5e5cdd`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af34bfc4ee2926c4d5e5cdd)  
 **Production Site:** `https://bazaarvilla.com` (Netlify Site: `trendzcartdemo`)  
-**Status:** **READY FOR PRODUCTION REVIEW — LOCAL IMPLEMENTATION & COMPREHENSIVE VERIFICATION COMPLETE — DEPLOYMENT GATE PENDING OWNER APPROVAL**  
+**Status:** **COMPLETED & PUBLISHED TO PRODUCTION — 100% VERIFIED LIVE**  
 
 ---
 
@@ -261,18 +263,35 @@ Automated in-browser screenshot capture was executed via Playwright (`scripts/ca
 
 ---
 
-## 14. Netlify Production Deployment Runbook & Pending Gate
+## 14. Netlify Production Deployment & Live Verification Evidence
 
-> [!IMPORTANT]
-> In accordance with project safety guidelines, NO production deployment has been initiated. Remote deployment remains paused awaiting explicit owner authorization.
+Conditional authorization was granted by the store owner following rigorous verification of hourly refresh mechanics, Firestore query scalability, and truth-in-advertising COD semantics.
 
-### Production Release Steps (Upon Owner Approval):
-1. **Merge Task Branch:** Merge `task/023-product-purchase-activity-counter` to `main`.
-2. **Execute Netlify Remote Build:** Deploy to site `trendzcartdemo` via Netlify CLI or Git push.
-3. **Verify Edge Cache Configuration:** Confirm header `Cache-Control: public, s-maxage=3600, stale-while-revalidate=1800` on `/api/products/[id]/purchase-activity`.
-4. **Smoke Verification on Live Storefront:**
-   - Verify PDP at `https://bazaarvilla.com/products/personalized-eyes-engraved-bar-necklace` renders cleanly.
-   - Verify admin portal at `https://bazaarvilla.com/admin/products` opens Section 6 and executes recalculation.
+### Production Deployment Details:
+- **Deployed Production Commit:** [`16b094ebfa4eff76d903d391ee07c31a4d9a7be6`](https://github.com/Coder-MayankSaini/trendzcart/commit/16b094ebfa4eff76d903d391ee07c31a4d9a7be6)
+- **Netlify Published Deploy ID:** [`6af34bfc4ee2926c4d5e5cdd`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af34bfc4ee2926c4d5e5cdd)
+- **Build ID:** `6af34bfc4ee2926c4d5e5cdb`
+- **Netlify Site:** `trendzcartdemo` (Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)
+- **Published Production Domain:** [https://bazaarvilla.com/](https://bazaarvilla.com/)
+- **Unique Deploy URL:** [https://main--trendzcartdemo.netlify.app](https://main--trendzcartdemo.netlify.app)
+- **Secrets Scan:** 121 files scanned — 0 leaks detected.
+- **Scheduled Functions:** `reservation-cleanup` active (`*/5 * * * *`).
+- **Site Status:** Site is live ✨
+
+### Post-Deployment Live Verification Results (`scripts/verify-live-task023.mjs`):
+Executed post-deployment automated verification against live host `https://bazaarvilla.com` (**9/9 checks passed**):
+
+| Check | Area | Live Result | Status |
+|---|---|---|---|
+| **1. Admin Token Generation** | Authentication | Successfully provisioned valid Firebase ID token for authorized admin UID `jdi97hwEJQYt5NXoUhyISOpW7Hl1`. | **PASSED** |
+| **2. Public API Data Boundary** | Security & Privacy | `GET /api/products/[id]/purchase-activity` returned HTTP 200, count: 0, visible: false, and 100% PII redacted. | **PASSED** |
+| **3. Edge CDN Cache Headers** | Performance | `Cache-Control: public, s-maxage=3600, stale-while-revalidate=1800` active on response. | **PASSED** |
+| **4. Fixture Exclusion** | Security & Integrity | Synthetic test fixture `task013_test_prod_simple` returned HTTP 404. | **PASSED** |
+| **5. Admin API 401 Rejection** | Access Control | Unauthenticated `POST /api/admin/products/[id]/purchase-activity` rejected with HTTP 401. | **PASSED** |
+| **6. Admin Recalculation** | Admin Control | Authenticated admin recalculation returned HTTP 200 with `{ success: true, activity: { unitsSold: 0, periodDays: 30 } }`. | **PASSED** |
+| **7. Storefront PDP Rendering** | Storefront | PDP at `/products/personalized-eyes-engraved-bar-necklace...` rendered cleanly (HTTP 200, 64,477 bytes, 0 hydration errors). | **PASSED** |
+| **8. Review System Preservation** | Backward Compatibility | `GET /api/reviews?productId=...` returned HTTP 200 (TASK 022 preserved). | **PASSED** |
+| **9. Commercial Checkout Gate** | Payment Integrity | `/api/razorpay/public-config` returned HTTP 200 with `commercialCheckoutEnabled: true`. | **PASSED** |
 
 ---
 
