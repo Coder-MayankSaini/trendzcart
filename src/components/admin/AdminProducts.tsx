@@ -930,6 +930,10 @@ export default function AdminProducts() {
                                         />
                                         Requires Customer Photo Upload
                                     </label>
+                                    <div style={{ fontSize: "0.78rem", color: "#6b7280", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                        Cash on Delivery (COD) will be automatically disabled at checkout for orders containing this product.
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1361,9 +1365,14 @@ export default function AdminProducts() {
                                         <div style={{ fontWeight: 600, color: "var(--text-primary)" }}>{product.name}</div>
                                         <div style={{ display: "flex", gap: "6px", marginTop: "2px", alignItems: "center", flexWrap: "wrap" }}>
                                             {product.isCustomized && (
-                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
-                                                    Custom
-                                                </span>
+                                                <>
+                                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
+                                                        Custom
+                                                    </span>
+                                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+                                                        Prepaid Only
+                                                    </span>
+                                                </>
                                             )}
                                             {product.isFeatured && (
                                                 <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
@@ -1459,9 +1468,14 @@ export default function AdminProducts() {
                                                 {product.category || (product.categories && product.categories[0]) || "General"}
                                             </span>
                                             {product.isCustomized && (
-                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
-                                                    Custom
-                                                </span>
+                                                <>
+                                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--text-primary)", color: "var(--bg-primary)" }}>
+                                                        Custom
+                                                    </span>
+                                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" }}>
+                                                        Prepaid Only
+                                                    </span>
+                                                </>
                                             )}
                                             {product.reviewCount && product.reviewCount > 0 ? (
                                                 <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#d97706", display: "inline-flex", alignItems: "center", gap: "2px" }}>

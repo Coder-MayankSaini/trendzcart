@@ -6,6 +6,7 @@ const admin = (adminModule as any).default || adminModule;
 import {
     calculateOrderPricing,
     verifyRazorpaySignature,
+    isCustomizableProduct,
 } from "@/lib/orders/pricing";
 import type { OrderItemInput } from "@/lib/orders/pricing";
 import {
@@ -199,6 +200,49 @@ export async function POST(req: NextRequest) {
                 requestedIdSnap = await transaction.get(adminDb!.collection("orders").doc(body.id.trim()));
             }
 
+            // MANDATORY SERVER-SIDE COD RESTRICTION (TASK 027)
+            // Inspect trusted catalog data for all cart items.
+            // If even one product in the cart is customizable/personalized, COD must be strictly rejected.
+            if (body.paymentMethod === "COD") {
+                const ineligibleItems: Array<{ id: string; name: string }> = [];
+
+                for (const item of body.items) {
+                    const productId = item.productId || item.id;
+                    if (!productId) {
+                        return {
+                            status: 400,
+                            error: "Cannot process COD: order item is missing a valid product ID.",
+                        };
+                    }
+
+                    const docSnap = productMap.get(productId);
+                    if (!docSnap || !docSnap.exists) {
+                        return {
+                            status: 400,
+                            error: `Cannot process COD: Product '${productId}' not found in catalog.`,
+                        };
+                    }
+
+                    const prodData = docSnap.data();
+                    if (isCustomizableProduct(prodData)) {
+                        ineligibleItems.push({
+                            id: productId,
+                            name: prodData?.name || item.name || productId,
+                        });
+                    }
+                }
+
+                if (ineligibleItems.length > 0) {
+                    const itemNames = ineligibleItems.map((i) => `'${i.name}'`).join(", ");
+                    return {
+                        status: 400,
+                        code: "COD_NOT_ALLOWED_CUSTOM_PRODUCT",
+                        error: `Cash on Delivery is not available for orders containing customizable or personalized items (${itemNames}). Please select an online payment method to complete your purchase.`,
+                        ineligibleItems,
+                    };
+                }
+            }
+
             // VALIDATION & PRICING PHASE
             const pricing = await calculateOrderPricing(
                 body.items,
@@ -218,6 +262,11 @@ export async function POST(req: NextRequest) {
                         isTestFixture: data?.isTestFixture,
                         purchasable: data?.purchasable,
                         isArchived: data?.isArchived,
+                        isCustomized: data?.isCustomized,
+                        customizationType: data?.customizationType,
+                        customizable: data?.customizable,
+                        isPersonalized: data?.isPersonalized,
+                        sizes: data?.sizes,
                     };
                 },
                 async (code: string) => {
@@ -366,7 +415,14 @@ export async function POST(req: NextRequest) {
         });
 
         if (transactionResult.status !== 200) {
-            return NextResponse.json({ error: transactionResult.error }, { status: transactionResult.status });
+            return NextResponse.json(
+                {
+                    error: transactionResult.error,
+                    code: (transactionResult as any).code,
+                    ineligibleItems: (transactionResult as any).ineligibleItems,
+                },
+                { status: transactionResult.status }
+            );
         }
 
         return NextResponse.json({

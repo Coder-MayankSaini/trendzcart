@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import AuthModal from "@/components/storefront/AuthModal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase/config";
 
 interface ShippingAddress {
     fullName: string;
@@ -35,10 +37,77 @@ export default function CheckoutPage() {
     });
 
     const [paymentMethod, setPaymentMethod] = useState<"RAZORPAY" | "COD">("RAZORPAY");
+    const [verifiedCustomizableIds, setVerifiedCustomizableIds] = useState<Set<string>>(new Set());
     const [coupon, setCoupon] = useState<{ code: string; type: string; value: number } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [razorpayKeyId, setRazorpayKeyId] = useState("");
     const [isCommercialOpen, setIsCommercialOpen] = useState(true);
+
+    // Live catalog verification to detect customizable products even if cart item flags were stale
+    useEffect(() => {
+        if (!items || items.length === 0) return;
+        let isCancelled = false;
+        const checkProductCustomizability = async () => {
+            try {
+                if (!db || typeof db.collection !== "function") {
+                    // db might be modular firestore instance
+                }
+                const productIds = Array.from(new Set(items.map((i) => i.productId).filter(Boolean)));
+                const customIds = new Set<string>();
+                for (const pid of productIds) {
+                    try {
+                        const ref = doc(db, "products", pid);
+                        const snap = await getDoc(ref);
+                        if (snap && snap.exists()) {
+                            const d = snap.data();
+                            if (
+                                d?.isCustomized === true ||
+                                d?.customizationType === "requires_name" ||
+                                d?.customizationType === "requires_picture" ||
+                                d?.customizable === true ||
+                                d?.isPersonalized === true
+                            ) {
+                                customIds.add(pid);
+                            }
+                        }
+                    } catch {
+                        // Non-blocking fallback; client flags and server transactional verification remain active
+                    }
+                }
+                if (!isCancelled && customIds.size > 0) {
+                    setVerifiedCustomizableIds(customIds);
+                }
+            } catch {
+                // Ignore background check failure
+            }
+        };
+        checkProductCustomizability();
+        return () => {
+            isCancelled = true;
+        };
+    }, [items]);
+
+    // Authoritative check if current cart contains any customizable item
+    const hasCustomizableItem = useMemo(() => {
+        return items.some(
+            (item) =>
+                item.isCustomized === true ||
+                Boolean(
+                    item.customizationData &&
+                    (item.customizationData.name ||
+                        item.customizationData.pictureUrl ||
+                        item.customizationData.storagePath)
+                ) ||
+                verifiedCustomizableIds.has(item.productId)
+        );
+    }, [items, verifiedCustomizableIds]);
+
+    // Automatically force online payment if customizable items enter the cart
+    useEffect(() => {
+        if (hasCustomizableItem && paymentMethod === "COD") {
+            setPaymentMethod("RAZORPAY");
+        }
+    }, [hasCustomizableItem, paymentMethod]);
 
     useEffect(() => {
         const script = document.createElement("script");
@@ -170,6 +239,12 @@ export default function CheckoutPage() {
         const orderId = uuidv4();
 
         if (paymentMethod === "COD") {
+            if (hasCustomizableItem) {
+                alert("Cash on Delivery is unavailable because your cart contains customized or personalized items. Please select an online payment method.");
+                setPaymentMethod("RAZORPAY");
+                setIsProcessing(false);
+                return;
+            }
             try {
                 const orderResult = await saveOrder(orderId, "Processing", "PENDING");
                 rememberOrderLocally(orderResult.id, orderResult.guestAccessToken);
@@ -364,14 +439,65 @@ export default function CheckoutPage() {
                                 </div>
                             </label>
 
-                            <label className={`co-payment-card ${paymentMethod === "COD" ? "co-payment-selected" : ""}`}>
-                                <input type="radio" name="payment" value="COD" checked={paymentMethod === "COD"} onChange={() => setPaymentMethod("COD")} className="co-radio" />
-                                <div className="co-payment-info">
-                                    <span className="co-payment-name">Cash on Delivery</span>
-                                    <span className="co-payment-desc">Pay when your order arrives</span>
+                            <label
+                                className={`co-payment-card ${paymentMethod === "COD" ? "co-payment-selected" : ""} ${hasCustomizableItem ? "co-payment-disabled" : ""}`}
+                                style={hasCustomizableItem ? { opacity: 0.65, cursor: "not-allowed", borderColor: "var(--border-color)", background: "rgba(0,0,0,0.02)" } : undefined}
+                                data-testid="payment-option-cod"
+                            >
+                                <input
+                                    type="radio"
+                                    name="payment"
+                                    value="COD"
+                                    checked={paymentMethod === "COD"}
+                                    disabled={hasCustomizableItem}
+                                    onChange={() => {
+                                        if (!hasCustomizableItem) {
+                                            setPaymentMethod("COD");
+                                        }
+                                    }}
+                                    className="co-radio"
+                                />
+                                <div className="co-payment-info" style={{ flex: 1 }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
+                                        <span className="co-payment-name">Cash on Delivery</span>
+                                        {hasCustomizableItem && (
+                                            <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "2px 8px", borderRadius: "6px", backgroundColor: "#fee2e2", color: "#b91c1c" }}>
+                                                Unavailable for Custom Items
+                                            </span>
+                                        )}
+                                    </div>
+                                    <span className="co-payment-desc">
+                                        {hasCustomizableItem
+                                            ? "Personalized products require upfront online payment"
+                                            : "Pay when your order arrives"}
+                                    </span>
                                 </div>
                             </label>
                         </div>
+
+                        {hasCustomizableItem && (
+                            <div
+                                style={{
+                                    marginTop: "14px",
+                                    padding: "12px 16px",
+                                    borderRadius: "12px",
+                                    backgroundColor: "#eff6ff",
+                                    border: "1px solid #bfdbfe",
+                                    color: "#1e40af",
+                                    fontSize: "0.86rem",
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    gap: "10px",
+                                    lineHeight: 1.5,
+                                }}
+                                data-testid="cod-restriction-notice"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "2px" }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" /></svg>
+                                <div>
+                                    <strong>Prepaid Only for Personalized Items:</strong> Your cart contains customized products. Because personalized items are crafted specifically for you upon receiving the order, Cash on Delivery is disabled for this entire order. Please complete your purchase securely with online payment (UPI, Cards, NetBanking).
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 

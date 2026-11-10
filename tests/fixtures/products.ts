@@ -11,6 +11,8 @@ export interface TestProduct {
     inventory: number;
     isVisible: boolean;
     isCustomized: boolean;
+    customizationType?: "requires_name" | "requires_picture" | null;
+    sizes?: string[];
     category: string;
     images: string[];
     createdAt: number;
@@ -75,6 +77,45 @@ export const SYNTHETIC_PRODUCTS: Record<string, TestProduct> = {
         isCustomized: false,
         category: "apparel",
         images: ["https://example.com/demo-jacket.jpg"],
+        createdAt: Date.now(),
+    },
+    "prod-custom-frame-800": {
+        id: "prod-custom-frame-800",
+        name: "Synthetic Demo Custom Photo Frame",
+        slug: "synthetic-demo-custom-photo-frame",
+        price: 800,
+        inventory: 15,
+        isVisible: true,
+        isCustomized: true,
+        customizationType: "requires_picture",
+        category: "accessories",
+        images: ["https://example.com/demo-frame.jpg"],
+        createdAt: Date.now(),
+    },
+    "prod-custom-mug-400": {
+        id: "prod-custom-mug-400",
+        name: "Synthetic Demo Personalized Mug",
+        slug: "synthetic-demo-personalized-mug",
+        price: 400,
+        inventory: 20,
+        isVisible: true,
+        isCustomized: true,
+        customizationType: "requires_name",
+        category: "accessories",
+        images: ["https://example.com/demo-mug-custom.jpg"],
+        createdAt: Date.now(),
+    },
+    "prod-sized-shirt-600": {
+        id: "prod-sized-shirt-600",
+        name: "Synthetic Sized Regular T-Shirt",
+        slug: "synthetic-sized-regular-tshirt",
+        price: 600,
+        inventory: 25,
+        isVisible: true,
+        isCustomized: false,
+        sizes: ["S", "M", "L", "XL"],
+        category: "apparel",
+        images: ["https://example.com/demo-sized-shirt.jpg"],
         createdAt: Date.now(),
     },
 };

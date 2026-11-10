@@ -258,6 +258,25 @@ export default function CartPage() {
                             <span>₹{finalTotal.toLocaleString("en-IN")}</span>
                         </div>
 
+                        {items.some(i => i.isCustomized || Boolean(i.customizationData && (i.customizationData.name || i.customizationData.pictureUrl))) && (
+                            <div style={{
+                                marginTop: '16px',
+                                padding: '12px 14px',
+                                borderRadius: '12px',
+                                backgroundColor: 'rgba(14, 165, 233, 0.08)',
+                                border: '1px solid rgba(14, 165, 233, 0.25)',
+                                color: '#0369a1',
+                                fontSize: '0.84rem',
+                                display: 'flex',
+                                alignItems: 'flex-start',
+                                gap: '8px',
+                                lineHeight: 1.45
+                            }} data-testid="cart-cod-restriction-note">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '2px' }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                <span><strong>Personalized Order:</strong> Cart includes custom items. Cash on Delivery is disabled; online payment (UPI/Cards) required at checkout.</span>
+                            </div>
+                        )}
+
                         <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '16px', marginBottom: '32px', textAlign: 'center' }}>Tax included. Shipping calculated at checkout.</p>
 
                         <button

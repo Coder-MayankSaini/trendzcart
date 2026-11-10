@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/023-product-purchase-activity-counter`  
+**Current Active Git Branch:** `task/027-customizable-product-cod-restriction`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 023 COMPLETED & DEPLOYED TO PRODUCTION** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af34bfc4ee2926c4d5e5cdd`; Task 023 product purchase activity counter, mobile admin configuration, private simulation preview, public/admin APIs, and strict COD truth-in-advertising semantics deployed and verified live with 368 unique automated tests passing; 9/9 post-deployment live smoke checks passing)
+**Current Commercial Transacting Safety Status:** **LIVE & COMMERCIALLY OPERATIONAL — TASK 027 IMPLEMENTED LOCALLY (AWAITING OWNER APPROVAL FOR PRODUCTION DEPLOYMENT)** (Commercial checkout active on production `https://bazaarvilla.com`; Netlify Published Deploy `6af34bfc4ee2926c4d5e5cdd`; Task 027 customizable product COD restriction verified locally with 396 unique automated tests passing [99 unit + 297 integration]; 9/9 visual QA screenshots verified; strict transactional server-side enforcement active; awaiting owner approval before remote container build)
 
 ---
 
@@ -56,15 +56,16 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-024** | Bazaarvilla Product Image Gallery, Multi-Upload & Category Image Isolation Repair | **COMPLETED & PUBLISHED** | `task/024-product-category-media-isolation-fix` (`965631f`) | [TASK-024-product-category-media-isolation-fix.md](./TASK-024-product-category-media-isolation-fix.md) | Diagnosed and proved root cause of image duplication and cross-entity sharing (Netlify Edge CDN query stripping + admin index state); implemented path-based public media delivery `/api/media/public/[...key]`, stable item UUID tracking in admin gallery, synchronized thumbnails, client validation, memory cleanup, and SVG fallback data URIs; authored 25 regression tests (MEDIA-001 to MEDIA-025); verified 100% pass across all 288 automated tests (30 unit, 258 integration including 38 rules); published Netlify production deploy `6af2f4b739ed72801cec0792` (0 secrets detected); verified 5/5 distinct product images and category isolation live on `https://bazaarvilla.com`. |
 | **TASK-025** | Bazaarvilla Admin Product Image Gallery UI Layout Repair | **COMPLETED & PUBLISHED** | `task/025-admin-product-gallery-layout-fix` (`d071ebc`) | [TASK-025-admin-product-gallery-layout-fix.md](./TASK-025-admin-product-gallery-layout-fix.md) | Diagnosed and proved root cause of hero blank space (global `.hero` padding leakage of 240px onto admin cards) and overlapping action buttons; replaced generic `.hero` with scoped `.is-hero` and eliminated `!important` overrides; re-architected gallery cards with self-contained 1:1 preview box, neutral background, `object-fit: contain`, position chips, hero badge, and dedicated footer actions; optimized mobile viewports (<= 430px) with 44px symmetric touch targets; upgraded dropzone UI; authored 5 unit tests (GALLERY-001 to GALLERY-005); verified 293 unique tests (35 unit + 258 integration); published Netlify deploy `6af30335364d8bc4b2d811d5`; verified live on `https://bazaarvilla.com`. |
 | **TASK-026** | Bazaarvilla Blurry Storefront Product Images & Image Quality Optimization | **COMPLETED & PUBLISHED** | `task/026-storefront-product-image-sharpness-fix` (`af9aa4d`) | [TASK-026-storefront-product-image-sharpness-fix.md](./TASK-026-storefront-product-image-sharpness-fix.md) | Diagnosed and proved root causes of storefront product image blurriness (premature thumbnail selection of 279×375 px asset stretched 2.74×–3.33× on high-DPI displays, raw unoptimized `<img>` tags, and homepage `unoptimized={true}`); implemented high-resolution cover prioritization, path-based URL normalization, Next.js `<Image>` with responsive `sizes` across catalog and homepage, high-definition PDP gallery with enforced 4/5 aspect ratio (`height: auto`), instant thumbnail switching, admin compression threshold increase to 500KB/800px, and modern WebP/AVIF formats; reduced image payload by 53%–96% while delivering pristine sharpness; authored 6 unit tests (QUALITY-001 to QUALITY-006); verified 299 unique automated tests (41 unit + 258 integration); published Netlify production deploy `6af31801088738694fc1dcb8`; 36/36 post-deployment live smoke checks passed on `https://bazaarvilla.com`. |
+| **TASK-027** | Bazaarvilla Customizable Product COD Restriction & Mixed-Cart Safeguards | **COMPLETED LOCALLY — AWAITING OWNER PRODUCTION APPROVAL** | `task/027-customizable-product-cod-restriction` | [TASK-027-customizable-product-cod-restriction.md](./TASK-027-customizable-product-cod-restriction.md) | Enforced secure checkout business rule: if shopping cart contains any customizable product, Cash on Delivery is strictly disabled for the entire cart, while regular products retain existing COD eligibility; authoritative personalization detection via trusted catalog metadata (`isCustomized: true`, `customizationType`); responsive checkout UX with disabled COD cards, badges, and explanation banners; mixed-cart protection; mandatory server-side transactional validation on `POST /api/orders/create` before inventory reservations; 396 unique automated tests passing (99 unit + 297 integration); 9 visual QA screenshots captured; all 35 Next.js routes compiling cleanly; production deployment safely paused awaiting explicit owner authorization. |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is on active task branch `task/023-product-purchase-activity-counter`.
+  - Git working tree is on active task branch `task/027-customizable-product-cod-restriction`.
   - Razorpay merchant account approval confirmed and configured in Live Mode (`rzp_live_Ty8CuwoSSBGpHi`).
-  - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af32ea1de06339db927ce29`).
+  - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af34bfc4ee2926c4d5e5cdd`).
   - Netlify secret scanning is active (`SECRETS_SCAN_ENABLED=true`) with targeted exclusions (`SECRETS_SCAN_OMIT_KEYS`, `SECRETS_SCAN_OMIT_PATHS`), verified passing on remote build (105 files scanned, 0 leaks).
   - Server-to-server gateway verification (`verifyPaymentWithGateway`) protects all payment finalization pathways against synthetic claims.
   - Public commercial checkout gate (`COMMERCIAL_CHECKOUT_ENABLED=true`) is open, active, and processing real customer orders.
@@ -79,12 +80,19 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
-    - `npm test`: 85/85 unit tests passing across 7 suites (14 pricing, 11 staging guard, 5 responsive admin, 5 gallery layout, 6 image quality, 19 review validation, and 25 purchase activity).
+    - `npm test`: 99/99 unit tests passing across 8 suites (14 pricing, 11 staging guard, 5 responsive admin, 5 gallery layout, 6 image quality, 19 review validation, 25 purchase activity, and **14 customizable product COD restriction**).
     - `npm run test:rules`: 39/39 rules and authorization tests passing (subset of integration suite).
-    - `npm run test:integration`: 283/283 integration tests across 22 suites passing (including 10 purchase activity API & security tests, 14 bulk review management tests, 39 security rules tests, and 25 media isolation tests).
+    - `npm run test:integration`: 297/297 integration tests across 23 suites passing (including **14 COD restriction integration tests**, 10 purchase activity API & security tests, 14 bulk review management tests, 39 security rules tests, and 25 media isolation tests).
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 35/35 Next.js routes compiling cleanly with Turbopack.
-    - Total unique automated tests: **368 passing** (85 unit + 283 integration; zero double-counting).
+    - Total unique automated tests: **396 passing** (99 unit + 297 integration; zero double-counting).
+  - TASK 027 Status:
+    - Business rule fully implemented and verified: Cash on Delivery strictly disabled when cart contains customizable/personalized products.
+    - Regular products retain complete COD eligibility.
+    - Mixed regular/personalized carts are protected as whole prepaid orders (no automatic cart splitting or forced product removals).
+    - Server-side transactional enforcement active on `POST /api/orders/create` before inventory decrements or order persistence.
+    - 9 visual QA screenshots captured and verified across desktop and mobile in `docs/screenshots/task027/`.
+    - Production deployment safely paused awaiting explicit owner authorization.
   - TASK 026 Storefront Image Sharpness Status:
     - Root causes mathematically proven and remediated: storefront cover image selector now prioritizes master photo `images[0]` over compressed thumbnail `thumbnails[0]`.
     - Upgraded `ProductCardImage.tsx` to Next.js `<Image>` with responsive `sizes` and path-based URL normalizer.
