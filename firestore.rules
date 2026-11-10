@@ -73,19 +73,27 @@ service cloud.firestore {
     }
 
     // 5. Reviews collection
-    // Public read for customer reviews on product detail pages.
-    // Client SDK direct writes are denied to eliminate REVIEW-BYPASS vulnerability;
-    // all customer submissions must go through the server-side /api/reviews/submit route.
-    // Legitimate administrators maintain full moderation and review management permissions.
+    // Direct client reads and writes are strictly restricted to eliminate review privacy risks
+    // (leakage of private metadata, unpublished drafts, internal source references, admin UIDs,
+    // and batch identifiers).
+    // Public customer reviews are served exclusively through the server-authoritative /api/reviews
+    // route, which redacts internal provenance fields and filters for genuinely published reviews.
+    // Customer review submissions occur exclusively via verified server route /api/reviews/submit.
+    // Administrative moderation occurs exclusively via verified server endpoints /api/admin/reviews/*.
+    // Direct client SDK writes are denied to eliminate REVIEW-BYPASS and client tampering.
+    // Read access is restricted to verified administrators for backoffice console inspection.
     match /reviews/{reviewId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // 5b. Review Import Batches
-    // Audit logs for bulk review imports. Restricted to administrators.
+    // Audit logs for bulk review imports. Generated and controlled exclusively by server Admin SDK.
+    // Direct client SDK writes are denied to ensure audit records cannot be silently modified or deleted.
+    // Read access is restricted to verified administrators for audit inspections.
     match /reviewImportBatches/{batchId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // 6. Orders collection

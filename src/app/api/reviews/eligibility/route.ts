@@ -59,7 +59,20 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        return NextResponse.json({ eligible }, { status: 200, headers });
+        if (eligible) {
+            const existingReviewSnap = await adminDb
+                .collection("reviews")
+                .where("productId", "==", productId)
+                .where("userId", "==", uid)
+                .limit(1)
+                .get();
+
+            if (!existingReviewSnap.empty) {
+                return NextResponse.json({ eligible: false, alreadyReviewed: true }, { status: 200, headers });
+            }
+        }
+
+        return NextResponse.json({ eligible, alreadyReviewed: false }, { status: 200, headers });
     } catch (error) {
         console.error("[Review Eligibility Error]:", error);
         return NextResponse.json({ eligible: false }, { status: 500, headers });

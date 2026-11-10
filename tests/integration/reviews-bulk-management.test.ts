@@ -488,4 +488,96 @@ describe("Review Bulk Import, Moderation & Storefront Aggregates Integration Tes
         assert.equal(emptyProd.averageRating, 5.0);
         assert.equal(emptyProd.ratingDistribution[5], 1);
     });
+
+    // 7. Simulation Safeguards & Private Status Isolation
+    it("REV-IMPORT-011: should strictly reject publishing batches containing simulated-test reviews", async () => {
+        const simulatedBatch = [
+            {
+                externalReviewId: "sim-item-001",
+                reviewerDisplayName: "[Simulation] Demo User",
+                rating: 5,
+                title: "Simulated Review",
+                body: "This is a simulated review fixture that must never reach the live database.",
+                reviewedAt: "2026-10-10",
+                source: "simulated-test",
+                sourceReference: "DEMO-REF-001",
+                customerConsentConfirmed: false,
+            },
+        ];
+
+        const req = createJsonPostRequest(
+            "http://localhost:3000/api/admin/reviews/publish-batch",
+            { productId: targetProductId, reviews: simulatedBatch },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const res = await publishBatchRoute(req);
+        assert.equal(res.status, 400);
+
+        const data = await res.json();
+        assert.ok(data.error.includes("Simulated"));
+
+        // Confirm nothing was written to Firestore reviews collection
+        const snap = await adminDb!.collection("reviews").where("sourceType", "==", "simulated-test").get();
+        assert.equal(snap.empty, true);
+    });
+
+    it("REV-IMPORT-012: public /api/reviews must hide unpublished, archived, rejected, and simulated reviews", async () => {
+        const timestamp = Date.now();
+        // Seed reviews with different publication statuses
+        await adminDb!.collection("reviews").doc("rev_staged").set({
+            id: "rev_staged",
+            productId: targetProductId,
+            rating: 5,
+            comment: "Staged review not yet published",
+            publicationStatus: "staged",
+            createdAt: timestamp,
+            isFake: false,
+        });
+
+        await adminDb!.collection("reviews").doc("rev_archived").set({
+            id: "rev_archived",
+            productId: targetProductId,
+            rating: 1,
+            comment: "Archived review",
+            publicationStatus: "archived",
+            createdAt: timestamp,
+            isFake: false,
+        });
+
+        await adminDb!.collection("reviews").doc("rev_simulated").set({
+            id: "rev_simulated",
+            productId: targetProductId,
+            rating: 5,
+            comment: "Simulated review",
+            sourceType: "simulated-test",
+            publicationStatus: "published",
+            createdAt: timestamp,
+            isFake: false,
+        });
+
+        await adminDb!.collection("reviews").doc("rev_legit_pub").set({
+            id: "rev_legit_pub",
+            productId: targetProductId,
+            rating: 5,
+            userName: "Genuine Customer",
+            comment: "Legitimate published review",
+            publicationStatus: "published",
+            createdAt: timestamp,
+            isFake: false,
+            sourceType: "storefront",
+        });
+
+        const req = new Request(`http://localhost:3000/api/reviews?productId=${targetProductId}`);
+        const res = await publicReviewsGetRoute(req as any);
+        assert.equal(res.status, 200);
+
+        const data = await res.json();
+        const returnedIds = data.reviews.map((r: any) => r.id);
+
+        assert.ok(returnedIds.includes("rev_legit_pub"), "Published review must be visible");
+        assert.ok(!returnedIds.includes("rev_staged"), "Staged review must NOT be visible");
+        assert.ok(!returnedIds.includes("rev_archived"), "Archived review must NOT be visible");
+        assert.ok(!returnedIds.includes("rev_simulated"), "Simulated review must NOT be visible");
+    });
 });

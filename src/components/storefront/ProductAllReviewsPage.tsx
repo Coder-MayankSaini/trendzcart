@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { normalizeMediaUrl } from "@/lib/storage/mediaUrl";
 import type { ProductReviewStats, RatingDistribution } from "@/lib/reviews/types";
 
 interface ProductReviewItem {
@@ -93,7 +94,7 @@ export default function ProductAllReviewsPage({ product }: ProductAllReviewsPage
         loadReviews(page + 1, true);
     };
 
-    const mainImage = product.images?.[0] || null;
+    const mainImage = product.images?.[0] ? normalizeMediaUrl(product.images[0]) : null;
 
     return (
         <div style={{ maxWidth: "1000px", margin: "0 auto", padding: "24px 16px 80px 16px" }}>

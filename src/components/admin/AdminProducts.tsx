@@ -98,12 +98,6 @@ export default function AdminProducts() {
     const [selectedCategory, setSelectedCategory] = useState("ALL");
     const [selectedVisibility, setSelectedVisibility] = useState<"ALL" | "VISIBLE" | "HIDDEN">("ALL");
 
-    // Fake review states
-    const [addingReviewForProduct, setAddingReviewForProduct] = useState<string | null>(null);
-    const [fakeReviewForm, setFakeReviewForm] = useState({ userName: "", rating: 5, comment: "" });
-    const [fakeReviewImages, setFakeReviewImages] = useState<File[]>([]);
-    const [fakeReviewUploading, setFakeReviewUploading] = useState(false);
-
     useEffect(() => {
         try {
             const unsub = onSnapshot(collection(db, "products"), (snapshot) => {
@@ -400,42 +394,6 @@ export default function AdminProducts() {
         } finally {
             setUploading(false);
             setUploadProgress(null);
-        }
-    };
-
-    const handleFakeReviewSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!addingReviewForProduct) return;
-        setFakeReviewUploading(true);
-        try {
-            const uploadedUrls: string[] = [];
-            for (const file of fakeReviewImages) {
-                const options = { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true };
-                const compressedFile = await imageCompression(file, options);
-                const url = await uploadFileToR2(compressedFile, "reviews", addingReviewForProduct);
-                uploadedUrls.push(url);
-            }
-            const reviewId = crypto.randomUUID();
-            await setDoc(doc(db, "reviews", reviewId), {
-                id: reviewId,
-                productId: addingReviewForProduct,
-                userId: null,
-                userName: fakeReviewForm.userName || "Verified Buyer",
-                rating: fakeReviewForm.rating,
-                comment: fakeReviewForm.comment,
-                images: uploadedUrls,
-                createdAt: Date.now(),
-                isFake: true
-            });
-            setAddingReviewForProduct(null);
-            setFakeReviewForm({ userName: "", rating: 5, comment: "" });
-            setFakeReviewImages([]);
-            alert("Review added successfully!");
-        } catch (err) {
-            console.error(err);
-            alert("Failed to add review.");
-        } finally {
-            setFakeReviewUploading(false);
         }
     };
 
@@ -948,90 +906,6 @@ export default function AdminProducts() {
     // =========================================================================
     return (
         <div className="animate-fade-in" style={{ position: "relative" }}>
-            {/* Fake review modal */}
-            {addingReviewForProduct && (
-                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-                    <div className="admin-card" style={{ width: "100%", maxWidth: "480px", maxHeight: "90vh", overflowY: "auto", margin: 0, padding: "24px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-                            <h3 style={{ fontSize: "1.2rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>Add Seed Review</h3>
-                            <button
-                                type="button"
-                                onClick={() => setAddingReviewForProduct(null)}
-                                style={{ fontSize: "1.5rem", color: "var(--text-secondary)", lineHeight: 1 }}
-                            >
-                                &times;
-                            </button>
-                        </div>
-                        <form onSubmit={handleFakeReviewSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
-                                <label>Reviewer Name</label>
-                                <input
-                                    type="text"
-                                    className="admin-form-input"
-                                    value={fakeReviewForm.userName}
-                                    onChange={(e) => setFakeReviewForm({ ...fakeReviewForm, userName: e.target.value })}
-                                    placeholder="e.g. John Doe"
-                                    required
-                                />
-                            </div>
-                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
-                                <label>Rating (1 to 5 Stars)</label>
-                                <select
-                                    className="admin-form-select"
-                                    value={fakeReviewForm.rating}
-                                    onChange={(e) => setFakeReviewForm({ ...fakeReviewForm, rating: Number(e.target.value) })}
-                                >
-                                    <option value={5}>★★★★★ (5 Stars)</option>
-                                    <option value={4}>★★★★☆ (4 Stars)</option>
-                                    <option value={3}>★★★☆☆ (3 Stars)</option>
-                                    <option value={2}>★★☆☆☆ (2 Stars)</option>
-                                    <option value={1}>★☆☆☆☆ (1 Star)</option>
-                                </select>
-                            </div>
-                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
-                                <label>Comment</label>
-                                <textarea
-                                    className="admin-form-textarea"
-                                    rows={3}
-                                    value={fakeReviewForm.comment}
-                                    onChange={(e) => setFakeReviewForm({ ...fakeReviewForm, comment: e.target.value })}
-                                    placeholder="Customer feedback on quality, sizing, and shipping..."
-                                    required
-                                />
-                            </div>
-                            <div className="admin-form-group" style={{ marginBottom: 0 }}>
-                                <label>Review Photos (Optional)</label>
-                                <input
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    onChange={(e) => setFakeReviewImages(Array.from(e.target.files || []))}
-                                    className="admin-form-input"
-                                    style={{ padding: "8px" }}
-                                />
-                            </div>
-                            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
-                                <button
-                                    type="button"
-                                    onClick={() => setAddingReviewForProduct(null)}
-                                    className="admin-btn admin-btn-secondary admin-btn-sm"
-                                    disabled={fakeReviewUploading}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="admin-btn admin-btn-primary admin-btn-sm"
-                                    disabled={fakeReviewUploading}
-                                >
-                                    {fakeReviewUploading ? "Uploading..." : "Publish Review"}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
             <AdminPageHeader
                 title="Product Catalog"
                 subtitle={`Manage your store inventory (${products.length} total products)`}

@@ -175,15 +175,15 @@ function AdminReviewsPage() {
             const dateOffset = (i * 2) % 60;
             const reviewDate = new Date(Date.now() - dateOffset * 86400000).toISOString().split("T")[0];
             return {
-                externalReviewId: `bv-offline-rev-${String(i + 1).padStart(3, "0")}`,
-                reviewerDisplayName: name,
+                externalReviewId: `bv-simulated-rev-${String(i + 1).padStart(3, "0")}`,
+                reviewerDisplayName: `[Simulation] ${name}`,
                 rating: ratingsDistribution[i],
-                title: ratingsDistribution[i] >= 4 ? "Excellent Quality & Fit" : "Decent Fabric",
-                body: sampleComments[i % sampleComments.length],
+                title: ratingsDistribution[i] >= 4 ? "Simulated: Excellent Quality & Fit" : "Simulated: Decent Fabric",
+                body: `[SIMULATED DEMO REVIEW — NOT FOR PUBLIC DISPLAY] ${sampleComments[i % sampleComments.length]}`,
                 reviewedAt: reviewDate,
-                source: "offline-customer-feedback",
-                sourceReference: `STORE-RECEIPT-${1000 + i}`,
-                customerConsentConfirmed: true,
+                source: "simulated-test",
+                sourceReference: `DEMO-SIMULATION-REC-${1000 + i}`,
+                customerConsentConfirmed: false,
             };
         });
 
@@ -671,9 +671,9 @@ function AdminReviewsPage() {
                                     type="button"
                                     onClick={handleLoadSample38}
                                     className="admin-btn admin-btn-secondary admin-btn-sm"
-                                    title="Load 38 authentic sample reviews for demonstration"
+                                    title="Load 38 simulated demo reviews for preview testing only (publication strictly blocked)"
                                 >
-                                    Load Sample Batch (38 Reviews)
+                                    Load Simulation Preview (38 Reviews)
                                 </button>
                                 <button
                                     type="button"

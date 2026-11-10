@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase/config";
 import { useAuth } from "@/context/AuthContext";
 import imageCompression from "browser-image-compression";
 import AuthModal from "./AuthModal";
@@ -35,8 +33,14 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
     const [reviews, setReviews] = useState<Review[]>([]);
     const [loading, setLoading] = useState(true);
     const [isEligible, setIsEligible] = useState(false);
+    const [alreadyReviewed, setAlreadyReviewed] = useState(false);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [showReviewForm, setShowReviewForm] = useState(false);
+    const [apiStats, setApiStats] = useState<{ count: number; avg: string; dist: Record<number, number> }>({
+        count: 0,
+        avg: "0.0",
+        dist: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+    });
 
     // Form state
     const [rating, setRating] = useState(5);
@@ -46,24 +50,46 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Fetch reviews in real-time
-    useEffect(() => {
-        const q = query(
-            collection(db, "reviews"),
-            where("productId", "==", productId)
-        );
-        const unsub = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Review[];
-            data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            setReviews(data);
-            setLoading(false);
-        }, (err) => {
+    // Fetch reviews from server-authoritative API
+    const fetchReviews = useCallback(async () => {
+        try {
+            setLoading(true);
+            const res = await fetch(`/api/reviews?productId=${encodeURIComponent(productId)}&limit=10`);
+            if (res.ok) {
+                const data = await res.json();
+                const loaded: Review[] = (data.reviews || []).map((r: any) => ({
+                    id: r.id,
+                    productId: r.productId,
+                    userId: null,
+                    userName: r.userName || "Customer",
+                    rating: r.rating,
+                    title: r.title || null,
+                    comment: r.comment,
+                    images: r.images || [],
+                    createdAt: r.createdAt,
+                    verifiedPurchase: r.verifiedPurchase === true,
+                    publicationStatus: "published",
+                    sourceType: r.sourceType,
+                }));
+                setReviews(loaded);
+                if (data.stats) {
+                    setApiStats({
+                        count: data.stats.reviewCount || 0,
+                        avg: Number(data.stats.averageRating || 0).toFixed(1),
+                        dist: data.stats.ratingDistribution || { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },
+                    });
+                }
+            }
+        } catch (err) {
             console.error("Failed to load reviews:", err);
+        } finally {
             setLoading(false);
-        });
-
-        return () => unsub();
+        }
     }, [productId]);
+
+    useEffect(() => {
+        fetchReviews();
+    }, [fetchReviews]);
 
     // Check review submission eligibility via server route
     useEffect(() => {
@@ -71,6 +97,7 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
         async function checkEligibility() {
             if (!user) {
                 setIsEligible(false);
+                setAlreadyReviewed(false);
                 return;
             }
             try {
@@ -82,13 +109,22 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
                 });
                 if (res.ok) {
                     const data = await res.json();
-                    if (isMounted) setIsEligible(Boolean(data.eligible));
+                    if (isMounted) {
+                        setIsEligible(Boolean(data.eligible));
+                        setAlreadyReviewed(Boolean(data.alreadyReviewed));
+                    }
                 } else {
-                    if (isMounted) setIsEligible(false);
+                    if (isMounted) {
+                        setIsEligible(false);
+                        setAlreadyReviewed(false);
+                    }
                 }
             } catch (err) {
                 console.error("Eligibility check failed:", err);
-                if (isMounted) setIsEligible(false);
+                if (isMounted) {
+                    setIsEligible(false);
+                    setAlreadyReviewed(false);
+                }
             }
         }
 
@@ -119,7 +155,6 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
         if (!user) return;
 
         // Check if user already reviewed
-        const alreadyReviewed = reviews.some(r => r.userId === user.uid);
         if (alreadyReviewed) {
             setError("You have already reviewed this product.");
             return;
@@ -198,6 +233,9 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
             setComment("");
             setImageFiles([]);
             setFilePreviews([]);
+            setAlreadyReviewed(true);
+            setIsEligible(false);
+            await fetchReviews();
         } catch (err: any) {
             console.error(err);
             setError(err.message || "Failed to submit review.");
@@ -206,32 +244,25 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
         }
     };
 
-    // Filter strictly for published genuine customer reviews
-    const publishedReviews = useMemo(() => {
-        return reviews.filter(r => {
-            if (r.editorialNote === true) return false;
-            if (r.sourceType === "simulated-test") return false;
-            if (r.isFake === true && r.publicationStatus !== "published") return false;
-            return r.publicationStatus === "published" || (!r.publicationStatus && r.isFake !== true);
-        });
-    }, [reviews]);
-
     // Calculate rating stats
     const stats = useMemo(() => {
-        const count = publishedReviews.length;
-        const sum = publishedReviews.reduce((acc, r) => acc + (r.rating || 0), 0);
+        if (apiStats.count > 0 || reviews.length === 0) {
+            return apiStats;
+        }
+        const count = reviews.length;
+        const sum = reviews.reduce((acc, r) => acc + (r.rating || 0), 0);
         const avg = count > 0 ? (sum / count).toFixed(1) : "0.0";
 
         const dist: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-        for (const r of publishedReviews) {
+        for (const r of reviews) {
             const s = Math.round(r.rating);
             if (s >= 1 && s <= 5) dist[s]++;
         }
         return { count, avg, dist };
-    }, [publishedReviews]);
+    }, [apiStats, reviews]);
 
     // Selection of recent 4 reviews
-    const displayedReviews = publishedReviews.slice(0, 4);
+    const displayedReviews = reviews.slice(0, 4);
 
     return (
         <div className="pr-container" style={{ marginTop: '48px', paddingTop: '32px', borderTop: '1px solid var(--border-color)' }}>
@@ -258,6 +289,7 @@ export default function ProductReviews({ productId, productSlug }: ProductReview
                     <button
                         onClick={() => {
                             if (!user) setIsAuthModalOpen(true);
+                            else if (alreadyReviewed) setError("You have already reviewed this product.");
                             else if (!isEligible) setError("You must purchase and receive this product before reviewing.");
                             else { setShowReviewForm(true); setError(null); }
                         }}

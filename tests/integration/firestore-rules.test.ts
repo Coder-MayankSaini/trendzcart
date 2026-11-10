@@ -124,6 +124,22 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
                 createdAt: Date.now(),
             });
 
+            // 6b. Review Import Batches
+            await setDoc(doc(db, "reviewImportBatches", "batch_test_022"), {
+                batchId: "batch_test_022",
+                productId: "prod_visible",
+                productName: "Visible Product",
+                adminUid: "admin_uid",
+                createdAt: Date.now(),
+                totalSubmitted: 38,
+                validEntries: 38,
+                rejectedEntries: 0,
+                publishedEntries: 38,
+                duplicateEntries: 0,
+                status: "published",
+                errorSummary: [],
+            });
+
             // 7. Internal Collections
             await setDoc(doc(db, "paymentRecords", "pay_100"), {
                 paymentId: "pay_100",
@@ -401,13 +417,13 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
         );
     });
 
-    // RULE-015 — Review Submission Authorization & Client SDK Bypass Prevention (TASK A)
-    it("RULE-015: Review Authorization — customer cannot directly create or modify reviews via client SDK; admin can moderate", async () => {
+    // RULE-015 — Review Collection Privacy & Server-Authoritative Boundary (TASK 022 Hardened)
+    it("RULE-015: Review Privacy — anonymous and regular customers CANNOT read reviews directly via client SDK; direct client writes denied", async () => {
         const custADb = testEnv.authenticatedContext("cust_a").firestore();
         const adminDb = testEnv.authenticatedContext("admin_uid", { admin: true }).firestore();
         const unauthDb = testEnv.unauthenticatedContext().firestore();
 
-        // Customer attempting direct client SDK review creation FAILS (remediates REVIEW-BYPASS)
+        // 1. Customer attempting direct client SDK review creation FAILS (must use /api/reviews/submit)
         await assertFails(
             setDoc(doc(custADb, "reviews", "rev_cust_a"), {
                 id: "rev_cust_a",
@@ -421,7 +437,7 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
             })
         );
 
-        // Customer cannot submit fake review directly
+        // 2. Customer cannot submit fake review directly
         await assertFails(
             setDoc(doc(custADb, "reviews", "rev_fake_attempt"), {
                 id: "rev_fake_attempt",
@@ -434,25 +450,35 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
             })
         );
 
-        // Customer cannot modify existing reviews directly
+        // 3. Customer cannot modify existing reviews directly
         await assertFails(
             updateDoc(doc(custADb, "reviews", "rev_existing"), {
                 comment: "Tampered review",
             })
         );
 
-        // Customer cannot delete reviews directly
+        // 4. Customer cannot delete reviews directly
         await assertFails(
             deleteDoc(doc(custADb, "reviews", "rev_existing"))
         );
 
-        // Public unauthenticated read of reviews succeeds
-        await assertSucceeds(
+        // 5. Unauthenticated client direct read FAILS (prevents leakage of unpublished reviews and private metadata)
+        await assertFails(
             getDoc(doc(unauthDb, "reviews", "rev_existing"))
         );
 
-        // Verified admin can create and moderate reviews
+        // 6. Regular customer direct read FAILS (must read via /api/reviews)
+        await assertFails(
+            getDoc(doc(custADb, "reviews", "rev_existing"))
+        );
+
+        // 7. Verified administrator can inspect reviews
         await assertSucceeds(
+            getDoc(doc(adminDb, "reviews", "rev_existing"))
+        );
+
+        // 8. Direct client SDK writes by administrator FAIL (all moderation must pass through server APIs)
+        await assertFails(
             setDoc(doc(adminDb, "reviews", "rev_admin_moderated"), {
                 id: "rev_admin_moderated",
                 productId: "prod_visible",
@@ -466,8 +492,8 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
         );
     });
 
-    // RULE-015B — Review Import Batches Audit Logs (TASK 022)
-    it("RULE-015B: Review Import Batches — audit logs restricted to admin only (TASK 022)", async () => {
+    // RULE-015B — Review Import Batches Audit Logs (TASK 022 Hardened)
+    it("RULE-015B: Review Import Batches — audit records are read-only for admin; client SDK writes strictly prohibited (TASK 022)", async () => {
         const custADb = testEnv.authenticatedContext("cust_a").firestore();
         const adminDb = testEnv.authenticatedContext("admin_uid", { admin: true }).firestore();
         const unauthDb = testEnv.unauthenticatedContext().firestore();
@@ -488,17 +514,21 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
             errorSummary: [],
         };
 
-        // Unauthenticated access fails
+        // 1. Unauthenticated access fails completely
         await assertFails(getDoc(doc(unauthDb, "reviewImportBatches", testBatchId)));
         await assertFails(setDoc(doc(unauthDb, "reviewImportBatches", testBatchId), sampleBatchData));
 
-        // Authenticated customer access fails
+        // 2. Authenticated customer access fails completely
         await assertFails(getDoc(doc(custADb, "reviewImportBatches", testBatchId)));
         await assertFails(setDoc(doc(custADb, "reviewImportBatches", testBatchId), sampleBatchData));
 
-        // Verified administrator access succeeds
-        await assertSucceeds(setDoc(doc(adminDb, "reviewImportBatches", testBatchId), sampleBatchData));
+        // 3. Verified administrator can READ audit log
         await assertSucceeds(getDoc(doc(adminDb, "reviewImportBatches", testBatchId)));
+
+        // 4. Direct client SDK writes/updates/deletions by admin FAIL to prevent audit record tampering
+        await assertFails(setDoc(doc(adminDb, "reviewImportBatches", "batch_new_attempt"), sampleBatchData));
+        await assertFails(updateDoc(doc(adminDb, "reviewImportBatches", testBatchId), { status: "tampered" }));
+        await assertFails(deleteDoc(doc(adminDb, "reviewImportBatches", testBatchId)));
     });
 
     // RULE-016 — Payment Records

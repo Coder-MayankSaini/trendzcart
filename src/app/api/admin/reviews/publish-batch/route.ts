@@ -78,11 +78,18 @@ export async function POST(req: NextRequest) {
             maxBatchSize: 200,
         });
 
-        const eligibleEntries = validation.entries.filter((e) => e.eligibleForPublication);
+        const eligibleEntries = validation.entries.filter(
+            (e) => e.eligibleForPublication && e.source !== "simulated-test" && !e.isSimulation
+        );
         if (eligibleEntries.length === 0) {
+            const hasSimulations = validation.entries.some((e) => e.source === "simulated-test" || e.isSimulation);
+            const errorMessage = hasSimulations
+                ? "Simulated demonstration reviews cannot be published to the live customer database. All simulation test items are strictly isolated for demonstration preview."
+                : "No eligible reviews found for publication. Verify that ratings are valid (1-5), externalReviewIds are unique, and customerConsentConfirmed is true.";
+
             return NextResponse.json(
                 {
-                    error: "No eligible reviews found for publication. Verify that ratings are valid (1-5), externalReviewIds are unique, and customerConsentConfirmed is true.",
+                    error: errorMessage,
                     validationSummary: {
                         totalSubmitted: validation.totalSubmitted,
                         validCount: validation.validCount,
@@ -104,8 +111,14 @@ export async function POST(req: NextRequest) {
         const storedReviewsToReturn: any[] = [];
 
         for (const entry of eligibleEntries) {
+            // Absolute server-side safeguard against simulation insertion
+            if (entry.source === "simulated-test" || entry.isSimulation) {
+                continue;
+            }
+
             const reviewId = crypto.randomUUID();
             const reviewRef = adminDb.collection("reviews").doc(reviewId);
+            const isEditorial = entry.source === "editorial";
 
             // Construct authoritative stored review document
             const reviewDoc: StoredReview = {
@@ -125,7 +138,7 @@ export async function POST(req: NextRequest) {
                 sourceReference: entry.sourceReference || null,
                 externalReviewId: entry.externalReviewId,
                 customerConsentConfirmed: true,
-                editorialNote: false,
+                editorialNote: isEditorial,
                 publishedAt: importTimestamp,
                 importedAt: importTimestamp,
                 importedBy: adminUid,
