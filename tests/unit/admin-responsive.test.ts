@@ -7,6 +7,7 @@ describe("Admin Responsive Design System & Navigation Unit Tests (TASK 021)", ()
         const expectedRoutes = [
             "/admin/dashboard",
             "/admin/products",
+            "/admin/reviews",
             "/admin/categories",
             "/admin/orders",
             "/admin/coupons",
@@ -19,7 +20,7 @@ describe("Admin Responsive Design System & Navigation Unit Tests (TASK 021)", ()
     it("ADMIN-NAV-002: each navigation item must export valid label and icon identifier", () => {
         for (const item of ADMIN_NAV_ITEMS) {
             assert.ok(item.label && item.label.length > 0, `Missing label for route ${item.href}`);
-            assert.ok(["dashboard", "products", "categories", "orders", "coupons"].includes(item.icon), `Invalid icon identifier for ${item.label}`);
+            assert.ok(["dashboard", "products", "reviews", "categories", "orders", "coupons"].includes(item.icon), `Invalid icon identifier for ${item.label}`);
         }
     });
 
