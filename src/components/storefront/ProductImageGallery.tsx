@@ -65,7 +65,7 @@ export default function ProductImageGallery({ images, productName }: ProductImag
                     priority
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 55vw, 650px"
                     className="pig-main-img"
-                    style={{ objectFit: "cover" }}
+                    style={{ width: "100%", height: "auto", objectFit: "cover" }}
                     unoptimized={mainImgSrc.startsWith("data:")}
                     onError={() => {
                         setFailedImages(prev => ({ ...prev, [safeIndex]: true }));

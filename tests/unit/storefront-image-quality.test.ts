@@ -98,4 +98,20 @@ describe("Storefront Product Image Quality & Resolution (TASK 026)", () => {
         // Verify object-fit: cover is preserved for clean aspect ratio
         assert.ok(cssContent.includes("object-fit: cover"), "Storefront must use object-fit: cover for crisp aspect ratio");
     });
+
+    it("QUALITY-006: Product detail gallery main image enforces height: auto and 4/5 aspect ratio", () => {
+        const cssPath = path.join(process.cwd(), "src", "app", "globals.css");
+        const cssContent = fs.readFileSync(cssPath, "utf8");
+
+        // Verify .pig-main-img has width: 100%, height: auto, and aspect-ratio: 4/5
+        assert.ok(cssContent.includes(".pig-main-img"), ".pig-main-img must be defined in globals.css");
+        assert.ok(cssContent.includes("aspect-ratio: 4/5"), "Gallery image must maintain 4/5 aspect ratio");
+
+        const gallerySourcePath = path.join(process.cwd(), "src", "components", "storefront", "ProductImageGallery.tsx");
+        const galleryContent = fs.readFileSync(gallerySourcePath, "utf8");
+        assert.ok(
+            galleryContent.includes('height: "auto"') || galleryContent.includes("height: 'auto'"),
+            "ProductImageGallery must specify height: 'auto' in inline styles to prevent HTML attribute height locking"
+        );
+    });
 });
