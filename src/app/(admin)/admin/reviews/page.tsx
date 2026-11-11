@@ -14,6 +14,10 @@ import type {
     StoredReview,
     ProductReviewStats,
 } from "@/lib/reviews/types";
+import {
+    generateReviewJsonTemplate,
+    generateReviewAiPrompt,
+} from "@/lib/reviews/promptGenerator";
 
 interface ProductOption {
     id: string;
@@ -23,6 +27,12 @@ interface ProductOption {
     reviewCount?: number;
     averageRating?: number;
     inventory?: number;
+    description?: string;
+    category?: string;
+    slug?: string;
+    tags?: string[];
+    sizes?: string[];
+    colors?: Array<{ name: string; hex?: string }>;
 }
 
 export default function AdminReviewsPageWrapper() {
@@ -40,6 +50,12 @@ function AdminReviewsPage() {
     const [products, setProducts] = useState<ProductOption[]>([]);
     const [selectedProductId, setSelectedProductId] = useState<string>(initialProductId);
     const [activeTab, setActiveTab] = useState<"import" | "manage">("import");
+
+    // TASK 032: Generator and Product Search State
+    const [reviewCount, setReviewCount] = useState<number>(5);
+    const [productSearch, setProductSearch] = useState<string>("");
+    const [copiedType, setCopiedType] = useState<"template" | "prompt" | "id" | null>(null);
+    const [showPromptModal, setShowPromptModal] = useState<boolean>(false);
 
     // Import State
     const [importMode, setImportMode] = useState<"paste" | "upload">("paste");
@@ -115,6 +131,93 @@ function AdminReviewsPage() {
     const selectedProduct = useMemo(() => {
         return products.find((p) => p.id === selectedProductId) || null;
     }, [products, selectedProductId]);
+
+    // TASK 032: Filtered products for search-enabled selector
+    const filteredProducts = useMemo(() => {
+        if (!productSearch.trim()) return products;
+        const q = productSearch.trim().toLowerCase();
+        return products.filter((p) => {
+            const matchName = (p.name || "").toLowerCase().includes(q);
+            const matchId = (p.id || "").toLowerCase().includes(q);
+            const matchCategory = (p.category || "").toLowerCase().includes(q);
+            return matchName || matchId || matchCategory;
+        });
+    }, [products, productSearch]);
+
+    // Update product selection and keep URL query parameter in sync
+    const handleSelectProduct = (newId: string) => {
+        setSelectedProductId(newId);
+        if (typeof window !== "undefined") {
+            const url = new URL(window.location.href);
+            url.searchParams.set("productId", newId);
+            window.history.replaceState(null, "", url.toString());
+        }
+    };
+
+    // TASK 032: Clipboard and generator handlers
+    const handleCopy = async (text: string, type: "template" | "prompt" | "id") => {
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+            }
+            setCopiedType(type);
+            setTimeout(() => setCopiedType(null), 2500);
+        } catch (err) {
+            console.error("Failed to copy:", err);
+        }
+    };
+
+    const handleCopyJsonTemplate = () => {
+        if (!selectedProductId) return;
+        const template = generateReviewJsonTemplate(
+            selectedProductId,
+            selectedProduct?.name || "Product",
+            reviewCount
+        );
+        const jsonStr = JSON.stringify(template, null, 2);
+        handleCopy(jsonStr, "template");
+    };
+
+    const handleLoadTemplateIntoEditor = () => {
+        if (!selectedProductId) return;
+        const template = generateReviewJsonTemplate(
+            selectedProductId,
+            selectedProduct?.name || "Product",
+            reviewCount
+        );
+        setJsonInput(JSON.stringify(template, null, 2));
+        setImportMode("paste");
+        setValidationResult(null);
+        setPublishError(null);
+        setPublishSuccess(null);
+    };
+
+    const currentAiPrompt = useMemo(() => {
+        if (!selectedProductId) return "";
+        return generateReviewAiPrompt({
+            productId: selectedProductId,
+            productName: selectedProduct?.name || "Product",
+            productDescription: selectedProduct?.description,
+            price: selectedProduct?.price,
+            category: selectedProduct?.category,
+            tags: selectedProduct?.tags,
+            sizes: selectedProduct?.sizes,
+            colors: selectedProduct?.colors,
+            count: reviewCount,
+        });
+    }, [selectedProductId, selectedProduct, reviewCount]);
+
+    const handleCopyAiPrompt = () => {
+        if (!currentAiPrompt) return;
+        handleCopy(currentAiPrompt, "prompt");
+    };
 
     // Calculate live KPIs for the selected product
     const stats = useMemo(() => {
@@ -292,9 +395,15 @@ function AdminReviewsPage() {
             return;
         }
 
+        // TASK 032: Enforce target product matching without silent override
+        if (parsed.productId && parsed.productId !== selectedProductId) {
+            setPublishError(
+                `Product ID mismatch: JSON contains productId "${parsed.productId}", but you have selected "${selectedProductId}". All reviews must refer to the selected product.`
+            );
+            return;
+        }
+
         if (!parsed.productId) {
-            parsed.productId = selectedProductId;
-        } else if (parsed.productId !== selectedProductId) {
             parsed.productId = selectedProductId;
         }
 
@@ -305,7 +414,7 @@ function AdminReviewsPage() {
         try {
             const user = auth.currentUser;
             const idToken = user ? await user.getIdToken() : "";
-            const res = await fetch("/api/admin/reviews/validate", {
+            const res = await fetch(`/api/admin/reviews/validate?productId=${encodeURIComponent(selectedProductId)}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -554,37 +663,98 @@ function AdminReviewsPage() {
 
             {/* PRODUCT SELECTOR & SUMMARY CARD */}
             <div className="admin-card" style={{ marginBottom: "24px" }}>
-                <div style={{ display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap", marginBottom: "20px" }}>
-                    <div style={{ flex: 1, minWidth: "260px" }}>
-                        <label htmlFor="product-select" style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "6px" }}>
-                            Select Product to Manage Reviews:
-                        </label>
+                <div style={{ display: "flex", gap: "16px", alignItems: "flex-start", flexWrap: "wrap", marginBottom: "20px" }}>
+                    {/* Search & Selector */}
+                    <div style={{ flex: 1, minWidth: "280px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                            <label htmlFor="product-search" style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-secondary)" }}>
+                                Select Product:
+                            </label>
+                            {products.length > 0 && (
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                    {filteredProducts.length} of {products.length} products
+                                </span>
+                            )}
+                        </div>
+
+                        {/* Search Input */}
+                        <div style={{ position: "relative", marginBottom: "8px" }}>
+                            <input
+                                id="product-search"
+                                type="text"
+                                className="admin-form-input"
+                                placeholder="Search products by name, category, or ID..."
+                                value={productSearch}
+                                onChange={(e) => setProductSearch(e.target.value)}
+                                style={{ paddingRight: productSearch ? "32px" : "12px", width: "100%", fontSize: "0.85rem" }}
+                            />
+                            {productSearch && (
+                                <button
+                                    type="button"
+                                    onClick={() => setProductSearch("")}
+                                    style={{ position: "absolute", right: "8px", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: "0.9rem", padding: "4px" }}
+                                    title="Clear search"
+                                >
+                                    ✕
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Product Dropdown */}
                         <select
                             id="product-select"
                             className="admin-form-select"
                             value={selectedProductId}
-                            onChange={(e) => setSelectedProductId(e.target.value)}
+                            onChange={(e) => handleSelectProduct(e.target.value)}
+                            style={{ width: "100%", fontSize: "0.88rem" }}
                         >
-                            {products.map((p) => (
+                            {filteredProducts.map((p) => (
                                 <option key={p.id} value={p.id}>
                                     {p.name} (₹{p.price})
                                 </option>
                             ))}
+                            {filteredProducts.length === 0 && (
+                                <option disabled value="">
+                                    No products matching &quot;{productSearch}&quot;
+                                </option>
+                            )}
                         </select>
                     </div>
 
+                    {/* Selected Product Context Card */}
                     {selectedProduct && (
-                        <div style={{ display: "flex", gap: "12px", alignItems: "center", backgroundColor: "var(--bg-secondary)", padding: "10px 16px", borderRadius: "12px", border: "1px solid var(--border-color)" }}>
-                            <div style={{ width: "48px", height: "48px", borderRadius: "8px", overflow: "hidden", backgroundColor: "var(--bg-primary)", flexShrink: 0 }}>
+                        <div style={{ flex: 1, minWidth: "280px", display: "flex", gap: "14px", alignItems: "center", backgroundColor: "var(--bg-secondary)", padding: "12px 16px", borderRadius: "12px", border: "1px solid var(--border-color)" }}>
+                            <div style={{ width: "56px", height: "56px", borderRadius: "10px", overflow: "hidden", backgroundColor: "var(--bg-primary)", flexShrink: 0, border: "1px solid var(--border-color)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                                 {selectedProduct.images?.[0] ? (
                                     <img src={selectedProduct.images[0]} alt={selectedProduct.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                                 ) : (
-                                    <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", color: "var(--text-secondary)" }}>No img</div>
+                                    <div style={{ fontSize: "0.7rem", color: "var(--text-secondary)" }}>No img</div>
                                 )}
                             </div>
-                            <div>
-                                <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-primary)" }}>{selectedProduct.name}</div>
-                                <div style={{ fontSize: "0.8rem", color: "var(--accent)", fontWeight: 700 }}>₹{selectedProduct.price}</div>
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={selectedProduct.name}>
+                                    {selectedProduct.name}
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginTop: "3px" }}>
+                                    <span style={{ fontSize: "0.85rem", color: "var(--accent)", fontWeight: 700 }}>₹{selectedProduct.price}</span>
+                                    {selectedProduct.category && (
+                                        <AdminBadge variant="neutral">{selectedProduct.category}</AdminBadge>
+                                    )}
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
+                                    <code style={{ fontSize: "0.72rem", backgroundColor: "var(--bg-primary)", padding: "2px 6px", borderRadius: "4px", color: "var(--text-secondary)", border: "1px solid var(--border-color)" }} title={selectedProduct.id}>
+                                        ID: {selectedProduct.id.length > 22 ? selectedProduct.id.slice(0, 20) + "..." : selectedProduct.id}
+                                    </code>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleCopy(selectedProduct.id, "id")}
+                                        className="admin-btn admin-btn-sm"
+                                        style={{ padding: "2px 6px", fontSize: "0.7rem", height: "auto", minHeight: "unset" }}
+                                        title="Copy authoritative product ID"
+                                    >
+                                        {copiedType === "id" ? "Copied! ✓" : "Copy ID"}
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -646,6 +816,102 @@ function AdminReviewsPage() {
             {/* TAB 1: BULK JSON IMPORTER */}
             {activeTab === "import" && (
                 <div>
+                    {/* TASK 032: PRODUCT-SPECIFIC REVIEW JSON & AI PROMPT GENERATOR */}
+                    <div className="admin-card" style={{ marginBottom: "20px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-secondary)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "14px", marginBottom: "16px" }}>
+                            <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--text-primary)", margin: 0 }}>
+                                        ⚡ Product-Specific Review JSON & AI Prompt Generator
+                                    </h3>
+                                    <AdminBadge variant="visible">TASK 032</AdminBadge>
+                                </div>
+                                <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: "4px 0 0 0", maxWidth: "600px" }}>
+                                    Generate authentic formatting prompts and import templates populated with the selected product&apos;s real document ID (<code>{selectedProductId}</code>).
+                                </p>
+                            </div>
+
+                            {/* Configurable Review Count */}
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", backgroundColor: "var(--bg-primary)", padding: "8px 12px", borderRadius: "10px", border: "1px solid var(--border-color)" }}>
+                                <label htmlFor="review-count-input" style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-secondary)" }}>
+                                    Number of Review Entries:
+                                </label>
+                                <input
+                                    id="review-count-input"
+                                    type="number"
+                                    min={1}
+                                    max={50}
+                                    value={reviewCount}
+                                    onChange={(e) => {
+                                        const v = parseInt(e.target.value, 10);
+                                        if (isNaN(v)) setReviewCount(1);
+                                        else setReviewCount(Math.max(1, Math.min(50, v)));
+                                    }}
+                                    className="admin-form-input"
+                                    style={{ width: "68px", textAlign: "center", fontWeight: 800, padding: "6px" }}
+                                />
+                                <div style={{ display: "flex", gap: "4px" }}>
+                                    {[1, 3, 5, 10, 20].map((c) => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setReviewCount(c)}
+                                            className={`admin-filter-pill ${reviewCount === c ? "active" : ""}`}
+                                            style={{ padding: "4px 8px", fontSize: "0.75rem", minHeight: "unset" }}
+                                        >
+                                            {c}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Action Buttons Row */}
+                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+                            <button
+                                type="button"
+                                onClick={handleCopyJsonTemplate}
+                                className="admin-btn admin-btn-secondary"
+                                style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", fontWeight: 700 }}
+                                title={`Copy ${reviewCount}-entry JSON template populated with target product ID`}
+                            >
+                                <span>📋</span>
+                                {copiedType === "template" ? "✓ JSON Template Copied!" : `Copy JSON Template (${reviewCount})`}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleCopyAiPrompt}
+                                className="admin-btn admin-btn-primary"
+                                style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", fontWeight: 700 }}
+                                title="Copy AI prompt containing product title, factual description, and JSON schema"
+                            >
+                                <span>✨</span>
+                                {copiedType === "prompt" ? "✓ AI Prompt Copied!" : `Copy AI Prompt (${reviewCount} Entries)`}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowPromptModal(true)}
+                                className="admin-btn admin-btn-secondary"
+                                style={{ fontSize: "0.85rem" }}
+                                title="Inspect the generated AI formatting prompt before copying"
+                            >
+                                👁 View Prompt
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={handleLoadTemplateIntoEditor}
+                                className="admin-btn admin-btn-secondary"
+                                style={{ fontSize: "0.85rem" }}
+                                title="Directly load the JSON template into the editor area below"
+                            >
+                                📝 Load into Editor
+                            </button>
+                        </div>
+                    </div>
+
                     {/* Input Controls Card */}
                     <div className="admin-card" style={{ marginBottom: "24px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "16px" }}>
@@ -906,6 +1172,10 @@ function AdminReviewsPage() {
                                                     {entry.eligibleForPublication ? (
                                                         <span style={{ fontSize: "0.72rem", padding: "3px 8px", borderRadius: "6px", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontWeight: 700 }}>
                                                             ✓ Eligible
+                                                        </span>
+                                                    ) : entry.isTemplatePlaceholder ? (
+                                                        <span style={{ fontSize: "0.72rem", padding: "3px 8px", borderRadius: "6px", backgroundColor: "rgba(245, 158, 11, 0.15)", color: "#b45309", fontWeight: 700 }}>
+                                                            Template Placeholder
                                                         </span>
                                                     ) : entry.isSimulation ? (
                                                         <span style={{ fontSize: "0.72rem", padding: "3px 8px", borderRadius: "6px", backgroundColor: "rgba(100, 116, 139, 0.15)", color: "#475569", fontWeight: 700 }}>
@@ -1241,6 +1511,64 @@ function AdminReviewsPage() {
                             >
                                 Close
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TASK 032: AI FORMATTING PROMPT PREVIEW MODAL */}
+            {showPromptModal && (
+                <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+                    <div className="admin-card animate-fade-in" style={{ maxWidth: "760px", width: "100%", maxHeight: "90vh", display: "flex", flexDirection: "column", padding: "24px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", borderBottom: "1px solid var(--border-color)", paddingBottom: "12px" }}>
+                            <div>
+                                <h3 style={{ fontSize: "1.15rem", fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                                    <span>✨</span> AI Review Formatting Prompt
+                                </h3>
+                                <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "4px 0 0 0" }}>
+                                    Pre-populated with {selectedProduct?.name || "Product"} (ID: <code>{selectedProductId}</code>) · Capacity: {reviewCount} {reviewCount === 1 ? "entry" : "entries"}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowPromptModal(false)}
+                                style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: "var(--text-secondary)" }}
+                                title="Close modal"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div style={{ flex: 1, overflowY: "auto", marginBottom: "16px" }}>
+                            <textarea
+                                readOnly
+                                rows={16}
+                                className="admin-form-textarea"
+                                value={currentAiPrompt}
+                                style={{ fontFamily: "monospace", fontSize: "0.8rem", lineHeight: 1.45, width: "100%", resize: "vertical" }}
+                            />
+                        </div>
+
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                            <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                                Paste into ChatGPT, Claude, Gemini, or any LLM alongside your genuine customer feedback.
+                            </span>
+                            <div style={{ display: "flex", gap: "8px" }}>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPromptModal(false)}
+                                    className="admin-btn admin-btn-secondary admin-btn-sm"
+                                >
+                                    Close
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleCopyAiPrompt}
+                                    className="admin-btn admin-btn-primary admin-btn-sm"
+                                >
+                                    {copiedType === "prompt" ? "✓ Prompt Copied!" : "Copy AI Prompt"}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

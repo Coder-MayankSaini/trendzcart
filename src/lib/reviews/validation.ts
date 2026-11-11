@@ -50,13 +50,53 @@ export function containsHtmlOrScript(text: string): boolean {
 }
 
 /**
+ * Detects whether a review payload entry is an unedited template placeholder.
+ * Protects against accidental or simulated placeholder publication.
+ */
+export function isTemplatePlaceholderReview(item: any): boolean {
+    if (!item || typeof item !== "object") return false;
+
+    const placeholderPatterns = [
+        /\[template placeholder/i,
+        /\[placeholder/i,
+        /^template-/i,
+        /^placeholder-/i,
+        /replace this with authentic customer feedback/i,
+        /customer name placeholder/i,
+        /customer feedback goes here/i,
+        /order-ref-placeholder/i,
+        /ref-placeholder/i,
+        /template review headline/i,
+        /\[customer name placeholder/i,
+        /\[review headline placeholder/i,
+    ];
+
+    const fieldsToCheck = [
+        item.externalReviewId,
+        item.reviewerDisplayName,
+        item.body,
+        item.comment,
+        item.title,
+        item.sourceReference,
+    ];
+
+    return fieldsToCheck.some((val) => {
+        if (typeof val === "string") {
+            return placeholderPatterns.some((pattern) => pattern.test(val));
+        }
+        return false;
+    });
+}
+
+/**
  * Validates a single review item from an import batch.
  */
 export function validateSingleReviewItem(
     item: any,
     index: number,
     seenBatchIds: Set<string>,
-    existingExternalIds: Set<string>
+    existingExternalIds: Set<string>,
+    expectedProductId?: string
 ): ReviewValidationEntry {
     const errors: string[] = [];
     const warnings: string[] = [];
@@ -233,11 +273,21 @@ export function validateSingleReviewItem(
         }
     }
 
+    // Check for item-level product mismatch if specified
+    if (item.productId && expectedProductId && item.productId !== expectedProductId) {
+        errors.push(`Item productId '${item.productId}' does not match expected product ID '${expectedProductId}'.`);
+    }
+
+    const isTemplatePlaceholder = isTemplatePlaceholderReview(item);
+    if (isTemplatePlaceholder) {
+        errors.push("This entry contains template placeholder data. Please replace with authentic customer feedback before publishing.");
+    }
+
     const isSimulation = source === "simulated-test";
     const valid = errors.length === 0;
 
-    // Must be valid, have consent confirmed, and NOT be a simulation to be eligible for public storefront publication
-    const eligibleForPublication = valid && customerConsentConfirmed && !isSimulation;
+    // Must be valid, have consent confirmed, and NOT be a simulation or placeholder to be eligible for public storefront publication
+    const eligibleForPublication = valid && customerConsentConfirmed && !isSimulation && !isTemplatePlaceholder;
 
     return {
         itemIndex: index + 1,
@@ -257,6 +307,7 @@ export function validateSingleReviewItem(
         warnings,
         isDuplicate: existingExternalIds.has(externalReviewId),
         isSimulation,
+        isTemplatePlaceholder,
     };
 }
 
@@ -270,6 +321,7 @@ export function validateReviewImportPayload(
         productName?: string;
         existingExternalIds?: Set<string>;
         maxBatchSize?: number;
+        expectedProductId?: string;
     }
 ): ReviewBatchValidationResult {
     const {
@@ -277,6 +329,7 @@ export function validateReviewImportPayload(
         productName,
         existingExternalIds = new Set<string>(),
         maxBatchSize = 200,
+        expectedProductId,
     } = options;
 
     const entries: ReviewValidationEntry[] = [];
@@ -314,6 +367,36 @@ export function validateReviewImportPayload(
 
     const rawProductId = payload.productId;
     const productId = typeof rawProductId === "string" ? rawProductId.trim() : "";
+
+    if (expectedProductId && productId && productId !== expectedProductId) {
+        return {
+            valid: false,
+            productId,
+            productName,
+            totalSubmitted: Array.isArray(payload.reviews) ? payload.reviews.length : 0,
+            validCount: 0,
+            invalidCount: Array.isArray(payload.reviews) ? payload.reviews.length : 1,
+            duplicateCount: 0,
+            eligibleCount: 0,
+            entries: [
+                {
+                    itemIndex: 0,
+                    externalReviewId: "",
+                    reviewerDisplayName: "",
+                    rating: 0,
+                    body: "",
+                    reviewedAt: "",
+                    source: "offline-customer-feedback",
+                    customerConsentConfirmed: false,
+                    images: [],
+                    valid: false,
+                    eligibleForPublication: false,
+                    errors: [`Payload productId '${productId}' does not match target product '${expectedProductId}'.`],
+                    warnings: [],
+                },
+            ],
+        };
+    }
 
     const reviews = payload.reviews;
     if (!Array.isArray(reviews)) {
@@ -412,7 +495,7 @@ export function validateReviewImportPayload(
     let eligibleCount = 0;
 
     for (let i = 0; i < reviews.length; i++) {
-        const entry = validateSingleReviewItem(reviews[i], i, seenBatchIds, existingExternalIds);
+        const entry = validateSingleReviewItem(reviews[i], i, seenBatchIds, existingExternalIds, expectedProductId || productId);
 
         // If product does not exist, add error to entry
         if (!productExists) {
@@ -451,9 +534,10 @@ export function validateReviewImportPayload(
 export function isPubliclyPublishedReview(r: any): boolean {
     if (!r || typeof r !== "object") return false;
 
-    // Strict block on editorial notes and simulated test data
+    // Strict block on editorial notes, simulated test data, and template placeholders
     if (r.editorialNote === true) return false;
     if (r.sourceType === "simulated-test" || r.isSimulation === true) return false;
+    if (r.isTemplatePlaceholder === true || isTemplatePlaceholderReview(r)) return false;
 
     // Explicit non-published statuses
     if (

@@ -657,4 +657,125 @@ describe("Review Bulk Import, Moderation & Storefront Aggregates Integration Tes
             }
         }
     });
+
+    // TASK 032 Integration Tests
+    it("REV-IMPORT-015: should strictly reject publishing batches containing template placeholder reviews (HTTP 400)", async () => {
+        const placeholderBatch = [
+            {
+                externalReviewId: "TEMPLATE-prod_bazaar_hoodie-01",
+                reviewerDisplayName: "[Customer Name Placeholder 1]",
+                rating: 5,
+                title: "[Review Headline Placeholder 1]",
+                body: "[Template Placeholder 1: Replace this with authentic customer feedback for Bazaarvilla Hoodie before importing]",
+                reviewedAt: "2026-11-10",
+                source: "offline-customer-feedback",
+                sourceReference: "ORDER-REF-PLACEHOLDER-01",
+                customerConsentConfirmed: true,
+            },
+        ];
+
+        const req = createJsonPostRequest(
+            "http://localhost:3000/api/admin/reviews/publish-batch",
+            { productId: targetProductId, reviews: placeholderBatch },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const res = await publishBatchRoute(req);
+        assert.equal(res.status, 400);
+
+        const data = await res.json();
+        assert.ok(data.error.includes("Template placeholder entries cannot be published"));
+
+        // Verify zero reviews were inserted
+        const snap = await adminDb!.collection("reviews").where("productId", "==", targetProductId).get();
+        assert.equal(snap.size, 0);
+    });
+
+    it("REV-IMPORT-016: should reject review batch validation and publish when target product ID mismatches payload productId", async () => {
+        const mismatchPayload = {
+            productId: "different_product_id_123",
+            reviews: [
+                {
+                    externalReviewId: "mismatch-01",
+                    reviewerDisplayName: "Genuine Customer",
+                    rating: 5,
+                    body: "Real customer comment.",
+                    reviewedAt: "2026-11-10",
+                    source: "offline-customer-feedback",
+                    sourceReference: "REC-991",
+                    customerConsentConfirmed: true,
+                },
+            ],
+        };
+
+        // Query param productId=targetProductId vs payload.productId=different_product_id_123
+        const validateReq = createJsonPostRequest(
+            `http://localhost:3000/api/admin/reviews/validate?productId=${targetProductId}`,
+            mismatchPayload,
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const validateRes = await validateRoute(validateReq);
+        assert.equal(validateRes.status, 400);
+
+        const validateData = await validateRes.json();
+        assert.ok(validateData.error.includes("Product mismatch"));
+    });
+
+    it("REV-IMPORT-017: should preserve verifiedPurchase: false for published imported reviews and link to public storefront", async () => {
+        const genuineImport = [
+            {
+                externalReviewId: "bv-gen-ext-4410",
+                reviewerDisplayName: "Deepak Sharma",
+                rating: 5,
+                title: "Terrific Quality & Fast Dispatch",
+                body: "Ordered offline at the exhibition booth and received yesterday. Fabric is soft, stitching is sturdy, and color matches photos.",
+                reviewedAt: "2026-11-09",
+                source: "offline-customer-feedback",
+                sourceReference: "EXHIBITION-BOOTH-4410",
+                customerConsentConfirmed: true,
+            },
+        ];
+
+        const req = createJsonPostRequest(
+            "http://localhost:3000/api/admin/reviews/publish-batch",
+            { productId: targetProductId, reviews: genuineImport },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const res = await publishBatchRoute(req);
+        assert.equal(res.status, 201);
+
+        const data = await res.json();
+        assert.equal(data.success, true);
+        assert.equal(data.publishedCount, 1);
+
+        // Verify stored document in Firestore emulator
+        const snap = await adminDb!
+            .collection("reviews")
+            .where("externalReviewId", "==", "bv-gen-ext-4410")
+            .get();
+
+        assert.equal(snap.size, 1);
+        const stored = snap.docs[0].data();
+
+        assert.equal(stored.productId, targetProductId);
+        assert.equal(stored.userName, "Deepak Sharma");
+        assert.equal(stored.rating, 5);
+        assert.equal(stored.publicationStatus, "published");
+        assert.equal(stored.isFake, false);
+        assert.equal(stored.verifiedPurchase, false, "Imported reviews must NOT receive false in-app verified purchase badge");
+
+        // Verify queryable via public storefront route
+        const pubReq = new Request(`http://localhost:3000/api/reviews?productId=${targetProductId}`);
+        const pubRes = await publicReviewsGetRoute(pubReq as any);
+        assert.equal(pubRes.status, 200);
+
+        const pubData = await pubRes.json();
+        assert.equal(pubData.stats.reviewCount, 1);
+        assert.equal(pubData.stats.averageRating, 5);
+        assert.equal(pubData.reviews.length, 1);
+        assert.equal(pubData.reviews[0].userName, "Deepak Sharma");
+        assert.equal(pubData.reviews[0].verifiedPurchase, false);
+    });
 });

@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const queryProductId = req.nextUrl?.searchParams?.get("productId")?.trim();
         const rawProductId = body?.productId;
         if (!rawProductId || typeof rawProductId !== "string" || !rawProductId.trim()) {
             return NextResponse.json(
@@ -30,6 +31,39 @@ export async function POST(req: NextRequest) {
             );
         }
         const productId = rawProductId.trim();
+
+        if (queryProductId && productId !== queryProductId) {
+            return NextResponse.json(
+                {
+                    error: `Product mismatch: Payload contains productId '${productId}', but target product is '${queryProductId}'.`,
+                    valid: false,
+                    productId,
+                    totalSubmitted: Array.isArray(body?.reviews) ? body.reviews.length : 0,
+                    validCount: 0,
+                    invalidCount: Array.isArray(body?.reviews) ? body.reviews.length : 1,
+                    duplicateCount: 0,
+                    eligibleCount: 0,
+                    entries: [
+                        {
+                            itemIndex: 0,
+                            externalReviewId: "",
+                            reviewerDisplayName: "",
+                            rating: 0,
+                            body: "",
+                            reviewedAt: "",
+                            source: "offline-customer-feedback",
+                            customerConsentConfirmed: false,
+                            images: [],
+                            valid: false,
+                            eligibleForPublication: false,
+                            errors: [`Payload productId '${productId}' does not match target product '${queryProductId}'.`],
+                            warnings: [],
+                        },
+                    ],
+                },
+                { status: 400, headers }
+            );
+        }
 
         if (!adminDb) {
             return NextResponse.json(
@@ -62,6 +96,7 @@ export async function POST(req: NextRequest) {
             productName,
             existingExternalIds,
             maxBatchSize: 200,
+            expectedProductId: queryProductId || productId,
         });
 
         return NextResponse.json(

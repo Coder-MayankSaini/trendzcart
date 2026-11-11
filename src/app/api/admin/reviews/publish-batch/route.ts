@@ -89,16 +89,21 @@ export async function POST(req: NextRequest) {
             productName,
             existingExternalIds,
             maxBatchSize: 200,
+            expectedProductId: productId,
         });
 
         const eligibleEntries = validation.entries.filter(
-            (e) => e.eligibleForPublication && e.source !== "simulated-test" && !e.isSimulation
+            (e) => e.eligibleForPublication && e.source !== "simulated-test" && !e.isSimulation && !e.isTemplatePlaceholder
         );
         if (eligibleEntries.length === 0) {
             const hasSimulations = validation.entries.some((e) => e.source === "simulated-test" || e.isSimulation);
-            const errorMessage = hasSimulations
-                ? "Simulated demonstration reviews cannot be published to the live customer database. All simulation test items are strictly isolated for demonstration preview."
-                : "No eligible reviews found for publication. Verify that ratings are valid (1-5), externalReviewIds are unique, and customerConsentConfirmed is true.";
+            const hasPlaceholders = validation.entries.some((e) => e.isTemplatePlaceholder);
+            let errorMessage = "No eligible reviews found for publication. Verify that ratings are valid (1-5), externalReviewIds are unique, and customerConsentConfirmed is true.";
+            if (hasPlaceholders) {
+                errorMessage = "Template placeholder entries cannot be published as genuine customer reviews. Replace placeholder data with authentic customer feedback.";
+            } else if (hasSimulations) {
+                errorMessage = "Simulated demonstration reviews cannot be published to the live customer database. All simulation test items are strictly isolated for demonstration preview.";
+            }
 
             return NextResponse.json(
                 {
@@ -124,8 +129,8 @@ export async function POST(req: NextRequest) {
         const storedReviewsToReturn: any[] = [];
 
         for (const entry of eligibleEntries) {
-            // Absolute server-side safeguard against simulation insertion
-            if (entry.source === "simulated-test" || entry.isSimulation) {
+            // Absolute server-side safeguard against simulation and placeholder insertion
+            if (entry.source === "simulated-test" || entry.isSimulation || entry.isTemplatePlaceholder) {
                 continue;
             }
 

@@ -44,6 +44,7 @@ export interface ReviewValidationEntry {
     warnings: string[];
     isDuplicate?: boolean;
     isSimulation?: boolean;
+    isTemplatePlaceholder?: boolean;
 }
 
 export interface ReviewBatchValidationResult {
