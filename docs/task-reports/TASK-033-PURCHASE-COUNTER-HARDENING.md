@@ -4,7 +4,11 @@
 **Title:** Bazaarvilla Production Readiness Audit & Hardening of Admin-Configurable Purchase Activity Counter  
 **Git Branch:** `task/033-purchase-counter-hardening`  
 **Base Commit:** `15d6d35`  
-**Status:** **TASK 033 — PRODUCTION HARDENING COMPLETE, AWAITING OWNER DEPLOYMENT APPROVAL.** (Zero production mutations; zero secrets exposed; 100% tests passing)  
+**Deployed Code Commit:** [`46445f4`](https://github.com/Coder-MayankSaini/trendzcart/commit/46445f4fd0665068de7e655eac45c6be4d0ac6c5)  
+**Netlify Published Deploy ID:** [`6af4b40fecdefd9cbd208f07`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af4b40fecdefd9cbd208f07)  
+**Netlify Build ID:** `6af4b40fecdefd9cbd208f05`  
+**Production URL:** `https://bazaarvilla.com`  
+**Status:** **TASK 033 — DEPLOYED & VERIFIED LIVE.** (Zero production mutations; zero secrets exposed; 100% tests passing; 12/12 live verification checks passed)  
 
 ---
 
@@ -179,9 +183,59 @@ Empirical CDP visual verification was executed across all 6 target screen widths
 
 ---
 
-## 7. Operational Commitments & Deployment Status
+## 7. Production Release Execution
 
-- **Live Production Database:** Untouched. No live orders, real payments, live product documents, or inventory records were modified.
-- **Secrets Management:** `.env.local` contains no emulator overrides and remains clean. Zero secrets are staged in Git.
-- **Deployment Status:** In strict compliance with instructions, **TASK 033 has NOT been deployed to Netlify production or live Firebase.**
-- **Current State:** `TASK 033 — PRODUCTION HARDENING COMPLETE, AWAITING OWNER DEPLOYMENT APPROVAL.`
+The verified code was deployed to the existing Netlify production site `trendzcartdemo` under the conditional release authorization:
+- **Target Site:** `trendzcartdemo` (Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)
+- **Custom Domain:** `https://bazaarvilla.com`
+- **Deployed Git Commit:** [`46445f4`](https://github.com/Coder-MayankSaini/trendzcart/commit/46445f4fd0665068de7e655eac45c6be4d0ac6c5)
+- **Netlify Published Deploy ID:** [`6af4b40fecdefd9cbd208f07`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af4b40fecdefd9cbd208f07)
+- **Netlify Build ID:** `6af4b40fecdefd9cbd208f05`
+- **Next.js Turbopack Compilation:** 35 / 35 static & dynamic routes compiled cleanly in 24.7s.
+- **Automated Secret Scanning:** 140 files scanned in remote Linux container — **0 secrets detected**.
+- **Scheduled Functions:** `reservation-cleanup` active (`*/5 * * * *`).
+
+---
+
+## 8. Post-Deployment Read-Only Live Production Verification (`scripts/verify-live-task033.mjs`)
+
+Immediately following publication, an automated 12-point read-only verification suite was executed against the live production host `https://bazaarvilla.com`:
+
+| Check ID | Verification Criterion | Status | Live Evidence / Measured Value |
+|:---:|:---|:---:|:---|
+| **1** | Homepage and Catalog Pages Availability | **PASS** | Homepage: HTTP 200; `/products` catalog: HTTP 200 |
+| **2** | Live Storefront PDP Loading & Brand Presentation | **PASS** | Sample product 'Silver Plated Rudraksha Om Bracelet' PDP returned HTTP 200 |
+| **3** | Public Purchase Activity API Availability & DTO Privacy | **PASS** | Public API returned HTTP 200; `metric='units_sold'`; `count=0`; `visible=false`; `displayMode='auto'`; zero PII leaked |
+| **4** | Admin Products Interface Availability | **PASS** | `/admin/products` returned HTTP 200 |
+| **5** | Admin Purchase-Activity API Anonymous Rejection (HTTP 401) | **PASS** | Anonymous call to `/api/admin/products/[id]/purchase-activity` returned HTTP 401 (expected 401) |
+| **6** | Admin Purchase-Activity API Non-Admin Customer Rejection (HTTP 403) | **PASS** | Non-admin call with customer token returned HTTP 403 (expected 403 Forbidden) |
+| **7** | Product-Specific Data Isolation | **PASS** | Product A (`12be4f44-...`) and Product B (`27b49fb7-...`) resolve independently with distinct DTO payloads |
+| **8** | Existing Review Functionality Integrity | **PASS** | `/api/reviews?productId=...` returned HTTP 200; 10 reviews |
+| **9** | TASK 031 Mobile Responsiveness & Compact Benefits Preserved | **PASS** | Verified presence of TASK 031 compact benefits copy ('On eligible orders' / 'Delivery across India') on live homepage |
+| **10** | TASK 030 CSV Bulk Importer Template Endpoints Functional | **PASS** | CSV import template endpoint returned HTTP 200 |
+| **11** | Cart and Commercial Checkout Availability | **PASS** | `/cart` HTTP 200; `/checkout` HTTP 200; Razorpay commercial checkout enabled: `true` |
+| **12** | Storefront Badge Rendering & Metric Integrity | **PASS** | Active badge label: '0 units sold in the past 30 days' (`displayThreshold: 5`, `visible: false`) |
+
+---
+
+## 9. Rollback & Disaster Recovery Runbook
+
+If any regression occurs on production:
+1. In the Netlify Admin Console, navigate to **Deploys**: `https://app.netlify.com/projects/trendzcartdemo/deploys`.
+2. Select previous known-good deploy ID [`6af48533e9e35f6e303e4de1`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af48533e9e35f6e303e4de1) (TASK 032 baseline).
+3. Click **"Publish deploy"**. Netlify rolls back CDN edge routing within ~5 seconds with zero server restart downtime.
+4. All Firestore collections, Razorpay configurations, and Cloudflare R2 assets remain completely untouched and backward-compatible.
+
+---
+
+## 10. Final Release Sign-Off
+
+**`TASK 033 — DEPLOYED & VERIFIED LIVE.`**
+
+- **Deployed Git Commit:** [`46445f4`](https://github.com/Coder-MayankSaini/trendzcart/commit/46445f4fd0665068de7e655eac45c6be4d0ac6c5)
+- **Netlify Published Deploy ID:** [`6af4b40fecdefd9cbd208f07`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af4b40fecdefd9cbd208f07)
+- **Netlify Build ID:** `6af4b40fecdefd9cbd208f05`
+- **Total Automated Tests:** **581 unique passing tests (215 unit + 366 integration, 100% pass rate)**
+- **Live Read-Only Verification:** 12 / 12 Passed (100% Pass Rate)
+- **Production Data Mutations:** 0 (100% read-only verification; zero changes to orders, payments, or products)
+- **Commercial Transacting Safety:** 100% Operational
