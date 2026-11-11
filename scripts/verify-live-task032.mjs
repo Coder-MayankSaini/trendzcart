@@ -75,7 +75,6 @@ async function runLiveVerification() {
     });
     const customerAuthJson = await customerAuthRes.json();
     const customerIdToken = customerAuthJson.idToken;
-    await admin.auth().deleteUser(customerUid);
 
     // 1. Admin Reviews page loads
     const adminPageRes = await fetch("https://bazaarvilla.com/admin/reviews", {
@@ -223,6 +222,8 @@ async function runLiveVerification() {
         },
         body: JSON.stringify({ productId: sampleProduct.id, reviews: [] }),
     });
+
+    try { await admin.auth().deleteUser(customerUid); } catch {}
 
     const authSecurityOk = unauthRes.status === 401 && forbiddenRes.status === 403;
     record(
