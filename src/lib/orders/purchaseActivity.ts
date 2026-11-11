@@ -109,9 +109,18 @@ export async function calculateAndPersistProductPurchaseActivity(
         let orderUnitsSold = existingActivity.orderUnitsSold ?? countsByPeriod[periodDays] ?? 0;
         let lastOrderSyncAt = existingActivity.lastOrderSyncAt ?? existingActivity.lastCalculatedAt ?? 0;
 
+        const isSwitchingToAuto = (existingActivity.displayMode === "custom" || existingActivity.isCustomCount === true) && displayMode === "auto";
+        const hasAllPeriodBuckets = Boolean(
+            existingActivity.countsByPeriod &&
+            typeof existingActivity.countsByPeriod[7] === "number" &&
+            typeof existingActivity.countsByPeriod[30] === "number" &&
+            typeof existingActivity.countsByPeriod[90] === "number"
+        );
+
         const needsOrderSync = (
             configOverride?.forceLiveRecalculate === true ||
-            !existingActivity.countsByPeriod ||
+            isSwitchingToAuto ||
+            !hasAllPeriodBuckets ||
             !lastOrderSyncAt ||
             (Date.now() - lastOrderSyncAt > CACHE_TTL_MS)
         );

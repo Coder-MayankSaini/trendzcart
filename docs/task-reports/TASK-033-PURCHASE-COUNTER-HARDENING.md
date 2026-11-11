@@ -156,10 +156,10 @@ Empirical CDP visual verification was executed across all 6 target screen widths
 |---|---|---|---|---|---|---|
 | **Unit Tests** | `npm test` | 215 | 215 | 0 | >= 207 | **PASS** |
 | **Security Rules Tests** | `npm run test:rules` | 41 | 41 | 0 | 41 | **PASS** |
-| **Integration Tests (Emulator)** | `npm run test:integration` | 363 (25 suites) | 363 | 0 | >= 358 | **PASS** |
-| **Unique Automated Tests** | Combined unique | **578** | **578** | **0** | **>= 565** | **PASS** |
+| **Integration Tests (Emulator)** | `npm run test:integration` | 366 (25 suites) | 366 | 0 | >= 358 | **PASS** |
+| **Unique Automated Tests** | Combined unique | **581** | **581** | **0** | **>= 565** | **PASS** |
 | **TypeScript Typecheck** | `npm run typecheck` | Full repository | 0 errors | 0 errors | 0 errors | **PASS** |
-| **Production Build** | `npm run build` | 35 routes | 35 routes | 0 errors | 35 routes | **PASS** (5.5s Turbopack) |
+| **Production Build** | `npm run build` | 35 routes | 35 routes | 0 errors | 35 routes | **PASS** (7.0s Turbopack) |
 
 ### 6.2 Key Hardening Test Criteria Verified
 
@@ -171,7 +171,11 @@ Empirical CDP visual verification was executed across all 6 target screen widths
 6. **ACT-API-012:** Rejection of values exceeding 99,999 (`customUnitsSold: 100000` => HTTP 400).
 7. **ACT-API-013:** Rejection of invalid display modes (`displayMode: "invalid_mode"` => HTTP 400).
 8. **ACT-API-014:** Strict product isolation verified (modifying Product A leaves Product B completely unaffected).
-9. **Admin Auth Claims Script:** `manage-admin-claims.mjs` invocations in tests hardened using `process.execPath`, eliminating Windows process invocation exit code 3221226505.
+9. **ACT-API-015:** Switching from custom mode back to auto mode immediately restores and refreshes genuine order metrics from Firestore without stale values or data loss.
+10. **ACT-API-016:** 7-day, 30-day, and 90-day counters remain independent and uncorrupted after custom mode is enabled, updated, and switched back to auto mode.
+11. **ACT-API-017:** Storefront synchronization — count changes, enabling/disabling, page reload consistency, and zero PII exposure.
+12. **Admin Save-Path Consistency:** Ordinary Save Product workflow in `AdminProducts.tsx` enforces identical bounds (`MAX_CONFIGURED_UNITS = 99999`, threshold `<= 1000`, period `7/30/90`), while preserving live order metrics via transactional reconciliation (`existingPA`).
+13. **Admin Auth Claims Script:** `manage-admin-claims.mjs` invocations in tests hardened using `process.execPath`, eliminating Windows process invocation exit code 3221226505.
 
 ---
 

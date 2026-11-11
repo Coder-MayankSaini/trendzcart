@@ -40,12 +40,13 @@ async function getProductBySlug(slug: string) {
 
   // Hourly bounded refresh for purchase activity counter (recalculates order stats; preserves custom display settings)
   const isCustomMode = data?.purchaseActivity?.displayMode === "custom" || data?.purchaseActivity?.isCustomCount === true;
+  const lastSyncAt = data?.purchaseActivity?.lastOrderSyncAt ?? data?.purchaseActivity?.lastCalculatedAt;
   if (
     adminDb &&
     !isCustomMode &&
     (!data?.purchaseActivity ||
-      typeof data.purchaseActivity.lastCalculatedAt !== "number" ||
-      Date.now() - data.purchaseActivity.lastCalculatedAt > CACHE_TTL_MS)
+      typeof lastSyncAt !== "number" ||
+      Date.now() - lastSyncAt > CACHE_TTL_MS)
   ) {
     try {
       const freshActivity = await calculateAndPersistProductPurchaseActivity(adminDb, doc.id);

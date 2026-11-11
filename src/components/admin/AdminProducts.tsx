@@ -609,12 +609,13 @@ export default function AdminProducts() {
                 });
 
                 const rawPA = formData.purchaseActivity;
+                const existingPA = liveProduct?.purchaseActivity;
                 const displayMode: PurchaseActivityDisplayMode = rawPA?.displayMode || (rawPA?.isCustomCount ? "custom" : "auto");
                 const customUnits = Math.min(MAX_CONFIGURED_UNITS, Math.max(0, Math.floor(Number(rawPA?.customUnitsSold ?? rawPA?.unitsSold) || 0)));
                 const period: PurchaseActivityPeriod = (rawPA?.periodDays && [7, 30, 90].includes(rawPA.periodDays)) ? rawPA.periodDays : 30;
-                const threshold = Math.max(0, Math.floor(Number(rawPA?.displayThreshold) || 5));
-                const countsByPeriod = rawPA?.countsByPeriod || { 7: 0, 30: 0, 90: 0 };
-                const orderUnits = rawPA?.orderUnitsSold ?? countsByPeriod[period] ?? 0;
+                const threshold = Math.min(1000, Math.max(0, Math.floor(Number(rawPA?.displayThreshold) || 5)));
+                const countsByPeriod = existingPA?.countsByPeriod || rawPA?.countsByPeriod || { 7: 0, 30: 0, 90: 0 };
+                const orderUnits = existingPA?.countsByPeriod?.[period] ?? existingPA?.orderUnitsSold ?? rawPA?.orderUnitsSold ?? countsByPeriod[period] ?? 0;
                 const effectiveUnits = displayMode === "custom" ? customUnits : orderUnits;
 
                 const sanitizedPurchaseActivity = {
@@ -627,9 +628,9 @@ export default function AdminProducts() {
                     orderUnitsSold: orderUnits,
                     isCustomCount: displayMode === "custom",
                     countsByPeriod,
-                    qualifyingOrdersCount: rawPA?.qualifyingOrdersCount ?? 0,
-                    uniquePurchasersCount: rawPA?.uniquePurchasersCount ?? 0,
-                    lastOrderSyncAt: rawPA?.lastOrderSyncAt ?? 0,
+                    qualifyingOrdersCount: existingPA?.qualifyingOrdersCount ?? rawPA?.qualifyingOrdersCount ?? 0,
+                    uniquePurchasersCount: existingPA?.uniquePurchasersCount ?? rawPA?.uniquePurchasersCount ?? 0,
+                    lastOrderSyncAt: existingPA?.lastOrderSyncAt ?? rawPA?.lastOrderSyncAt ?? 0,
                     lastCalculatedAt: Date.now(),
                 };
 

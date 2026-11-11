@@ -468,4 +468,185 @@ describe("Product Purchase Activity API & Security Integration Tests (TASK 023)"
         assert.equal(dataPubA.visible, true);
         assert.equal(dataPubA.displayMode, "custom");
     });
+
+    async function seedMultiPeriodOrders() {
+        const now = new Date();
+        const fourDaysAgo = new Date(now.getTime() - 4 * 24 * 60 * 60 * 1000);
+        const twentyDaysAgo = new Date(now.getTime() - 20 * 24 * 60 * 60 * 1000);
+        const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+        await adminDb!.collection("orders").doc("ord_fresh_7d").set({
+            id: "ord_fresh_7d",
+            paymentMethod: "RAZORPAY",
+            paymentStatus: "PAID",
+            orderStatus: "Processing",
+            createdAt: fourDaysAgo,
+            items: [{ productId: commercialProductId, quantity: 3, price: 1499 }],
+        });
+        await adminDb!.collection("orders").doc("ord_fresh_30d").set({
+            id: "ord_fresh_30d",
+            paymentMethod: "RAZORPAY",
+            paymentStatus: "PAID",
+            orderStatus: "Delivered",
+            createdAt: twentyDaysAgo,
+            items: [{ productId: commercialProductId, quantity: 7, price: 1499 }],
+        });
+        await adminDb!.collection("orders").doc("ord_fresh_90d").set({
+            id: "ord_fresh_90d",
+            paymentMethod: "RAZORPAY",
+            paymentStatus: "PAID",
+            orderStatus: "Delivered",
+            createdAt: sixtyDaysAgo,
+            items: [{ productId: commercialProductId, quantity: 10, price: 1499 }],
+        });
+    }
+
+    it("ACT-API-015: switching from custom mode back to auto mode immediately restores and refreshes genuine order metrics", async () => {
+        await seedMultiPeriodOrders();
+
+        // 1. First set custom mode to 99 units
+        const reqCustom = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "custom", customUnitsSold: 99, periodDays: 30 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const resCustom = await adminPurchaseActivityRoute(reqCustom, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+        assert.equal(resCustom.status, 200);
+
+        const pubCustom = await publicPurchaseActivityRoute(
+            new NextRequest(`http://localhost:3000/api/products/${commercialProductId}/purchase-activity`),
+            { params: Promise.resolve({ id: commercialProductId }) }
+        );
+        const pubCustomData = await pubCustom.json();
+        assert.equal(pubCustomData.count, 99);
+        assert.equal(pubCustomData.displayMode, "custom");
+
+        // 2. Switch from custom mode back to auto mode
+        const reqAuto = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "auto", periodDays: 30 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const resAuto = await adminPurchaseActivityRoute(reqAuto, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+        assert.equal(resAuto.status, 200);
+        const autoData = await resAuto.json();
+
+        // Must restore genuine order count (3 in 7d + 7 in 30d = 10 units)
+        assert.equal(autoData.activity.unitsSold, 10);
+        assert.equal(autoData.activity.displayMode, "auto");
+
+        // Public API immediately delivers the restored authentic metric
+        const pubAuto = await publicPurchaseActivityRoute(
+            new NextRequest(`http://localhost:3000/api/products/${commercialProductId}/purchase-activity`),
+            { params: Promise.resolve({ id: commercialProductId }) }
+        );
+        const pubAutoData = await pubAuto.json();
+        assert.equal(pubAutoData.count, 10);
+        assert.equal(pubAutoData.displayMode, "auto");
+        assert.equal(pubAutoData.label, "10 units sold in the past 30 days");
+    });
+
+    it("ACT-API-016: 7-day, 30-day, and 90-day counters remain independent and uncorrupted after custom mode", async () => {
+        await seedMultiPeriodOrders();
+
+        // Query product with periodDays = 7
+        const req7d = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "auto", periodDays: 7 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const res7d = await adminPurchaseActivityRoute(req7d, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+        assert.equal(res7d.status, 200);
+        const data7d = await res7d.json();
+        assert.equal(data7d.activity.unitsSold, 3);
+        assert.equal(data7d.activity.periodDays, 7);
+
+        // Query product with periodDays = 90
+        const req90d = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "auto", periodDays: 90 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const res90d = await adminPurchaseActivityRoute(req90d, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+        assert.equal(res90d.status, 200);
+        const data90d = await res90d.json();
+        assert.equal(data90d.activity.unitsSold, 20); // 3 + 7 + 10
+        assert.equal(data90d.activity.periodDays, 90);
+
+        // Verify countsByPeriod buckets are distinct and intact
+        assert.equal(data90d.activity.countsByPeriod[7], 3);
+        assert.equal(data90d.activity.countsByPeriod[30], 10);
+        assert.equal(data90d.activity.countsByPeriod[90], 20);
+    });
+
+    it("ACT-API-017: Storefront synchronization — count changes, enabling/disabling, page reload consistency, and zero PII", async () => {
+        await seedMultiPeriodOrders();
+
+        // 1. Disable badge
+        const reqDisable = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { enabled: false },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        await adminPurchaseActivityRoute(reqDisable, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+
+        const pubDisabled = await publicPurchaseActivityRoute(
+            new NextRequest(`http://localhost:3000/api/products/${commercialProductId}/purchase-activity`),
+            { params: Promise.resolve({ id: commercialProductId }) }
+        );
+        const dataDisabled = await pubDisabled.json();
+        assert.equal(dataDisabled.visible, false);
+
+        // 2. Re-enable badge with threshold 5
+        const reqEnable = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { enabled: true, displayThreshold: 5, periodDays: 30 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        await adminPurchaseActivityRoute(reqEnable, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+
+        const pubEnabled = await publicPurchaseActivityRoute(
+            new NextRequest(`http://localhost:3000/api/products/${commercialProductId}/purchase-activity`),
+            { params: Promise.resolve({ id: commercialProductId }) }
+        );
+        const dataEnabled = await pubEnabled.json();
+        assert.equal(dataEnabled.visible, true);
+        assert.equal(dataEnabled.count, 10);
+
+        // 3. Set high threshold (50) -> should be hidden
+        const reqHighThreshold = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayThreshold: 50 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        await adminPurchaseActivityRoute(reqHighThreshold, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+
+        const pubHidden = await publicPurchaseActivityRoute(
+            new NextRequest(`http://localhost:3000/api/products/${commercialProductId}/purchase-activity`),
+            { params: Promise.resolve({ id: commercialProductId }) }
+        );
+        const dataHidden = await pubHidden.json();
+        assert.equal(dataHidden.visible, false);
+
+        // 4. Zero sensitive data leakage check
+        assert.equal((dataHidden as any).customerEmail, undefined);
+        assert.equal((dataHidden as any).purchaserEmail, undefined);
+        assert.equal((dataHidden as any).orderId, undefined);
+        assert.equal((dataHidden as any).shippingAddress, undefined);
+        assert.equal((dataHidden as any).paymentId, undefined);
+    });
 });
