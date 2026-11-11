@@ -8,6 +8,7 @@ import {
     verifyRazorpaySignature,
     isCustomizableProduct,
 } from "@/lib/orders/pricing";
+import { calculateVariantStockBreakdown } from "@/lib/products/variants";
 import type { OrderItemInput } from "@/lib/orders/pricing";
 import {
     generateGuestAccessToken,
@@ -267,6 +268,11 @@ export async function POST(req: NextRequest) {
                         customizable: data?.customizable,
                         isPersonalized: data?.isPersonalized,
                         sizes: data?.sizes,
+                        hasVariants: data?.hasVariants,
+                        sizeMode: data?.sizeMode,
+                        sizesList: data?.sizesList,
+                        colors: data?.colors,
+                        variants: data?.variants,
                     };
                 },
                 async (code: string) => {
@@ -369,25 +375,88 @@ export async function POST(req: NextRequest) {
 
             // Decrement inventory safely within the transaction
             if (paymentStatus === "PAID" || (body.paymentMethod === "COD" && paymentStatus === "PENDING")) {
-                const inventoryDecrements = new Map<string, number>();
-                for (const item of pricing.validatedItems) {
-                    inventoryDecrements.set(
-                        item.productId,
-                        (inventoryDecrements.get(item.productId) || 0) + item.quantity
-                    );
-                }
-                for (const [productId, qty] of inventoryDecrements.entries()) {
+                const uniquePIds = Array.from(new Set(pricing.validatedItems.map((item) => item.productId)));
+
+                for (const productId of uniquePIds) {
                     const snap = productMap.get(productId);
-                    const currentStock = snap?.data()?.inventory;
+                    const prodData = snap?.data();
                     const productRef = adminDb!.collection("products").doc(productId);
-                    if (typeof currentStock === "number") {
+
+                    if (prodData?.hasVariants === true && Array.isArray(prodData?.variants) && prodData.variants.length > 0) {
+                        const variantDecrements = new Map<string, number>();
+                        for (const item of pricing.validatedItems) {
+                            if (item.productId === productId && item.variantId) {
+                                variantDecrements.set(
+                                    item.variantId,
+                                    (variantDecrements.get(item.variantId) || 0) + item.quantity
+                                );
+                            }
+                        }
+
+                        // MANDATORY TRANSACTION STOCK CHECK (Prevent Overselling & Silent Clamping)
+                        for (const [vId, decQty] of variantDecrements.entries()) {
+                            const v = prodData.variants.find((variant: any) => variant.id === vId);
+                            if (!v) {
+                                return {
+                                    status: 400,
+                                    error: `Variant '${vId}' not found on product '${prodData.name || productId}'.`,
+                                };
+                            }
+                            const currentVariantStock = Number(v.inventory) || 0;
+                            if (currentVariantStock < decQty) {
+                                return {
+                                    status: 400,
+                                    error: `Insufficient stock for variant '${vId}' on '${prodData.name || productId}'. Available: ${currentVariantStock}, requested: ${decQty}.`,
+                                };
+                            }
+                        }
+
+                        const updatedVariants = prodData.variants.map((v: any) => {
+                            const dec = variantDecrements.get(v.id) || 0;
+                            if (dec > 0) {
+                                const currentStock = Number(v.inventory) || 0;
+                                const newStock = currentStock - dec;
+                                if (newStock < 0) {
+                                    throw new Error(`Inventory underflow prevented: variant ${v.id} stock cannot drop below zero.`);
+                                }
+                                return { ...v, inventory: newStock };
+                            }
+                            return v;
+                        });
+
+                        const breakdown = calculateVariantStockBreakdown(updatedVariants);
+
                         transaction.update(productRef, {
-                            inventory: currentStock - qty,
+                            variants: updatedVariants,
+                            inventory: breakdown.sellableStock,
+                            totalPhysicalInventory: breakdown.totalPhysicalStock,
                         });
                     } else {
-                        transaction.update(productRef, {
-                            inventory: admin.firestore.FieldValue.increment(-qty),
-                        });
+                        // Legacy product stock decrement
+                        const totalProductQty = pricing.validatedItems
+                            .filter((item) => item.productId === productId)
+                            .reduce((sum, item) => sum + item.quantity, 0);
+
+                        const currentStock = prodData?.inventory;
+                        if (typeof currentStock === "number") {
+                            if (currentStock < totalProductQty) {
+                                return {
+                                    status: 400,
+                                    error: `Insufficient stock for '${prodData?.name || productId}'. Available: ${currentStock}, requested: ${totalProductQty}.`,
+                                };
+                            }
+                            const newStock = currentStock - totalProductQty;
+                            if (newStock < 0) {
+                                throw new Error(`Inventory underflow prevented: product ${productId} stock cannot drop below zero.`);
+                            }
+                            transaction.update(productRef, {
+                                inventory: newStock,
+                            });
+                        } else {
+                            transaction.update(productRef, {
+                                inventory: admin.firestore.FieldValue.increment(-totalProductQty),
+                            });
+                        }
                     }
                 }
             }

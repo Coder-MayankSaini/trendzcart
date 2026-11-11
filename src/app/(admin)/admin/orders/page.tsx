@@ -287,6 +287,13 @@ export default function AdminOrders() {
                                                 {order.items?.map((item: any, idx: number) => (
                                                     <li key={idx} style={{ fontSize: "0.85rem" }}>
                                                         <span style={{ fontWeight: 600 }}>{item.quantity}×</span> {item.name}
+                                                        {(item.size || item.color || item.sku) && (
+                                                            <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                                                                {item.size ? <span>Size: <strong>{item.size}</strong> </span> : null}
+                                                                {item.color ? <span>Color: <strong>{item.color}</strong> </span> : null}
+                                                                {item.sku ? <span>SKU: <code>{item.sku}</code></span> : null}
+                                                            </div>
+                                                        )}
                                                         {item.customizationData && (
                                                             <div style={{ fontSize: "0.75rem", backgroundColor: "rgba(234, 179, 8, 0.12)", color: "#ca8a04", padding: "4px 8px", marginTop: "3px", borderRadius: "6px", border: "1px solid rgba(234, 179, 8, 0.25)" }}>
                                                                 <strong>Custom: </strong>
@@ -433,6 +440,14 @@ export default function AdminOrders() {
                                                     ₹{((item.price || 0) * (item.quantity || 1)).toLocaleString("en-IN")}
                                                 </span>
                                             </div>
+
+                                            {(item.size || item.color || item.sku) && (
+                                                <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "2px" }}>
+                                                    {item.size ? <span>Size: <strong>{item.size}</strong> </span> : null}
+                                                    {item.color ? <span>Color: <strong>{item.color}</strong> </span> : null}
+                                                    {item.sku ? <span>SKU: <code>{item.sku}</code></span> : null}
+                                                </div>
+                                            )}
 
                                             {item.customizationData && (
                                                 <div style={{ marginTop: "4px", padding: "6px 10px", borderRadius: "8px", backgroundColor: "rgba(234, 179, 8, 0.12)", color: "#ca8a04", fontSize: "0.75rem", border: "1px solid rgba(234, 179, 8, 0.25)" }}>

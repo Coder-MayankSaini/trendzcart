@@ -274,6 +274,8 @@ export default function MyOrdersPage() {
                                                         Qty: {item.quantity} &middot; ₹
                                                         {item.price?.toLocaleString("en-IN")}
                                                         {item.size ? ` · Size: ${item.size}` : ""}
+                                                        {item.color ? ` · Color: ${item.color}` : ""}
+                                                        {item.sku ? ` · SKU: ${item.sku}` : ""}
                                                     </span>
                                                 </div>
                                                 <span className="mo-item-total">

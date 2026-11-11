@@ -1,12 +1,34 @@
 import crypto from "crypto";
+import type {
+    SizeDimension,
+    SizeMode,
+    SizeOption,
+    ColorOption,
+    ProductVariant,
+} from "../products/variants.ts";
+import { formatVariantTitle } from "../products/variants.ts";
+
+export type {
+    SizeDimension,
+    SizeMode,
+    SizeOption,
+    ColorOption,
+    ProductVariant,
+};
 
 export interface OrderItemInput {
     id?: string;
     productId?: string;
+    variantId?: string;
+    sku?: string;
     name?: string;
     price?: number;
     quantity: number;
     size?: string;
+    sizeId?: string;
+    color?: string;
+    colorId?: string;
+    dimensions?: SizeDimension;
     image?: string;
     isCustomized?: boolean;
     customizationData?: {
@@ -22,11 +44,17 @@ export interface OrderItemInput {
 export interface ValidatedOrderItem {
     id: string;
     productId: string;
+    variantId?: string;
+    sku?: string;
     name: string;
     price: number;
     quantity: number;
     itemSubtotal: number;
     size?: string;
+    sizeId?: string;
+    color?: string;
+    colorId?: string;
+    dimensions?: SizeDimension;
     image?: string;
     isCustomized: boolean;
     customizationData?: {
@@ -55,6 +83,12 @@ export interface ProductRecord {
     customizable?: boolean;
     isPersonalized?: boolean;
     sizes?: string[];
+    // Flexible Variants & Sizing (TASK 029)
+    hasVariants?: boolean;
+    sizeMode?: SizeMode;
+    sizesList?: SizeOption[];
+    colors?: ColorOption[];
+    variants?: ProductVariant[];
 }
 
 import {
@@ -180,13 +214,19 @@ export async function calculateOrderPricing(
         };
     }
 
-    // Aggregate requested quantities per product to prevent inventory bypass with split line items
+    // Aggregate requested quantities per product and per variant to prevent inventory bypass
     const totalRequestedPerProduct = new Map<string, number>();
+    const totalRequestedPerVariant = new Map<string, number>();
+
     for (const item of items) {
         const pId = item.productId || item.id;
         const q = Number(item.quantity);
         if (pId && Number.isInteger(q) && q > 0) {
             totalRequestedPerProduct.set(pId, (totalRequestedPerProduct.get(pId) || 0) + q);
+            if (item.variantId) {
+                const vKey = `${pId}:${item.variantId}`;
+                totalRequestedPerVariant.set(vKey, (totalRequestedPerVariant.get(vKey) || 0) + q);
+            }
         }
     }
 
@@ -221,13 +261,71 @@ export async function calculateOrderPricing(
             continue;
         }
 
-        const totalRequested = totalRequestedPerProduct.get(productId) || quantity;
-        if (typeof product.inventory === "number" && product.inventory < totalRequested) {
-            errors.push(`Insufficient stock for '${product.name}'. Available: ${product.inventory}, requested: ${totalRequested}.`);
-            continue;
+        let authoritativePrice = Number(product.price);
+        let matchedVariant: ProductVariant | undefined;
+
+        // Check whether product uses flexible variant system
+        if (product.hasVariants === true) {
+            if (!Array.isArray(product.variants) || product.variants.length === 0) {
+                errors.push(`Product '${product.name}' is configured for variants but has no valid variants configured.`);
+                continue;
+            }
+
+            // Mandatory Variant ID check (TASK 029 Hardening)
+            if (!item.variantId || item.variantId.trim().length === 0) {
+                errors.push(`Product '${product.name}' requires a valid variant selection (missing variantId).`);
+                continue;
+            }
+
+            // Verify variantId belongs strictly to this authoritative product record
+            matchedVariant = product.variants.find((v) => v.id === item.variantId);
+            if (!matchedVariant) {
+                errors.push(`Variant '${item.variantId}' does not belong to product '${product.name}'.`);
+                continue;
+            }
+
+            // Verify referenced size and color combination is valid if provided
+            if (item.size && matchedVariant.sizeName && item.size.trim().toLowerCase() !== matchedVariant.sizeName.trim().toLowerCase()) {
+                errors.push(`Variant '${item.variantId}' size mismatch for '${product.name}': expected '${matchedVariant.sizeName}', received '${item.size}'.`);
+                continue;
+            }
+            if (item.color && matchedVariant.colorName && item.color.trim().toLowerCase() !== matchedVariant.colorName.trim().toLowerCase()) {
+                errors.push(`Variant '${item.variantId}' color mismatch for '${product.name}': expected '${matchedVariant.colorName}', received '${item.color}'.`);
+                continue;
+            }
+
+            if (matchedVariant.isActive === false) {
+                const varLabel = formatVariantTitle(matchedVariant);
+                errors.push(`Variant '${varLabel}' for '${product.name}' is currently unavailable (inactive).`);
+                continue;
+            }
+
+            // Variant-specific inventory check
+            const vKey = `${productId}:${matchedVariant.id}`;
+            const totalRequestedVariant = totalRequestedPerVariant.get(vKey) || quantity;
+            if (typeof matchedVariant.inventory === "number" && matchedVariant.inventory < totalRequestedVariant) {
+                const varLabel = formatVariantTitle(matchedVariant);
+                errors.push(`Insufficient stock for '${product.name} (${varLabel})'. Available: ${matchedVariant.inventory}, requested: ${totalRequestedVariant}.`);
+                continue;
+            }
+
+            // Variant-specific authoritative pricing override
+            if (
+                typeof matchedVariant.price === "number" &&
+                !isNaN(matchedVariant.price) &&
+                matchedVariant.price >= 0
+            ) {
+                authoritativePrice = matchedVariant.price;
+            }
+        } else {
+            // Legacy / Standard product stock check
+            const totalRequested = totalRequestedPerProduct.get(productId) || quantity;
+            if (typeof product.inventory === "number" && product.inventory < totalRequested) {
+                errors.push(`Insufficient stock for '${product.name}'. Available: ${product.inventory}, requested: ${totalRequested}.`);
+                continue;
+            }
         }
 
-        const authoritativePrice = Number(product.price);
         if (Number.isNaN(authoritativePrice) || authoritativePrice < 0) {
             errors.push(`Product '${product.name}' has invalid catalog price.`);
             continue;
@@ -245,10 +343,25 @@ export async function calculateOrderPricing(
             itemSubtotal,
             isCustomized: isCustomizableProduct(product) || Boolean(item.isCustomized),
         };
-        if (item.size) {
-            validatedItem.size = item.size;
+
+        if (matchedVariant) {
+            validatedItem.variantId = matchedVariant.id;
+            if (matchedVariant.sku) validatedItem.sku = matchedVariant.sku;
+            if (matchedVariant.sizeName || item.size) validatedItem.size = matchedVariant.sizeName || item.size;
+            if (matchedVariant.sizeId || item.sizeId) validatedItem.sizeId = matchedVariant.sizeId || item.sizeId;
+            if (matchedVariant.colorName || item.color) validatedItem.color = matchedVariant.colorName || item.color;
+            if (matchedVariant.colorId || item.colorId) validatedItem.colorId = matchedVariant.colorId || item.colorId;
+            if (matchedVariant.dimensions || item.dimensions) validatedItem.dimensions = matchedVariant.dimensions || item.dimensions;
+            if (matchedVariant.image) {
+                validatedItem.image = matchedVariant.image;
+            }
+        } else {
+            if (item.size) {
+                validatedItem.size = item.size;
+            }
         }
-        if (item.image || (product.images && product.images[0])) {
+
+        if (!validatedItem.image && (item.image || (product.images && product.images[0]))) {
             validatedItem.image = item.image || (product.images && product.images[0]) || "";
         }
         if (item.customizationData) {

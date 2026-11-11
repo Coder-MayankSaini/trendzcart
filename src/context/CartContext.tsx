@@ -5,11 +5,23 @@ import { createContext, useContext, useState, ReactNode, useEffect } from "react
 export interface CartItem {
     id: string; // Unique ID for cart item (product.id + custom data hash conceptually)
     productId: string;
+    variantId?: string; // Specific variant identifier (TASK 029)
+    sku?: string;
     name: string;
     price: number;
     quantity: number;
     image: string;
-    size?: string; // T-shirt sizes etc.
+    size?: string; // Display size / dimensions (e.g. "XL", "Large — 26 × 26 cm")
+    sizeId?: string;
+    color?: string; // Color display name (e.g. "Midnight Black")
+    colorId?: string;
+    dimensions?: {
+        width?: number;
+        height?: number;
+        depth?: number;
+        length?: number;
+        unit: string;
+    };
     isCustomized: boolean;
     customizationData?: {
         name?: string;
@@ -62,10 +74,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     const addToCart = (newItem: CartItem) => {
         setItems(current => {
-            // Check if exact same item exists (including custom data and size)
+            // Check if exact same item exists (including custom data, variant ID, size, and color)
             const existingIndex = current.findIndex(
                 i => i.productId === newItem.productId &&
-                    i.size === newItem.size &&
+                    (i.variantId || "") === (newItem.variantId || "") &&
+                    (i.size || "") === (newItem.size || "") &&
+                    (i.color || "") === (newItem.color || "") &&
                     JSON.stringify(i.customizationData) === JSON.stringify(newItem.customizationData)
             );
 

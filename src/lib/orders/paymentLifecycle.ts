@@ -2,6 +2,7 @@ import crypto from "crypto";
 import * as adminModule from "firebase-admin";
 import { calculateOrderPricing } from "./pricing";
 import type { OrderItemInput } from "./pricing";
+import { calculateVariantStockBreakdown } from "../products/variants";
 import {
     generateGuestAccessToken,
     hashGuestAccessToken,
@@ -190,18 +191,23 @@ export async function createPendingPrepaidOrder(
                 const docSnap = productMap.get(productId);
                 if (!docSnap || !docSnap.exists) return null;
                 const data = docSnap.data();
-                return {
-                    id: docSnap.id,
-                    name: data?.name || "",
-                    price: Number(data?.price),
-                    inventory: typeof data?.inventory === "number" ? data.inventory : undefined,
-                    isVisible: data?.isVisible,
-                    images: data?.images,
-                    category: data?.category,
-                    isTestFixture: data?.isTestFixture,
-                    purchasable: data?.purchasable,
-                    isArchived: data?.isArchived,
-                };
+                    return {
+                        id: docSnap.id,
+                        name: data?.name || "",
+                        price: Number(data?.price),
+                        inventory: typeof data?.inventory === "number" ? data.inventory : undefined,
+                        isVisible: data?.isVisible,
+                        images: data?.images,
+                        category: data?.category,
+                        isTestFixture: data?.isTestFixture,
+                        purchasable: data?.purchasable,
+                        isArchived: data?.isArchived,
+                        hasVariants: data?.hasVariants,
+                        sizeMode: data?.sizeMode,
+                        sizesList: data?.sizesList,
+                        colors: data?.colors,
+                        variants: data?.variants,
+                    };
             },
             async (code: string) => {
                 if (!couponSnap || !couponSnap.exists || couponSnap.id !== code) return null;
@@ -281,25 +287,89 @@ export async function createPendingPrepaidOrder(
         const amountPaise = Math.round(pricing.total * 100);
 
         // Reserve inventory in database
-        const inventoryDecrements = new Map<string, number>();
-        for (const item of pricing.validatedItems) {
-            inventoryDecrements.set(
-                item.productId,
-                (inventoryDecrements.get(item.productId) || 0) + item.quantity
-            );
-        }
-        for (const [productId, qty] of inventoryDecrements.entries()) {
+        const uniqueProductIdsInOrder = Array.from(new Set(pricing.validatedItems.map((item) => item.productId)));
+        for (const productId of uniqueProductIdsInOrder) {
             const snap = productMap.get(productId);
-            const currentStock = snap?.data()?.inventory;
+            const prodData = snap?.data();
             const productRef = db.collection("products").doc(productId);
-            if (typeof currentStock === "number") {
+
+            if (prodData?.hasVariants === true && Array.isArray(prodData?.variants) && prodData.variants.length > 0) {
+                const variantDecrements = new Map<string, number>();
+                for (const item of pricing.validatedItems) {
+                    if (item.productId === productId && item.variantId) {
+                        variantDecrements.set(
+                            item.variantId,
+                            (variantDecrements.get(item.variantId) || 0) + item.quantity
+                        );
+                    }
+                }
+
+                // MANDATORY TRANSACTION STOCK CHECK (Prevent Overselling & Silent Clamping)
+                for (const [vId, decQty] of variantDecrements.entries()) {
+                    const v = prodData.variants.find((variant: any) => variant.id === vId);
+                    if (!v) {
+                        return {
+                            status: 400,
+                            success: false,
+                            error: `Variant '${vId}' not found on product '${prodData.name || productId}'.`,
+                        };
+                    }
+                    const currentVariantStock = Number(v.inventory) || 0;
+                    if (currentVariantStock < decQty) {
+                        return {
+                            status: 400,
+                            success: false,
+                            error: `Insufficient stock for variant '${vId}' on '${prodData.name || productId}'. Available: ${currentVariantStock}, requested: ${decQty}.`,
+                        };
+                    }
+                }
+
+                const updatedVariants = prodData.variants.map((v: any) => {
+                    const dec = variantDecrements.get(v.id) || 0;
+                    if (dec > 0) {
+                        const currentStock = Number(v.inventory) || 0;
+                        const newStock = currentStock - dec;
+                        if (newStock < 0) {
+                            throw new Error(`Inventory underflow prevented: variant ${v.id} stock cannot drop below zero.`);
+                        }
+                        return { ...v, inventory: newStock };
+                    }
+                    return v;
+                });
+
+                const breakdown = calculateVariantStockBreakdown(updatedVariants);
+
                 transaction.update(productRef, {
-                    inventory: currentStock - qty,
+                    variants: updatedVariants,
+                    inventory: breakdown.sellableStock,
+                    totalPhysicalInventory: breakdown.totalPhysicalStock,
                 });
             } else {
-                transaction.update(productRef, {
-                    inventory: admin.firestore.FieldValue.increment(-qty),
-                });
+                const totalQty = pricing.validatedItems
+                    .filter((item) => item.productId === productId)
+                    .reduce((sum, item) => sum + item.quantity, 0);
+
+                const currentStock = prodData?.inventory;
+                if (typeof currentStock === "number") {
+                    if (currentStock < totalQty) {
+                        return {
+                            status: 400,
+                            success: false,
+                            error: `Insufficient stock for '${prodData?.name || productId}'. Available: ${currentStock}, requested: ${totalQty}.`,
+                        };
+                    }
+                    const newStock = currentStock - totalQty;
+                    if (newStock < 0) {
+                        throw new Error(`Inventory underflow prevented: product ${productId} stock cannot drop below zero.`);
+                    }
+                    transaction.update(productRef, {
+                        inventory: newStock,
+                    });
+                } else {
+                    transaction.update(productRef, {
+                        inventory: admin.firestore.FieldValue.increment(-totalQty),
+                    });
+                }
             }
         }
 
@@ -589,20 +659,74 @@ export async function finalizeOrderPayment(
 
         // Late Payment Recovery (After Reservation Expiration)
         if (orderData?.reservationReleased === true || orderData?.paymentStatus === "EXPIRED") {
-            // Safely check if inventory is still available to re-reserve
             let stockAvailable = true;
             const items = orderData.items || [];
-            const productUpdates = new Map<string, number>();
+            const uniqueProductIdsForRecovery = Array.from(
+                new Set(items.map((i: any) => i.productId).filter(Boolean))
+            ) as string[];
 
-            for (const item of items) {
-                const pSnap = await transaction.get(db.collection("products").doc(item.productId));
-                const currentInv = pSnap.data()?.inventory;
-                if (typeof currentInv === "number") {
-                    if (currentInv < item.quantity) {
-                        stockAvailable = false;
-                        break;
+            const productDocsMap = new Map<string, adminModule.firestore.DocumentSnapshot>();
+            for (const pid of uniqueProductIdsForRecovery) {
+                const pSnap = await transaction.get(db.collection("products").doc(pid));
+                productDocsMap.set(pid, pSnap);
+            }
+
+            const productUpdates = new Map<string, any>();
+
+            for (const pid of uniqueProductIdsForRecovery) {
+                const pSnap = productDocsMap.get(pid);
+                const prodData = pSnap?.data();
+                const productItems = items.filter((i: any) => i.productId === pid);
+
+                if (prodData?.hasVariants === true && Array.isArray(prodData?.variants)) {
+                    const variantDemands = new Map<string, number>();
+                    for (const item of productItems) {
+                        if (item.variantId) {
+                            variantDemands.set(
+                                item.variantId,
+                                (variantDemands.get(item.variantId) || 0) + item.quantity
+                            );
+                        }
                     }
-                    productUpdates.set(item.productId, currentInv - item.quantity);
+
+                    for (const [vId, reqQty] of variantDemands.entries()) {
+                        const variant = prodData.variants.find((v: any) => v.id === vId);
+                        if (!variant || (typeof variant.inventory === "number" && variant.inventory < reqQty)) {
+                            stockAvailable = false;
+                            break;
+                        }
+                    }
+
+                    if (!stockAvailable) break;
+
+                    const updatedVariants = prodData.variants.map((v: any) => {
+                        const dec = variantDemands.get(v.id) || 0;
+                        if (dec > 0) {
+                            const currentStock = Number(v.inventory) || 0;
+                            const newStock = currentStock - dec;
+                            if (newStock < 0) {
+                                throw new Error(`Inventory underflow prevented: variant ${v.id} stock cannot drop below zero.`);
+                            }
+                            return { ...v, inventory: newStock };
+                        }
+                        return v;
+                    });
+                    const breakdown = calculateVariantStockBreakdown(updatedVariants);
+                    productUpdates.set(pid, {
+                        variants: updatedVariants,
+                        inventory: breakdown.sellableStock,
+                        totalPhysicalInventory: breakdown.totalPhysicalStock,
+                    });
+                } else {
+                    const totalProductQty = productItems.reduce((s: number, i: any) => s + i.quantity, 0);
+                    const currentInv = prodData?.inventory;
+                    if (typeof currentInv === "number") {
+                        if (currentInv < totalProductQty) {
+                            stockAvailable = false;
+                            break;
+                        }
+                        productUpdates.set(pid, { inventory: currentInv - totalProductQty });
+                    }
                 }
             }
 
@@ -651,8 +775,8 @@ export async function finalizeOrderPayment(
                 };
             } else {
                 // Stock is available: re-decrement and commit
-                for (const [pId, newStock] of productUpdates.entries()) {
-                    transaction.update(db.collection("products").doc(pId), { inventory: newStock });
+                for (const [pId, updates] of productUpdates.entries()) {
+                    transaction.update(db.collection("products").doc(pId), updates);
                 }
                 transaction.update(orderRef, {
                     inventoryReserved: true,
@@ -840,26 +964,72 @@ export async function releaseExpiredReservation(
 
             // WRITE PHASE: Now perform all database writes atomically
             // 1. Restore product stock
-            const stockIncrements = new Map<string, number>();
-            for (const item of items) {
-                stockIncrements.set(
-                    item.productId,
-                    (stockIncrements.get(item.productId) || 0) + item.quantity
-                );
-            }
-
-            for (const [productId, qty] of stockIncrements.entries()) {
+            for (const productId of uniqueProductIds) {
                 const productRef = db.collection("products").doc(productId);
                 const pSnap = productMap.get(productId);
-                const currentStock = pSnap?.data()?.inventory;
-                if (typeof currentStock === "number") {
+                const prodData = pSnap?.data();
+                const productItems = items.filter((item: any) => item.productId === productId);
+
+                if (prodData?.hasVariants === true && Array.isArray(prodData?.variants)) {
+                    const variantIncrements = new Map<string, number>();
+                    for (const item of productItems) {
+                        if (item.variantId) {
+                            variantIncrements.set(
+                                item.variantId,
+                                (variantIncrements.get(item.variantId) || 0) + (Number(item.quantity) || 1)
+                            );
+                        }
+                    }
+
+                    const updatedVariants = prodData.variants.map((v: any) => {
+                        const inc = variantIncrements.get(v.id) || 0;
+                        if (inc > 0) {
+                            return { ...v, inventory: (Number(v.inventory) || 0) + inc };
+                        }
+                        return v;
+                    });
+
+                    // TASK 029 Hardening: Prevent active-reservation data loss if an admin deleted
+                    // or rebuilt the matrix while a reservation was pending.
+                    const existingVariantIds = new Set(prodData.variants.map((v: any) => v.id));
+                    for (const [vId, incQty] of variantIncrements.entries()) {
+                        if (!existingVariantIds.has(vId)) {
+                            const itemSnapshot = productItems.find((i: any) => i.variantId === vId);
+                            updatedVariants.push({
+                                id: vId,
+                                sizeName: itemSnapshot?.size || "",
+                                colorName: itemSnapshot?.color || "",
+                                sku: itemSnapshot?.sku || "",
+                                price: itemSnapshot?.price ?? null,
+                                inventory: incQty,
+                                isActive: false,
+                                dimensions: itemSnapshot?.dimensions,
+                            });
+                        }
+                    }
+
+                    const breakdown = calculateVariantStockBreakdown(updatedVariants);
+
                     transaction.update(productRef, {
-                        inventory: currentStock + qty,
+                        variants: updatedVariants,
+                        inventory: breakdown.sellableStock,
+                        totalPhysicalInventory: breakdown.totalPhysicalStock,
                     });
                 } else {
-                    transaction.update(productRef, {
-                        inventory: admin.firestore.FieldValue.increment(qty),
-                    });
+                    const totalQty = productItems.reduce(
+                        (sum: number, item: any) => sum + (Number(item.quantity) || 1),
+                        0
+                    );
+                    const currentStock = prodData?.inventory;
+                    if (typeof currentStock === "number") {
+                        transaction.update(productRef, {
+                            inventory: currentStock + totalQty,
+                        });
+                    } else {
+                        transaction.update(productRef, {
+                            inventory: admin.firestore.FieldValue.increment(totalQty),
+                        });
+                    }
                 }
             }
 
@@ -876,6 +1046,7 @@ export async function releaseExpiredReservation(
             transaction.update(orderRef, {
                 inventoryReserved: false,
                 reservationReleased: true,
+                stockRestored: true,
                 paymentStatus: "EXPIRED",
                 orderStatus: "Expired",
                 expiredAt: new Date(),
@@ -886,5 +1057,170 @@ export async function releaseExpiredReservation(
         }
 
         return { success: true, released: false, reason: "ALREADY_RELEASED_OR_NOT_RESERVED" };
+    });
+}
+
+export interface CancelOrderOptions {
+    reason?: string;
+    callerUid?: string;
+}
+
+export interface CancelOrderResult {
+    status: number;
+    success: boolean;
+    duplicate?: boolean;
+    error?: string;
+    message?: string;
+}
+
+/**
+ * Idempotently cancels an order and restores reserved or committed inventory
+ * to the exact variant or product record.
+ */
+export async function cancelOrder(
+    db: adminModule.firestore.Firestore,
+    orderId: string,
+    options?: CancelOrderOptions
+): Promise<CancelOrderResult> {
+    const orderRef = db.collection("orders").doc(orderId);
+
+    return await db.runTransaction(async (transaction) => {
+        const orderSnap = await transaction.get(orderRef);
+        if (!orderSnap.exists) {
+            return { status: 404, success: false, error: "Order not found" };
+        }
+
+        const data = orderSnap.data();
+
+        // Idempotency: If order was already cancelled and stock restored
+        if (data?.orderStatus === "Cancelled" && (data?.stockRestored === true || data?.reservationReleased === true)) {
+            return {
+                status: 200,
+                success: true,
+                duplicate: true,
+                message: "Order already cancelled and stock restored",
+            };
+        }
+
+        const items = data?.items || [];
+        const uniqueProductIds = Array.from(
+            new Set(items.map((item: any) => item.productId).filter(Boolean))
+        ) as string[];
+
+        // READ PHASE
+        const productSnaps = await Promise.all(
+            uniqueProductIds.map((id) => transaction.get(db.collection("products").doc(id)))
+        );
+        const productMap = new Map<string, adminModule.firestore.DocumentSnapshot>();
+        uniqueProductIds.forEach((id, idx) => {
+            productMap.set(id, productSnaps[idx]);
+        });
+
+        let couponSnap: adminModule.firestore.DocumentSnapshot | null = null;
+        if (data?.couponCode) {
+            couponSnap = await transaction.get(db.collection("coupons").doc(data.couponCode));
+        }
+
+        // WRITE PHASE: Restore stock if stock was reserved or finalized
+        const shouldRestoreStock =
+            (data?.inventoryReserved === true || data?.inventoryFinalized === true) &&
+            data?.stockRestored !== true &&
+            data?.reservationReleased !== true;
+
+        if (shouldRestoreStock) {
+            for (const productId of uniqueProductIds) {
+                const productRef = db.collection("products").doc(productId);
+                const pSnap = productMap.get(productId);
+                if (!pSnap || !pSnap.exists) continue;
+                const prodData = pSnap.data();
+                const productItems = items.filter((item: any) => item.productId === productId);
+
+                if (prodData?.hasVariants === true && Array.isArray(prodData?.variants)) {
+                    const variantIncrements = new Map<string, number>();
+                    for (const item of productItems) {
+                        if (item.variantId) {
+                            variantIncrements.set(
+                                item.variantId,
+                                (variantIncrements.get(item.variantId) || 0) + (Number(item.quantity) || 1)
+                            );
+                        }
+                    }
+
+                    const updatedVariants = prodData.variants.map((v: any) => {
+                        const inc = variantIncrements.get(v.id) || 0;
+                        if (inc > 0) {
+                            return { ...v, inventory: (Number(v.inventory) || 0) + inc };
+                        }
+                        return v;
+                    });
+
+                    // Restore any deleted/orphaned variants as inactive
+                    const existingVariantIds = new Set(prodData.variants.map((v: any) => v.id));
+                    for (const [vId, incQty] of variantIncrements.entries()) {
+                        if (!existingVariantIds.has(vId)) {
+                            const itemSnapshot = productItems.find((i: any) => i.variantId === vId);
+                            updatedVariants.push({
+                                id: vId,
+                                sizeName: itemSnapshot?.size || "",
+                                colorName: itemSnapshot?.color || "",
+                                sku: itemSnapshot?.sku || "",
+                                price: itemSnapshot?.price ?? null,
+                                inventory: incQty,
+                                isActive: false,
+                                dimensions: itemSnapshot?.dimensions,
+                            });
+                        }
+                    }
+
+                    const breakdown = calculateVariantStockBreakdown(updatedVariants);
+                    transaction.update(productRef, {
+                        variants: updatedVariants,
+                        inventory: breakdown.sellableStock,
+                        totalPhysicalInventory: breakdown.totalPhysicalStock,
+                    });
+                } else {
+                    const totalQty = productItems.reduce(
+                        (sum: number, item: any) => sum + (Number(item.quantity) || 1),
+                        0
+                    );
+                    const currentStock = prodData?.inventory;
+                    if (typeof currentStock === "number") {
+                        transaction.update(productRef, {
+                            inventory: currentStock + totalQty,
+                        });
+                    } else {
+                        transaction.update(productRef, {
+                            inventory: admin.firestore.FieldValue.increment(totalQty),
+                        });
+                    }
+                }
+            }
+
+            // Restore coupon capacity
+            if (data?.couponCode && couponSnap && couponSnap.exists) {
+                const couponRef = db.collection("coupons").doc(data.couponCode);
+                const currentUsed = Number(couponSnap.data()?.timesUsed) || 0;
+                transaction.update(couponRef, {
+                    timesUsed: Math.max(0, currentUsed - 1),
+                });
+            }
+        }
+
+        transaction.update(orderRef, {
+            orderStatus: "Cancelled",
+            paymentStatus: data?.paymentStatus === "PAID" ? "REFUNDED" : "CANCELLED",
+            inventoryReserved: false,
+            reservationReleased: true,
+            stockRestored: true,
+            cancellationReason: options?.reason || "Cancelled by admin or customer",
+            cancelledAt: new Date(),
+            updatedAt: new Date(),
+        });
+
+        return {
+            status: 200,
+            success: true,
+            message: "Order cancelled and stock restored successfully",
+        };
     });
 }

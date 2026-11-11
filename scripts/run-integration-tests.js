@@ -74,7 +74,8 @@ const tests = [
     "tests/integration/commercial-checkout-gate.test.ts",
     "tests/integration/media-isolation.test.ts",
     "tests/integration/purchase-activity-api.test.ts",
-    "tests/integration/cod-customization-restriction.test.ts"
+    "tests/integration/cod-customization-restriction.test.ts",
+    "tests/integration/product-variants-lifecycle.test.ts"
 ];
 
 const result = spawnSync(process.execPath, ["--import", "./tests/register.mjs", "--test", "--test-concurrency=1", ...tests], {

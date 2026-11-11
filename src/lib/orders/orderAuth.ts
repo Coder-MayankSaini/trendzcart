@@ -131,6 +131,16 @@ export const toIsoDateString = (value: unknown): string | null => {
 export interface CustomerOrderSummaryItem {
     id?: string;
     productId: string;
+    variantId?: string;
+    sku?: string;
+    color?: string;
+    dimensions?: {
+        width?: number;
+        height?: number;
+        depth?: number;
+        length?: number;
+        unit: string;
+    };
     name: string;
     price: number;
     quantity: number;
@@ -204,6 +214,10 @@ export function projectCustomerOrder(
               return {
                   id: (item.id as string) || (item.productId as string),
                   productId: (item.productId as string) || (item.id as string),
+                  variantId: (item.variantId as string) || undefined,
+                  sku: (item.sku as string) || undefined,
+                  color: (item.color as string) || undefined,
+                  dimensions: (item.dimensions as any) || undefined,
                   name: String(item.name || "Product"),
                   price: Number(item.price) || 0,
                   quantity: Number(item.quantity) || 1,

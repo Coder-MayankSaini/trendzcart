@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { normalizeMediaUrl } from "@/lib/storage/mediaUrl";
 
@@ -9,16 +9,29 @@ const FALLBACK_DATA_URI = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 interface ProductImageGalleryProps {
     images: string[];
     productName: string;
+    activeImage?: string;
 }
 
-export default function ProductImageGallery({ images, productName }: ProductImageGalleryProps) {
+export default function ProductImageGallery({ images, productName, activeImage }: ProductImageGalleryProps) {
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [failedImages, setFailedImages] = useState<Record<number, boolean>>({});
+
+    // When an active variant image is selected, switch gallery view to it
+    useEffect(() => {
+        if (activeImage) {
+            const idx = images.indexOf(activeImage);
+            if (idx > -1) {
+                setSelectedIndex(idx);
+            }
+        }
+    }, [activeImage, images]);
 
     if (!images || images.length === 0) return null;
 
     const safeIndex = selectedIndex < images.length ? selectedIndex : 0;
-    const rawMainImg = images[safeIndex];
+    const rawMainImg = (activeImage && !images.includes(activeImage) && selectedIndex === 0)
+        ? activeImage
+        : images[safeIndex];
     const isMainFailed = failedImages[safeIndex];
     const mainImgSrc = isMainFailed ? FALLBACK_DATA_URI : normalizeMediaUrl(rawMainImg);
 

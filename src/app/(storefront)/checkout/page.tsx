@@ -590,6 +590,11 @@ export default function CheckoutPage() {
                                     )}
                                     <div className="co-item-details">
                                         <span className="co-item-name">{item.name}</span>
+                                        {(item.size || item.color) && (
+                                            <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", display: "block" }}>
+                                                {item.size ? item.size : ""}{item.size && item.color ? " / " : ""}{item.color ? item.color : ""}
+                                            </span>
+                                        )}
                                         {item.isCustomized && <span className="co-item-custom">Customized</span>}
                                     </div>
                                     <span className="co-item-price">₹{(item.price * item.quantity).toLocaleString("en-IN")}</span>

@@ -11,6 +11,22 @@ import AdminBadge from "./ui/AdminBadge";
 import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
 import type { PurchaseActivityPeriod } from "@/lib/orders/purchaseActivityTypes";
 import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
+import {
+    SizeMode,
+    DimensionUnit,
+    SizeDimension,
+    SizeOption,
+    ColorOption,
+    ProductVariant,
+    STANDARD_APPAREL_SIZES,
+    MAX_VARIANT_LIMIT,
+    formatDimensions,
+    formatSizeDisplay,
+    generateVariantMatrix,
+    generateVariantSku,
+    calculateVariantStockBreakdown,
+    validateVariantConfiguration,
+} from "@/lib/products/variants";
 
 async function uploadFileToR2(file: File, folder: string, subId?: string): Promise<string> {
     const user = auth.currentUser;
@@ -71,6 +87,11 @@ interface Product {
     isFeatured: boolean;
     customizationType: "requires_name" | "requires_picture" | null;
     sizes?: string[];
+    hasVariants?: boolean;
+    sizeMode?: SizeMode;
+    sizesList?: SizeOption[];
+    colors?: ColorOption[];
+    variants?: ProductVariant[];
     reviewCount?: number;
     averageRating?: number;
     ratingDistribution?: Record<number, number>;
@@ -91,6 +112,16 @@ interface CategoryOption {
     id: string;
     name: string;
 }
+
+const COLOR_PRESETS = [
+    { name: "Black", hex: "#000000" },
+    { name: "White", hex: "#FFFFFF" },
+    { name: "Navy Blue", hex: "#000080" },
+    { name: "Red", hex: "#DC2626" },
+    { name: "Olive Green", hex: "#556B2F" },
+    { name: "Burgundy", hex: "#800020" },
+    { name: "Beige", hex: "#F5F5DC" },
+];
 
 export default function AdminProducts() {
     const [products, setProducts] = useState<Product[]>([]);
@@ -116,6 +147,24 @@ export default function AdminProducts() {
     const [simulatedPeriod, setSimulatedPeriod] = useState<PurchaseActivityPeriod>(30);
     const [isRecalculatingActivity, setIsRecalculatingActivity] = useState(false);
     const [activityMessage, setActivityMessage] = useState<string | null>(null);
+
+    // Flexible Variants Editor State (TASK 029)
+    const [newCustomSize, setNewCustomSize] = useState("");
+    const [newDimensionSize, setNewDimensionSize] = useState<{
+        name: string;
+        width: number | "";
+        height: number | "";
+        depth: number | "";
+        unit: DimensionUnit;
+    }>({
+        name: "",
+        width: "",
+        height: "",
+        depth: "",
+        unit: "cm",
+    });
+    const [newColorName, setNewColorName] = useState("");
+    const [newColorHex, setNewColorHex] = useState("#000000");
 
     useEffect(() => {
         try {
@@ -198,6 +247,11 @@ export default function AdminProducts() {
             isCustomized: false,
             isFeatured: false,
             sizes: [],
+            hasVariants: false,
+            sizeMode: "none",
+            sizesList: [],
+            colors: [],
+            variants: [],
             customizationType: null,
             purchaseActivity: {
                 enabled: true,
@@ -216,13 +270,33 @@ export default function AdminProducts() {
         setActivityMessage(null);
         setIsAddingNewCategory(false);
         setNewCategoryName("");
+        setNewCustomSize("");
+        setNewDimensionSize({ name: "", width: "", height: "", depth: "", unit: "cm" });
+        setNewColorName("");
+        setNewColorHex("#000000");
         setIsEditing(true);
     };
 
     const handleEdit = (prod: Product) => {
         cleanupGalleryBlobUrls(galleryItems);
+        const existingSizes = Array.isArray(prod.sizes) ? prod.sizes : [];
+        const initialSizeMode: SizeMode = prod.sizeMode || (existingSizes.length > 0 ? "apparel" : "none");
+        const initialSizesList: SizeOption[] = (Array.isArray(prod.sizesList) && prod.sizesList.length > 0)
+            ? prod.sizesList
+            : existingSizes.map((s, idx) => ({
+                id: `size-${idx}-${s.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+                name: s,
+                isActive: true,
+                order: idx,
+            }));
+
         setFormData({
             ...prod,
+            hasVariants: prod.hasVariants || false,
+            sizeMode: initialSizeMode,
+            sizesList: initialSizesList,
+            colors: prod.colors || [],
+            variants: prod.variants || [],
             isCustomized: isCustomizableProduct(prod),
             purchaseActivity: prod.purchaseActivity || {
                 enabled: true,
@@ -248,6 +322,10 @@ export default function AdminProducts() {
         setActivityMessage(null);
         setIsAddingNewCategory(false);
         setNewCategoryName("");
+        setNewCustomSize("");
+        setNewDimensionSize({ name: "", width: "", height: "", depth: "", unit: "cm" });
+        setNewColorName("");
+        setNewColorHex("#000000");
         setIsEditing(true);
     };
 
@@ -447,6 +525,38 @@ export default function AdminProducts() {
                 finalCategory = finalCategories[0];
             }
 
+            const hasVariants = Boolean(formData.hasVariants);
+            const variants = formData.variants || [];
+            const sizesList = formData.sizesList || [];
+            const colors = formData.colors || [];
+            const sizeMode = formData.sizeMode || "none";
+
+            // Server-grade validation for variant configuration
+            if (hasVariants) {
+                const validation = validateVariantConfiguration({
+                    hasVariants: true,
+                    sizes: sizesList,
+                    colors,
+                    variants,
+                });
+                if (!validation.isValid) {
+                    alert("Variant Configuration Error:\n- " + validation.errors.join("\n- "));
+                    setUploading(false);
+                    return;
+                }
+            }
+
+            // If variants enabled, sync legacy sizes array with active sizesList for backward compatibility
+            const legacySizes = hasVariants
+                ? sizesList.filter(s => s.isActive !== false).map(s => s.name)
+                : (formData.sizes || []);
+
+            const breakdown = (hasVariants && variants.length > 0)
+                ? calculateVariantStockBreakdown(variants)
+                : null;
+            const totalInventory = breakdown ? breakdown.sellableStock : (Number(formData.inventory) || 0);
+            const totalPhysicalInventory = breakdown ? breakdown.totalPhysicalStock : totalInventory;
+
             const payload = {
                 ...formData,
                 id: productId,
@@ -455,6 +565,14 @@ export default function AdminProducts() {
                 category: finalCategory,
                 categories: finalCategories,
                 slug: formData.slug || formData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+                inventory: totalInventory,
+                totalPhysicalInventory,
+                sizes: legacySizes,
+                hasVariants,
+                sizeMode,
+                sizesList,
+                colors,
+                variants,
                 updatedAt: Date.now(),
             };
 
@@ -473,6 +591,177 @@ export default function AdminProducts() {
             setUploading(false);
             setUploadProgress(null);
         }
+    };
+
+    // =========================================================================
+    // FLEXIBLE VARIANTS HELPERS (TASK 029)
+    // =========================================================================
+    const handleToggleApparelSize = (sizeName: string) => {
+        const currentSizes = formData.sizesList || [];
+        const exists = currentSizes.find(s => s.name.toUpperCase() === sizeName.toUpperCase());
+        if (exists) {
+            const updated = currentSizes.filter(s => s.id !== exists.id);
+            setFormData(prev => ({ ...prev, sizesList: updated }));
+        } else {
+            const newOption: SizeOption = {
+                id: `size-${sizeName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+                name: sizeName,
+                isActive: true,
+                order: currentSizes.length,
+            };
+            setFormData(prev => ({ ...prev, sizesList: [...currentSizes, newOption] }));
+        }
+    };
+
+    const handleAddCustomSize = () => {
+        if (!newCustomSize.trim()) return;
+        const name = newCustomSize.trim();
+        const currentSizes = formData.sizesList || [];
+        if (currentSizes.some(s => s.name.toLowerCase() === name.toLowerCase())) {
+            alert("A size with this name already exists.");
+            return;
+        }
+        const newOption: SizeOption = {
+            id: `size-${Date.now()}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+            name,
+            isActive: true,
+            order: currentSizes.length,
+        };
+        setFormData(prev => ({ ...prev, sizesList: [...currentSizes, newOption] }));
+        setNewCustomSize("");
+    };
+
+    const handleAddDimensionSize = () => {
+        if (!newDimensionSize.name.trim()) {
+            alert("Please enter a size name (e.g. Small, Medium, Large).");
+            return;
+        }
+        const w = Number(newDimensionSize.width) || 0;
+        const h = Number(newDimensionSize.height) || 0;
+        const d = newDimensionSize.depth !== "" ? Number(newDimensionSize.depth) : undefined;
+        if (w <= 0 || h <= 0) {
+            alert("Please enter positive numbers for width and height.");
+            return;
+        }
+
+        const currentSizes = formData.sizesList || [];
+        const newOption: SizeOption = {
+            id: `size-dim-${Date.now()}-${newDimensionSize.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+            name: newDimensionSize.name.trim(),
+            dimensions: {
+                width: w,
+                height: h,
+                depth: d,
+                unit: newDimensionSize.unit,
+            },
+            isActive: true,
+            order: currentSizes.length,
+        };
+        setFormData(prev => ({ ...prev, sizesList: [...currentSizes, newOption] }));
+        setNewDimensionSize({ name: "", width: "", height: "", depth: "", unit: "cm" });
+    };
+
+    const handleRemoveSizeOption = (id: string) => {
+        if (!confirm("Are you sure you want to remove this size option? Any variants referencing this size may need to be refreshed.")) return;
+        setFormData(prev => ({
+            ...prev,
+            sizesList: (prev.sizesList || []).filter(s => s.id !== id),
+        }));
+    };
+
+    const handleMoveSizeOption = (index: number, direction: "up" | "down") => {
+        const sizes = [...(formData.sizesList || [])];
+        const targetIndex = direction === "up" ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= sizes.length) return;
+        const [item] = sizes.splice(index, 1);
+        sizes.splice(targetIndex, 0, item);
+        setFormData(prev => ({ ...prev, sizesList: sizes }));
+    };
+
+    const handleAddColor = (name: string, hex?: string) => {
+        const colorName = name.trim();
+        if (!colorName) return;
+        const currentColors = formData.colors || [];
+        if (currentColors.some(c => c.name.toLowerCase() === colorName.toLowerCase())) {
+            alert("A color with this name already exists.");
+            return;
+        }
+        const newCol: ColorOption = {
+            id: `col-${Date.now()}-${colorName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+            name: colorName,
+            hex: hex || "#000000",
+            isActive: true,
+        };
+        setFormData(prev => ({ ...prev, colors: [...currentColors, newCol] }));
+        setNewColorName("");
+        setNewColorHex("#000000");
+    };
+
+    const handleRemoveColor = (id: string) => {
+        if (!confirm("Are you sure you want to remove this color? Any variants referencing this color may need to be refreshed.")) return;
+        setFormData(prev => ({
+            ...prev,
+            colors: (prev.colors || []).filter(c => c.id !== id),
+        }));
+    };
+
+    const handleGenerateMatrix = () => {
+        const sizes = (formData.sizesList || []).filter(s => s.isActive !== false);
+        const colors = (formData.colors || []).filter(c => c.isActive !== false);
+
+        if (sizes.length === 0 && colors.length === 0) {
+            alert("Please configure at least one active size or color before generating combinations.");
+            return;
+        }
+
+        const baseSku = formData.slug || formData.name?.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "PROD";
+        const { variants: newMatrix, exceededLimit, error, requestedCount, limit } = generateVariantMatrix(sizes, colors, {
+            existingVariants: formData.variants || [],
+            baseSku,
+            basePrice: formData.price || 0,
+            defaultStock: 0, // Conservative default stock
+            maxLimit: MAX_VARIANT_LIMIT,
+        });
+
+        // TASK 029 Hardening: If limit exceeded, preserve existing matrix and inform admin
+        if (exceededLimit) {
+            alert(error || `Cannot generate variants: ${requestedCount} combinations were requested, which exceeds the supported limit of ${limit}. Existing variants were preserved.`);
+            return;
+        }
+
+        const breakdown = calculateVariantStockBreakdown(newMatrix);
+
+        setFormData(prev => ({
+            ...prev,
+            variants: newMatrix,
+            inventory: breakdown.sellableStock,
+            totalPhysicalInventory: breakdown.totalPhysicalStock,
+        }));
+    };
+
+    const handleUpdateVariant = (index: number, updates: Partial<ProductVariant>) => {
+        const updated = [...(formData.variants || [])];
+        updated[index] = { ...updated[index], ...updates };
+        const breakdown = calculateVariantStockBreakdown(updated);
+        setFormData(prev => ({
+            ...prev,
+            variants: updated,
+            inventory: breakdown.sellableStock,
+            totalPhysicalInventory: breakdown.totalPhysicalStock,
+        }));
+    };
+
+    const handleDeleteVariant = (index: number) => {
+        if (!confirm("Warning: Deleting or disabling this variant will permanently remove it from available purchasing options. Proceed?")) return;
+        const updated = [...(formData.variants || [])];
+        updated.splice(index, 1);
+        const breakdown = calculateVariantStockBreakdown(updated);
+        setFormData(prev => ({
+            ...prev,
+            variants: updated,
+            inventory: breakdown.sellableStock,
+            totalPhysicalInventory: breakdown.totalPhysicalStock,
+        }));
     };
 
     // =========================================================================
@@ -541,16 +830,24 @@ export default function AdminProducts() {
                         </div>
                     </div>
 
-                    {/* SECTION 2: PRICING, INVENTORY & SIZES */}
-                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }}>
-                        <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-                            <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>2</span>
-                            Pricing & Stock Inventory
-                        </h3>
+                    {/* SECTION 2: PRICING, INVENTORY & FLEXIBLE VARIANTS (TASK 029) */}
+                    <div style={{ borderTop: "1px solid var(--border-color)", paddingTop: "24px", marginBottom: "24px" }} data-testid="section-pricing-variants">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "8px", marginBottom: "16px" }}>
+                            <div>
+                                <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "8px", margin: 0 }}>
+                                    <span style={{ display: "inline-flex", width: "24px", height: "24px", borderRadius: "50%", backgroundColor: "var(--accent-light)", color: "var(--accent)", fontSize: "0.8rem", alignItems: "center", justifyContent: "center" }}>2</span>
+                                    Pricing, Stock & Variants
+                                </h3>
+                                <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "4px", marginBottom: 0 }}>
+                                    Configure base pricing, stock inventory, and multi-attribute variant matrix (sizes, dimensions & colors).
+                                </p>
+                            </div>
+                        </div>
 
-                        <div className="admin-form-grid-2">
+                        {/* Base Price and Stock Grid */}
+                        <div className="admin-form-grid-2" style={{ marginBottom: "20px" }}>
                             <div className="admin-form-group">
-                                <label htmlFor="prod-price">Price (₹ INR) *</label>
+                                <label htmlFor="prod-price">Base Price (₹ INR) *</label>
                                 <input
                                     id="prod-price"
                                     type="number"
@@ -562,10 +859,15 @@ export default function AdminProducts() {
                                     value={formData.price ?? 0}
                                     onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
                                 />
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    Default price for product or variants without explicit price overrides.
+                                </span>
                             </div>
 
                             <div className="admin-form-group">
-                                <label htmlFor="prod-inventory">Inventory Count *</label>
+                                <label htmlFor="prod-inventory">
+                                    {formData.hasVariants ? "Total Inventory (Aggregated across variants)" : "Inventory Count *"}
+                                </label>
                                 <input
                                     id="prod-inventory"
                                     type="number"
@@ -573,49 +875,714 @@ export default function AdminProducts() {
                                     step="1"
                                     min="0"
                                     required
+                                    disabled={formData.hasVariants}
                                     className="admin-form-input"
                                     value={formData.inventory ?? 0}
                                     onChange={(e) => setFormData({ ...formData, inventory: Number(e.target.value) })}
+                                    style={formData.hasVariants ? { backgroundColor: "var(--bg-secondary)", opacity: 0.85, cursor: "not-allowed" } : {}}
                                 />
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    {formData.hasVariants
+                                        ? "Automatically computed from the sum of active variant stock."
+                                        : "Direct product-level stock count."}
+                                </span>
                             </div>
                         </div>
 
-                        <div className="admin-form-group">
-                            <label htmlFor="prod-sizes">Available Sizes (Comma-separated)</label>
-                            <input
-                                id="prod-sizes"
-                                type="text"
-                                className="admin-form-input"
-                                value={(formData.sizes || []).join(", ")}
-                                onChange={(e) => {
-                                    const val = e.target.value;
-                                    const newSizes = val.split(",").map(s => s.trim()).filter(s => s !== "");
-                                    setFormData({ ...formData, sizes: newSizes });
-                                }}
-                                placeholder="S, M, L, XL, XXL"
-                            />
-                            <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
-                                {["S", "M", "L", "XL", "XXL", "Free Size"].map((preset) => {
-                                    const hasSize = (formData.sizes || []).includes(preset);
-                                    return (
-                                        <button
-                                            key={preset}
-                                            type="button"
-                                            className={`admin-filter-pill ${hasSize ? "active" : ""}`}
-                                            style={{ minHeight: "32px", fontSize: "0.75rem", padding: "4px 10px" }}
-                                            onClick={() => {
-                                                const current = new Set(formData.sizes || []);
-                                                if (current.has(preset)) current.delete(preset);
-                                                else current.add(preset);
-                                                setFormData({ ...formData, sizes: Array.from(current) });
-                                            }}
-                                        >
-                                            {preset}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                        {/* Variants Toggle Card */}
+                        <div style={{
+                            padding: "16px",
+                            borderRadius: "14px",
+                            backgroundColor: formData.hasVariants ? "rgba(0, 107, 60, 0.04)" : "var(--bg-primary)",
+                            border: formData.hasVariants ? "1.5px solid var(--accent)" : "1px solid var(--border-color)",
+                            marginBottom: "20px",
+                            transition: "all 0.2s ease"
+                        }}>
+                            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                <input
+                                    type="checkbox"
+                                    checked={formData.hasVariants || false}
+                                    onChange={(e) => {
+                                        const checked = e.target.checked;
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            hasVariants: checked,
+                                            sizeMode: prev.sizeMode || "apparel",
+                                        }));
+                                    }}
+                                    style={{ width: "20px", height: "20px", accentColor: "var(--accent)" }}
+                                />
+                                <span>Enable Product Variants (Sizes & Colors)</span>
+                            </label>
+                            <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginLeft: "30px", marginTop: "4px", marginBottom: 0 }}>
+                                Support apparel sizes, free size, physical dimensions (e.g. 26×26 cm), custom labels, and color swatches with variant-specific SKUs, prices, stock, and images.
+                            </p>
                         </div>
+
+                        {/* IF VARIANTS ARE NOT ENABLED: RENDER LEGACY SIZES INPUT */}
+                        {!formData.hasVariants && (
+                            <div className="admin-form-group">
+                                <label htmlFor="prod-sizes">Available Sizes (Legacy Comma-separated)</label>
+                                <input
+                                    id="prod-sizes"
+                                    type="text"
+                                    className="admin-form-input"
+                                    value={(formData.sizes || []).join(", ")}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        const newSizes = val.split(",").map(s => s.trim()).filter(s => s !== "");
+                                        setFormData({ ...formData, sizes: newSizes });
+                                    }}
+                                    placeholder="S, M, L, XL, XXL"
+                                />
+                                <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
+                                    {["S", "M", "L", "XL", "XXL", "Free Size"].map((preset) => {
+                                        const hasSize = (formData.sizes || []).includes(preset);
+                                        return (
+                                            <button
+                                                key={preset}
+                                                type="button"
+                                                className={`admin-filter-pill ${hasSize ? "active" : ""}`}
+                                                style={{ minHeight: "32px", fontSize: "0.75rem", padding: "4px 10px" }}
+                                                onClick={() => {
+                                                    const current = new Set(formData.sizes || []);
+                                                    if (current.has(preset)) current.delete(preset);
+                                                    else current.add(preset);
+                                                    setFormData({ ...formData, sizes: Array.from(current) });
+                                                }}
+                                            >
+                                                {preset}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* IF VARIANTS ARE ENABLED: RENDER FULL CONFIGURATION SYSTEM */}
+                        {formData.hasVariants && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }} data-testid="variants-config-container">
+                                {/* SUBSECTION A: SIZE CONFIGURATION MODE */}
+                                <div style={{ padding: "16px", borderRadius: "14px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)" }}>
+                                    <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <span>📏 Sizing Configuration Mode</span>
+                                    </h4>
+                                    <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "14px" }}>
+                                        Select how product sizing is structured for storefront selection.
+                                    </p>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px", marginBottom: "16px" }}>
+                                        {[
+                                            { mode: "none", label: "Mode A: No Size", desc: "No size options" },
+                                            { mode: "apparel", label: "Mode B: Apparel", desc: "XS, S, M, L, XL..." },
+                                            { mode: "free_size", label: "Mode C: Free Size", desc: "Auto-selected" },
+                                            { mode: "dimensions", label: "Mode D: Dimensions", desc: "Small (20×20 cm)" },
+                                            { mode: "custom", label: "Mode E: Custom", desc: "Mini, King, A4..." },
+                                        ].map(item => {
+                                            const isSelected = (formData.sizeMode || "apparel") === item.mode;
+                                            return (
+                                                <button
+                                                    key={item.mode}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const targetMode = item.mode as SizeMode;
+                                                        let newSizes = formData.sizesList || [];
+                                                        if (targetMode === "free_size") {
+                                                            newSizes = [{ id: "size-free-size", name: "Free Size", isActive: true }];
+                                                        } else if (targetMode === "none") {
+                                                            newSizes = [];
+                                                        }
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            sizeMode: targetMode,
+                                                            sizesList: newSizes,
+                                                        }));
+                                                    }}
+                                                    className={`admin-filter-pill ${isSelected ? "active" : ""}`}
+                                                    style={{
+                                                        padding: "10px 8px",
+                                                        height: "auto",
+                                                        minHeight: "52px",
+                                                        display: "flex",
+                                                        flexDirection: "column",
+                                                        alignItems: "center",
+                                                        justifyContent: "center",
+                                                        textAlign: "center",
+                                                        lineHeight: 1.2
+                                                    }}
+                                                >
+                                                    <span style={{ fontWeight: 700, fontSize: "0.82rem" }}>{item.label}</span>
+                                                    <span style={{ fontSize: "0.68rem", opacity: 0.8, marginTop: "2px" }}>{item.desc}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* MODE B: APPAREL SIZES CONTROLS */}
+                                    {formData.sizeMode === "apparel" && (
+                                        <div>
+                                            <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", display: "block", marginBottom: "6px" }}>
+                                                Select Available Apparel Sizes:
+                                            </label>
+                                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
+                                                {STANDARD_APPAREL_SIZES.map(preset => {
+                                                    const isChecked = (formData.sizesList || []).some(s => s.name.toUpperCase() === preset.toUpperCase() && s.isActive !== false);
+                                                    return (
+                                                        <button
+                                                            key={preset}
+                                                            type="button"
+                                                            onClick={() => handleToggleApparelSize(preset)}
+                                                            className={`admin-filter-pill ${isChecked ? "active" : ""}`}
+                                                            style={{ minWidth: "48px", minHeight: "36px", fontSize: "0.85rem", fontWeight: 600 }}
+                                                        >
+                                                            {isChecked && "✓ "}
+                                                            {preset}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* MODE C: FREE SIZE CONTROLS */}
+                                    {formData.sizeMode === "free_size" && (
+                                        <div style={{ padding: "12px 14px", borderRadius: "10px", backgroundColor: "rgba(0, 107, 60, 0.08)", border: "1px solid rgba(0, 107, 60, 0.2)", fontSize: "0.85rem", color: "var(--accent)" }}>
+                                            <strong>Free Size Configured:</strong> A universal &quot;Free Size&quot; option is automatically assigned. Storefront PDP will auto-select it seamlessly for customers.
+                                        </div>
+                                    )}
+
+                                    {/* MODE D: NAMED SIZES WITH PHYSICAL DIMENSIONS */}
+                                    {formData.sizeMode === "dimensions" && (
+                                        <div>
+                                            <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", display: "block", marginBottom: "8px" }}>
+                                                Add Named Size with Physical Dimensions (e.g. Small — 20 × 20 cm):
+                                            </label>
+                                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "8px", alignItems: "flex-end", marginBottom: "12px" }}>
+                                                <div>
+                                                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", display: "block", marginBottom: "2px" }}>Name *</span>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="e.g. Small"
+                                                        value={newDimensionSize.name}
+                                                        onChange={(e) => setNewDimensionSize({ ...newDimensionSize, name: e.target.value })}
+                                                        className="admin-form-input"
+                                                        style={{ height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", display: "block", marginBottom: "2px" }}>Width *</span>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="20"
+                                                        value={newDimensionSize.width}
+                                                        onChange={(e) => setNewDimensionSize({ ...newDimensionSize, width: e.target.value === "" ? "" : Number(e.target.value) })}
+                                                        className="admin-form-input"
+                                                        style={{ height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", display: "block", marginBottom: "2px" }}>Height *</span>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="20"
+                                                        value={newDimensionSize.height}
+                                                        onChange={(e) => setNewDimensionSize({ ...newDimensionSize, height: e.target.value === "" ? "" : Number(e.target.value) })}
+                                                        className="admin-form-input"
+                                                        style={{ height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", display: "block", marginBottom: "2px" }}>Depth (opt)</span>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="5"
+                                                        value={newDimensionSize.depth}
+                                                        onChange={(e) => setNewDimensionSize({ ...newDimensionSize, depth: e.target.value === "" ? "" : Number(e.target.value) })}
+                                                        className="admin-form-input"
+                                                        style={{ height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", display: "block", marginBottom: "2px" }}>Unit</span>
+                                                    <select
+                                                        value={newDimensionSize.unit}
+                                                        onChange={(e) => setNewDimensionSize({ ...newDimensionSize, unit: e.target.value as DimensionUnit })}
+                                                        className="admin-form-input"
+                                                        style={{ height: "36px", minHeight: "36px", fontSize: "0.82rem" }}
+                                                    >
+                                                        <option value="cm">cm</option>
+                                                        <option value="mm">mm</option>
+                                                        <option value="inch">inches</option>
+                                                        <option value="m">m</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAddDimensionSize}
+                                                        className="admin-btn admin-btn-primary"
+                                                        style={{ width: "100%", height: "36px", minHeight: "36px", fontSize: "0.82rem", padding: "0 10px" }}
+                                                    >
+                                                        + Add
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            {/* Configured Dimension Sizes List */}
+                                            {(formData.sizesList || []).length > 0 && (
+                                                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                    {(formData.sizesList || []).map((s, idx) => (
+                                                        <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 12px", borderRadius: "8px", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)", fontSize: "0.85rem" }}>
+                                                            <div>
+                                                                <strong>{s.name}</strong>
+                                                                {s.dimensions && (
+                                                                    <span style={{ marginLeft: "8px", color: "var(--text-secondary)", fontSize: "0.8rem" }}>
+                                                                        ({formatDimensions(s.dimensions)})
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div style={{ display: "flex", gap: "6px" }}>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveSizeOption(s.id)}
+                                                                    className="admin-btn admin-btn-danger admin-btn-sm"
+                                                                    style={{ padding: "2px 8px", fontSize: "0.75rem", minHeight: "26px" }}
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* MODE E: CUSTOM SIZE LABELS */}
+                                    {formData.sizeMode === "custom" && (
+                                        <div>
+                                            <label style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-primary)", display: "block", marginBottom: "6px" }}>
+                                                Add Custom Size Label (e.g. Mini, Regular, King, 8-inch, A4):
+                                            </label>
+                                            <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Enter custom size label..."
+                                                    value={newCustomSize}
+                                                    onChange={(e) => setNewCustomSize(e.target.value)}
+                                                    className="admin-form-input"
+                                                    style={{ height: "36px", minHeight: "36px", fontSize: "0.85rem" }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAddCustomSize}
+                                                    className="admin-btn admin-btn-primary"
+                                                    style={{ height: "36px", minHeight: "36px", fontSize: "0.85rem", whiteSpace: "nowrap" }}
+                                                >
+                                                    + Add Size
+                                                </button>
+                                            </div>
+
+                                            {/* Configured Custom Sizes List */}
+                                            {(formData.sizesList || []).length > 0 && (
+                                                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                                                    {(formData.sizesList || []).map((s, idx) => (
+                                                        <div key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 12px", borderRadius: "8px", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)", fontSize: "0.85rem" }}>
+                                                            <span><strong>{s.name}</strong></span>
+                                                            <div style={{ display: "flex", gap: "4px" }}>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={idx === 0}
+                                                                    onClick={() => handleMoveSizeOption(idx, "up")}
+                                                                    className="admin-btn admin-btn-secondary admin-btn-sm"
+                                                                    style={{ padding: "2px 6px", fontSize: "0.75rem", minHeight: "26px" }}
+                                                                >
+                                                                    ▲
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    disabled={idx === (formData.sizesList || []).length - 1}
+                                                                    onClick={() => handleMoveSizeOption(idx, "down")}
+                                                                    className="admin-btn admin-btn-secondary admin-btn-sm"
+                                                                    style={{ padding: "2px 6px", fontSize: "0.75rem", minHeight: "26px" }}
+                                                                >
+                                                                    ▼
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleRemoveSizeOption(s.id)}
+                                                                    className="admin-btn admin-btn-danger admin-btn-sm"
+                                                                    style={{ padding: "2px 8px", fontSize: "0.75rem", minHeight: "26px" }}
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* MODE A: NO SIZES */}
+                                    {formData.sizeMode === "none" && (
+                                        <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", fontStyle: "italic" }}>
+                                            No size options configured. Variants can be color-only, or leave colors empty for single product inventory.
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* SUBSECTION B: COLOR VARIANTS */}
+                                <div style={{ padding: "16px", borderRadius: "14px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)" }}>
+                                    <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <span>🎨 Product Color Swatches</span>
+                                    </h4>
+                                    <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginBottom: "12px" }}>
+                                        Add optional color selections with visual swatches and associated gallery photos.
+                                    </p>
+
+                                    {/* Preset Swatches Quick-Add */}
+                                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "14px" }}>
+                                        {COLOR_PRESETS.map(preset => {
+                                            const isAdded = (formData.colors || []).some(c => c.name.toLowerCase() === preset.name.toLowerCase());
+                                            return (
+                                                <button
+                                                    key={preset.name}
+                                                    type="button"
+                                                    onClick={() => !isAdded && handleAddColor(preset.name, preset.hex)}
+                                                    className={`admin-filter-pill ${isAdded ? "active" : ""}`}
+                                                    style={{ display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "0.78rem", padding: "4px 10px", minHeight: "32px", opacity: isAdded ? 0.6 : 1 }}
+                                                >
+                                                    <span style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: preset.hex, border: "1px solid rgba(0,0,0,0.2)" }} />
+                                                    {preset.name} {isAdded && "✓"}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Add Custom Color Form */}
+                                    <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "16px", flexWrap: "wrap" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                            <input
+                                                type="color"
+                                                value={newColorHex}
+                                                onChange={(e) => setNewColorHex(e.target.value)}
+                                                style={{ width: "38px", height: "38px", padding: "0", border: "1px solid var(--border-color)", borderRadius: "8px", cursor: "pointer" }}
+                                                title="Pick color"
+                                            />
+                                            <input
+                                                type="text"
+                                                value={newColorHex}
+                                                onChange={(e) => setNewColorHex(e.target.value)}
+                                                className="admin-form-input"
+                                                style={{ width: "85px", height: "36px", minHeight: "36px", fontSize: "0.82rem", textTransform: "uppercase" }}
+                                                placeholder="#HEX"
+                                            />
+                                        </div>
+                                        <div style={{ flex: 1, minWidth: "140px" }}>
+                                            <input
+                                                type="text"
+                                                placeholder="Color Name (e.g. Royal Blue)..."
+                                                value={newColorName}
+                                                onChange={(e) => setNewColorName(e.target.value)}
+                                                className="admin-form-input"
+                                                style={{ height: "36px", minHeight: "36px", fontSize: "0.85rem" }}
+                                            />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleAddColor(newColorName, newColorHex)}
+                                            className="admin-btn admin-btn-primary"
+                                            style={{ height: "36px", minHeight: "36px", fontSize: "0.85rem" }}
+                                        >
+                                            + Add Color
+                                        </button>
+                                    </div>
+
+                                    {/* Configured Colors List */}
+                                    {(formData.colors || []).length > 0 && (
+                                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                                            {(formData.colors || []).map((col) => (
+                                                <div key={col.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", borderRadius: "10px", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)", flexWrap: "wrap", gap: "8px" }}>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                        <span style={{ width: "20px", height: "20px", borderRadius: "50%", backgroundColor: col.hex || "#ccc", border: "1px solid rgba(0,0,0,0.2)" }} />
+                                                        <span style={{ fontWeight: 600, fontSize: "0.88rem" }}>{col.name}</span>
+                                                        <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>({col.hex || "no swatch"})</span>
+                                                    </div>
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                        {/* Optional Associated Gallery Image */}
+                                                        <select
+                                                            value={col.image || ""}
+                                                            onChange={(e) => {
+                                                                const img = e.target.value || undefined;
+                                                                setFormData(prev => ({
+                                                                    ...prev,
+                                                                    colors: (prev.colors || []).map(c => c.id === col.id ? { ...c, image: img } : c)
+                                                                }));
+                                                            }}
+                                                            className="admin-form-input"
+                                                            style={{ height: "30px", minHeight: "30px", fontSize: "0.75rem", padding: "2px 8px", width: "160px" }}
+                                                        >
+                                                            <option value="">No Color Photo</option>
+                                                            {galleryItems.map((item, idx) => (
+                                                                <option key={item.id} value={item.src}>Photo {idx + 1} {featuredImageId === item.id ? "(HERO)" : ""}</option>
+                                                            ))}
+                                                        </select>
+
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleRemoveColor(col.id)}
+                                                            className="admin-btn admin-btn-danger admin-btn-sm"
+                                                            style={{ padding: "2px 8px", fontSize: "0.75rem", minHeight: "28px" }}
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* SUBSECTION C: COMBINATION MATRIX GENERATOR */}
+                                <div style={{ padding: "16px", borderRadius: "14px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-primary)" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "12px" }}>
+                                        <div>
+                                            <h4 style={{ fontSize: "0.95rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                                                ⚡ Variant Combination Matrix
+                                            </h4>
+                                            <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginTop: "2px", marginBottom: 0 }}>
+                                                Active Sizes: {(formData.sizesList || []).filter(s => s.isActive !== false).length} &nbsp;|&nbsp; Active Colors: {(formData.colors || []).filter(c => c.isActive !== false).length} &nbsp;|&nbsp; Current Combinations: {(formData.variants || []).length} (Max {MAX_VARIANT_LIMIT})
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleGenerateMatrix}
+                                            className="admin-btn admin-btn-primary admin-btn-sm"
+                                            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                                            Generate / Refresh Matrix
+                                        </button>
+                                    </div>
+
+                                    {/* Notice about SKU and Price persistence */}
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginBottom: "14px", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                        Clicking &quot;Generate / Refresh Matrix&quot; creates all enabled combinations while preserving any custom SKUs, prices, stock, and photo associations you have already configured.
+                                    </div>
+
+                                    {/* Empty Matrix State */}
+                                    {(!formData.variants || formData.variants.length === 0) && (
+                                        <div style={{ padding: "24px 16px", textAlign: "center", backgroundColor: "var(--bg-secondary)", borderRadius: "10px", border: "1px dashed var(--border-color)", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                                            No variant combinations generated yet. Select your sizing mode and colors above, then click &quot;Generate / Refresh Matrix&quot;.
+                                        </div>
+                                    )}
+
+                                    {/* Desktop Matrix Table (>= 768px) */}
+                                    {formData.variants && formData.variants.length > 0 && (
+                                        <div className="admin-table-container" style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-color)", borderRadius: "10px", marginBottom: "12px" }}>
+                                            <table className="admin-table" style={{ fontSize: "0.82rem" }}>
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ width: "36px" }}>Active</th>
+                                                        <th>Option Combination</th>
+                                                        <th>SKU</th>
+                                                        <th>Price (₹) Override</th>
+                                                        <th>Stock Count</th>
+                                                        <th>Photo</th>
+                                                        <th style={{ textAlign: "right" }}>Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {formData.variants.map((v, vIdx) => {
+                                                        const labelParts: string[] = [];
+                                                        if (v.sizeName) labelParts.push(v.sizeName);
+                                                        if (v.colorName) labelParts.push(v.colorName);
+                                                        const comboLabel = labelParts.length > 0 ? labelParts.join(" / ") : "Default";
+
+                                                        return (
+                                                            <tr key={v.id || vIdx} style={{ opacity: v.isActive === false ? 0.5 : 1 }}>
+                                                                <td>
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={v.isActive !== false}
+                                                                        onChange={(e) => handleUpdateVariant(vIdx, { isActive: e.target.checked })}
+                                                                        style={{ width: "16px", height: "16px", accentColor: "var(--accent)" }}
+                                                                        title="Enable/disable this variant"
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <div style={{ fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
+                                                                        {comboLabel}
+                                                                    </div>
+                                                                </td>
+                                                                <td>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={v.sku || ""}
+                                                                        onChange={(e) => handleUpdateVariant(vIdx, { sku: e.target.value })}
+                                                                        className="admin-form-input"
+                                                                        style={{ height: "28px", minHeight: "28px", fontSize: "0.78rem", padding: "2px 6px", width: "120px" }}
+                                                                        placeholder="SKU"
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <input
+                                                                        type="number"
+                                                                        value={typeof v.price === "number" ? v.price : ""}
+                                                                        onChange={(e) => handleUpdateVariant(vIdx, { price: e.target.value === "" ? null : Number(e.target.value) })}
+                                                                        className="admin-form-input"
+                                                                        style={{ height: "28px", minHeight: "28px", fontSize: "0.78rem", padding: "2px 6px", width: "95px" }}
+                                                                        placeholder={`₹${formData.price || 0}`}
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <input
+                                                                        type="number"
+                                                                        min="0"
+                                                                        value={v.inventory ?? 0}
+                                                                        onChange={(e) => handleUpdateVariant(vIdx, { inventory: Math.max(0, Number(e.target.value) || 0) })}
+                                                                        className="admin-form-input"
+                                                                        style={{ height: "28px", minHeight: "28px", fontSize: "0.78rem", padding: "2px 6px", width: "70px" }}
+                                                                    />
+                                                                </td>
+                                                                <td>
+                                                                    <select
+                                                                        value={v.image || ""}
+                                                                        onChange={(e) => handleUpdateVariant(vIdx, { image: e.target.value || undefined })}
+                                                                        className="admin-form-input"
+                                                                        style={{ height: "28px", minHeight: "28px", fontSize: "0.75rem", padding: "2px 6px", width: "105px" }}
+                                                                    >
+                                                                        <option value="">Default Hero</option>
+                                                                        {galleryItems.map((item, idx) => (
+                                                                            <option key={item.id} value={item.src}>Photo {idx + 1}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </td>
+                                                                <td style={{ textAlign: "right" }}>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => handleDeleteVariant(vIdx)}
+                                                                        className="admin-btn admin-btn-danger admin-btn-sm"
+                                                                        style={{ padding: "2px 6px", fontSize: "0.75rem", minHeight: "26px" }}
+                                                                        title="Delete variant combination"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+
+                                    {/* Mobile Responsive Cards for Matrix (< 768px) */}
+                                    {formData.variants && formData.variants.length > 0 && (
+                                        <div className="admin-mobile-cards-list" style={{ marginTop: "12px" }}>
+                                            {formData.variants.map((v, vIdx) => {
+                                                const labelParts: string[] = [];
+                                                if (v.sizeName) labelParts.push(v.sizeName);
+                                                if (v.colorName) labelParts.push(v.colorName);
+                                                const comboLabel = labelParts.length > 0 ? labelParts.join(" / ") : "Default";
+
+                                                return (
+                                                    <div key={v.id || vIdx} className="admin-mobile-item-card" style={{ padding: "12px", border: "1px solid var(--border-color)", opacity: v.isActive === false ? 0.6 : 1 }}>
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                                            <strong style={{ fontSize: "0.9rem" }}>{comboLabel}</strong>
+                                                            <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.75rem", cursor: "pointer" }}>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={v.isActive !== false}
+                                                                    onChange={(e) => handleUpdateVariant(vIdx, { isActive: e.target.checked })}
+                                                                    style={{ accentColor: "var(--accent)" }}
+                                                                />
+                                                                Active
+                                                            </label>
+                                                        </div>
+
+                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                                                            <div>
+                                                                <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>SKU</span>
+                                                                <input
+                                                                    type="text"
+                                                                    value={v.sku || ""}
+                                                                    onChange={(e) => handleUpdateVariant(vIdx, { sku: e.target.value })}
+                                                                    className="admin-form-input"
+                                                                    style={{ height: "30px", minHeight: "30px", fontSize: "0.78rem" }}
+                                                                    placeholder="SKU"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Price Override (₹)</span>
+                                                                <input
+                                                                    type="number"
+                                                                    value={typeof v.price === "number" ? v.price : ""}
+                                                                    onChange={(e) => handleUpdateVariant(vIdx, { price: e.target.value === "" ? null : Number(e.target.value) })}
+                                                                    className="admin-form-input"
+                                                                    style={{ height: "30px", minHeight: "30px", fontSize: "0.78rem" }}
+                                                                    placeholder={`Base (₹${formData.price || 0})`}
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "center" }}>
+                                                            <div>
+                                                                <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Stock Count</span>
+                                                                <input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={v.inventory ?? 0}
+                                                                    onChange={(e) => handleUpdateVariant(vIdx, { inventory: Math.max(0, Number(e.target.value) || 0) })}
+                                                                    className="admin-form-input"
+                                                                    style={{ height: "30px", minHeight: "30px", fontSize: "0.78rem" }}
+                                                                />
+                                                            </div>
+                                                            <div style={{ display: "flex", gap: "4px", alignItems: "flex-end" }}>
+                                                                <div style={{ flex: 1 }}>
+                                                                    <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Photo</span>
+                                                                    <select
+                                                                        value={v.image || ""}
+                                                                        onChange={(e) => handleUpdateVariant(vIdx, { image: e.target.value || undefined })}
+                                                                        className="admin-form-input"
+                                                                        style={{ height: "30px", minHeight: "30px", fontSize: "0.72rem", padding: "2px 4px" }}
+                                                                    >
+                                                                        <option value="">Default</option>
+                                                                        {galleryItems.map((item, idx) => (
+                                                                            <option key={item.id} value={item.src}>Photo {idx + 1}</option>
+                                                                        ))}
+                                                                    </select>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteVariant(vIdx)}
+                                                                    className="admin-btn admin-btn-danger admin-btn-sm"
+                                                                    style={{ height: "30px", minHeight: "30px", padding: "0 8px" }}
+                                                                >
+                                                                    ✕
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+
+                                    {/* Total Stock Across Variants Summary */}
+                                    {formData.variants && formData.variants.length > 0 && (
+                                        <div style={{ marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", borderRadius: "8px", backgroundColor: "var(--bg-secondary)", fontSize: "0.85rem", fontWeight: 600 }}>
+                                            <span style={{ color: "var(--text-secondary)" }}>Total Stock Across Active Variants:</span>
+                                            <span style={{ color: "var(--accent)", fontSize: "0.95rem", fontWeight: 700 }}>
+                                                {formData.variants.filter(v => v.isActive !== false).reduce((sum, v) => sum + (Number(v.inventory) || 0), 0)} units
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* SECTION 3: CATEGORY SELECTION */}
@@ -1379,6 +2346,11 @@ export default function AdminProducts() {
                                                     </span>
                                                 </>
                                             )}
+                                            {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 && (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#f3e8ff", color: "#7e22ce", border: "1px solid #e9d5ff" }}>
+                                                    {product.variants.length} Variants
+                                                </span>
+                                            )}
                                             {product.isFeatured && (
                                                 <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
                                                     Featured
@@ -1481,6 +2453,11 @@ export default function AdminProducts() {
                                                         Prepaid Only
                                                     </span>
                                                 </>
+                                            )}
+                                            {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 && (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#f3e8ff", color: "#7e22ce", border: "1px solid #e9d5ff" }}>
+                                                    {product.variants.length} Variants
+                                                </span>
                                             )}
                                             {product.reviewCount && product.reviewCount > 0 ? (
                                                 <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "#d97706", display: "inline-flex", alignItems: "center", gap: "2px" }}>

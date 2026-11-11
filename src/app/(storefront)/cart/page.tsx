@@ -135,8 +135,12 @@ export default function CartPage() {
                                 </div>
                                 <p style={{ color: 'var(--text-secondary)', fontSize: '1.125rem', fontWeight: 500, margin: '0 0 16px 0' }}>₹{Number(item.price).toLocaleString("en-IN")}</p>
 
-                                {item.size && (
-                                    <p style={{ margin: '0 0 8px 0', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Size: {item.size}</p>
+                                {(item.size || item.color || item.sku) && (
+                                    <div style={{ margin: '0 0 8px 0', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                        {item.size && <span>Size: {item.size}</span>}
+                                        {item.color && <span>{item.size ? '·' : ''} Color: {item.color}</span>}
+                                        {item.sku && <span style={{ opacity: 0.8 }}>· SKU: {item.sku}</span>}
+                                    </div>
                                 )}
 
                                 {item.customizationData && (
