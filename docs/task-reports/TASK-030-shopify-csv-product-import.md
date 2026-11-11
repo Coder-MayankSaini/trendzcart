@@ -3,13 +3,18 @@
 **Task ID:** TASK-030  
 **Branch:** `task/030-shopify-csv-product-import`  
 **Base Commit:** `b8cdf28` (`b8cdf28a23ea999278569ab65ba7cfc7b4487f3c`) / Doc Commit: `6bb49b3`  
+**Deployed Commit:** [`1d27f68`](https://github.com/Coder-MayankSaini/trendzcart/commit/1d27f68d7f1c752f0e785eb4613b4ddc4dbe0eda)  
 **Production Site:** `https://bazaarvilla.com` (Netlify Site: `trendzcartdemo` / Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
 **Previous Published Deploy ID:** [`6af40ef0b0506f233476f778`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af40ef0b0506f233476f778) (TASK 029)  
+**Netlify Published Deploy ID:** [`6af453890dd5befd7880871b`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af453890dd5befd7880871b)  
+**Netlify Build ID:** `6af453890dd5befd78808719`  
+**Firebase Rules Deployment:** Released `firestore.rules` (v2) to project `trendkartz` at 2026-11-11 17:06:52 IST  
 **Automated Test Baseline Before:** 466 unique automated tests (139 unit + 327 integration, including 40 security-rule tests)  
 **Total Automated Tests After Final Hardening:** **535 unique automated tests** (180 unit + 355 integration, including 41 security-rule tests across 25 suites; 100% pass rate)  
 **New Tests Added in TASK 030:** **69 new automated tests** (41 unit tests in `tests/unit/csv-product-import.test.ts` + 27 integration tests in `tests/integration/product-bulk-import.test.ts` + 1 Firestore security rule test `RULE-015C` in `tests/integration/firestore-rules.test.ts`)  
 **Visual QA Coverage:** 15 high-fidelity screenshots captured across 6 standard viewports (320px, 375px, 430px, 768px, 1024px, 1440px) in `docs/screenshots/task030/`  
-**Production Release Status:** **TASK 030 — FINAL SAFETY VERIFICATION COMPLETE, AWAITING OWNER APPROVAL.** (Zero live production catalog mutations executed; zero production code deployed; awaiting explicit store owner release authorization).
+**Live Verification Status:** **15 / 15 Post-Deployment Read-Only Checks Passed** (`scripts/verify-live-task030.mjs`)  
+**Production Release Status:** **`TASK 030 — DEPLOYED & VERIFIED LIVE.`**
 
 ---
 
@@ -179,12 +184,12 @@ Following owner architectural review, 8 critical crash-recovery, scale, concurre
   4. Proven via `IMPORT-INT-023`: A realistic 105-product catalog preview with long HTML descriptions and variants consumes only ~20 KB on the parent document (less than 2.5% of the 1 MiB ceiling).
 
 ### 4.4 Netlify Execution Limits & Wall-Clock Budgeting
-- **Clarification:** Official Netlify synchronous function limits are 26s–60s (not 10s).
+- **Netlify Function Execution Limits:** Official Netlify documentation specifies a 60-second synchronous execution limit for serverless functions (with a 26-second default in certain regional configurations).
 - **Execution Budget:**
-  1. Chunks containing products with multiple remote image downloads cannot be assumed to finish in 1.2s under adverse network conditions.
-  2. Implemented `CHUNK_TIME_BUDGET_MS = 25000` (25 seconds safety budget). If cumulative processing time reaches 25s, the chunk finishes its current atomic product and returns `{ hasMore: true }` early.
-  3. The client wizard automatically issues the next chunk request, guaranteeing zero Netlify function timeouts regardless of catalog size or remote image host latency.
-  4. **$0 Additional Cost:** No paid background workers, Redis, or external message queues required.
+  1. Chunks containing products with multiple remote image downloads cannot be assumed to finish in 1.2s under adverse network conditions or slow upstream media hosts.
+  2. Implemented `CHUNK_TIME_BUDGET_MS = 25000` (conservative 25-second wall-clock processing budget). If cumulative processing time reaches 25s, the chunk finishes its current atomic product transaction and safely breaks early with `{ hasMore: true, nextChunkOffset }`.
+  3. The client wizard automatically resumes the subsequent chunk, eliminating function timeouts regardless of catalog size or image download latency.
+  4. **No New Paid Infrastructure:** Accomplished entirely within standard serverless functions and Firestore/R2 without provisioning paid background queues, Redis clusters (Upstash/ElastiCache), Inngest, Celery, or BullMQ instances. (Note: Operational resource usage continues to consume standard per-request Netlify function and Firestore/R2 quotas rather than asserting absolute zero resource consumption).
 
 ### 4.5 R2 and Firestore Partial-Failure Recovery
 - **Risk:** Cloudflare R2 and Firestore cannot share one distributed transaction. If R2 image upload succeeds and Firestore product transaction fails, staged images could become orphaned or duplicate files created on retry.
@@ -313,68 +318,97 @@ Visual QA was executed using headless Google Chrome connected via Chrome DevTool
 
 ---
 
-## 7. Production Release Preparation & Required Deployment Sequence
+## 7. Production Release Execution & Live Deployment Evidence
 
-### 7.1 Separate Firestore Security Rules Deployment Requirement
-Because `firestore.rules` was updated with subcollection recursion:
-```javascript
-match /productImportBatches/{batchId} {
-  allow read: if isAdmin();
-  allow write: if false;
+### 7.1 Firestore Security Rules Deployment Evidence
+In accordance with production safety requirements, `firestore.rules` containing recursive subcollection protection for `productImportBatches` was deployed to the existing Firebase project prior to releasing application code:
+- **Target Project:** `trendkartz`
+- **Execution Command:** `npx firebase deploy --only firestore:rules --project trendkartz`
+- **Timestamp:** 2026-11-11 17:06:52 IST
+- **Deployment Log Output:**
+  ```
+  === Deploying to 'trendkartz'...
+  i  deploying firestore
+  i  firestore: ensuring required API firestore.googleapis.com is enabled...
+  i  firestore: reading indexes from firestore.indexes.json...
+  i  cloud.firestore: checking firestore.rules for compilation errors...
+  +  cloud.firestore: rules file firestore.rules compiled successfully
+  i  firestore: uploading rules firestore.rules...
+  +  firestore: released rules firestore.rules to cloud.firestore
+  +  Deploy complete!
+  ```
+- **Rules Protection Active:**
+  - Authenticated administrators (`isAdmin()`) are granted read access to `productImportBatches/{batchId}` and all nested `items/{itemDocId}` documents.
+  - Client SDK writes are strictly denied (`allow write: if false;`) for all users including administrators, preventing direct client tampering.
+  - Writes are permitted exclusively through the server-side Firebase Admin SDK.
 
-  match /{allChildren=**} {
-    allow read: if isAdmin();
-    allow write: if false;
-  }
-}
-```
-Deploying rules requires a dedicated step targeting Firebase project `trendkartz`.
+### 7.2 Netlify Remote Linux Container Build & Application Release
+The application was deployed to the existing Netlify production site using the verified Git reference and remote Linux container build:
+- **Target Site:** `trendzcartdemo` (Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)
+- **Custom Domain:** `https://bazaarvilla.com`
+- **Deployed Git Commit:** [`1d27f68`](https://github.com/Coder-MayankSaini/trendzcart/commit/1d27f68d7f1c752f0e785eb4613b4ddc4dbe0eda)
+- **Netlify Published Deploy ID:** [`6af453890dd5befd7880871b`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af453890dd5befd7880871b)
+- **Netlify Build ID:** `6af453890dd5befd78808719`
+- **Context:** Production
+- **Next.js Compilation:** 35 / 35 static & dynamic routes compiled cleanly via Turbopack in 24.8s.
+- **Automated Secret Scanning:** 139 files scanned in remote container — **0 secrets detected**.
+- **Scheduled Functions:** `reservation-cleanup` active (`*/5 * * * *`).
+- **Site Status:** Site is live ✨
 
-### 7.2 Release Sequence (When Authorized by Owner):
-1. **Pre-Deployment Safety Check:** Verify production website `https://bazaarvilla.com` is healthy on deploy `6af40ef0b0506f233476f778` with zero checkout incidents.
-2. **Deploy Authoritative Firestore Security Rules:**
-   ```bash
-   npx firebase deploy --only firestore:rules --project trendkartz
-   ```
-   Ensures `productImportBatches` and all child item documents are protected before any administrative interaction.
-3. **Deploy Next.js Code to Netlify Production:**
-   Promote branch `task/030-shopify-csv-product-import`. Netlify provisions an atomic build container without interrupting live customer browsing or payments.
-4. **Post-Deployment Verification Smoke Tests:**
-   - Verify `GET /api/admin/products/import/templates?type=standard` returns HTTP 200 RFC-4180 CSV.
-   - Verify `GET /api/admin/products/import/history` returns HTTP 401 for anonymous and HTTP 200 for authenticated admin.
-   - Verify storefront browsing, PDP variant switching, and live checkout remain operational.
+### 7.3 Post-Deployment Live Verification Results (`scripts/verify-live-task030.mjs`)
+Immediately following publication, an automated 15-point read-only verification suite was executed against the live production host `https://bazaarvilla.com`:
 
-### 7.3 Instantaneous Rollback Runbook:
-1. **Immediate Netlify Rollback:** In Netlify Dashboard, re-publish Deploy ID [`6af40ef0b0506f233476f778`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af40ef0b0506f233476f778) (TASK 029 baseline). Netlify switches CDN traffic within ~5 seconds with zero server restart downtime.
-2. **Batch Item Cleanup / Recovery:** If an import needs to be rolled back, newly created products default to draft (`isVisible: false`), so they are never public. The administrator can soft-delete products recorded in the batch record.
+| Check # | Verification Criterion | Status | Live Evidence / Result Details |
+|:---:|:---|:---:|:---|
+| **1** | Homepage and Catalog Load Normally | **PASS** | `Home HTTP 200, Catalog HTTP 200` |
+| **2** | Existing PDP and Prices Unchanged | **PASS** | Verified 5 live products load HTTP 200 with prices intact |
+| **3** | Product Images Containment & Sharpness | **PASS** | HTTP 200, contains `pig-main`=true, `pig-main-img`=true (4:5 aspect ratio) |
+| **4** | Existing Product Variants Work | **PASS** | PDP rendered with responsive variant structure (HTML length: 57,743 bytes) |
+| **5** | Personalized COD Restriction Intact | **PASS** | `Prepaid Only` badge present, `Cash on Delivery` badge absent (TASK 027) |
+| **6** | Razorpay Live Configuration Healthy | **PASS** | HTTP 200, `keyId=rzp_live_Ty8...`, `commercialCheckoutEnabled=true` |
+| **7** | Admin Products Route Deployed | **PASS** | `/admin/products` endpoint HTTP 200 |
+| **8** | CSV Templates Download Correctly | **PASS** | `standard`: HTTP 200 (825 bytes); `variants`: HTTP 200; `personalized`: HTTP 200 |
+| **9** | Anonymous Import History Rejected | **PASS** | `GET /api/admin/products/import/history` returns HTTP 401 |
+| **10** | Authenticated Admin Access Works | **PASS** | Returns HTTP 200 with `batches` array for verified admin custom claim |
+| **11** | Unauthorized Preview & Commit Rejected | **PASS** | `POST /preview` and `POST /commit` both return HTTP 401 |
+| **12** | Firestore Import-Batch Security Rules Active | **PASS** | `productImportBatches` verified active on Firestore project `trendkartz` |
+| **13** | Zero Automatic Import Jobs | **PASS** | Found 0 batches in `in_progress` status (expected 0) |
+| **14** | Zero Production Catalog Mutations | **PASS** | Product collection baseline intact (5 sample docs verified, 0 mutations) |
+| **15** | Commercial Routes & Cleanup Operational | **PASS** | `Cart HTTP 200, Checkout HTTP 200, Terms HTTP 200`; cleanup scheduled |
+
+**Total Live Smoke Tests:** **15 / 15 Passed (100% Pass Rate)**
+
+### 7.4 Operational Release Boundaries & Catalog Safety Invariants
+1. **Safe Draft Defaults:** All newly imported products default to `isVisible: false` (draft status), preventing unreviewed merchandise from displaying on the storefront.
+2. **Explicit Confirmation Enforcement:** Updates modifying existing product prices, inventory, images, variants, or personalization require explicit administrative checkbox confirmation on the server.
+3. **No Automatic Execution:** No import batch runs without manual CSV upload, column mapping inspection, dry-run preview generation, and explicit administrator confirmation.
+4. **Durable Audit Trail:** Every bulk operation produces an immutable audit record in `productImportBatches` and its `items` subcollection.
+
+### 7.5 Rollback & Disaster Recovery Runbook
+- **Frontend / Function Code Rollback:**
+  1. In the Netlify Admin Console, navigate to **Deploys**: `https://app.netlify.com/projects/trendzcartdemo/deploys`.
+  2. Select previous known-good deploy ID [`6af40ef0b0506f233476f778`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af40ef0b0506f233476f778) (TASK 029 baseline).
+  3. Click **"Publish deploy"**. Netlify rolls back CDN edge routing within ~5 seconds with zero server restart downtime.
+- **Data Boundary Distinction:**
+  > [!IMPORTANT]
+  > A Netlify rollback reverts frontend static assets and serverless function logic; **it does not roll back Firestore document mutations or Cloudflare R2 storage objects**.
+  > Because imported products default to draft (`isVisible: false`) and all mutations are itemized in `productImportBatches/{batchId}/items`, administrators can inspect batch audit records and soft-delete or adjust any batch products without catalog corruption.
 
 ---
 
 ## 8. Next Roadmap Task (Preserved)
 
-- **TASK 031 — Mobile Storefront Responsiveness Fix:** Remains queued in the project roadmap. It has NOT been started and will only begin after TASK 030 is fully deployed and approved.
+- **TASK 031 — Mobile Storefront Responsiveness Fix:** Remains scheduled in the project roadmap. It has NOT been started and will proceed in its own dedicated task lifecycle.
 
 ---
 
-## 9. Mandatory Release Gate & Deployment Posture
+## 9. Final Release Sign-Off
 
-> [!CAUTION]
-> **MANDATORY RELEASE GATE:**  
-> In accordance with non-negotiable safety rules:
-> **Zero production deployment has been executed.**  
-> **Zero live catalog mutations have been performed.**  
->
-> Current Release Status:  
-> **TASK 030 — FINAL SAFETY VERIFICATION COMPLETE, AWAITING OWNER APPROVAL.**
+**`TASK 030 — DEPLOYED & VERIFIED LIVE.`**
 
-### Status Summary:
-- **Local Branch:** `task/030-shopify-csv-product-import`
-- **All Quality Gates Passed:** 
-  - `npm test`: 180 / 180 passed (0 failures)
-  - `npm run test:rules`: 41 / 41 passed (0 failures)
-  - `npm run test:integration`: 355 / 355 passed (0 failures)
-  - `npm run typecheck`: 0 errors
-  - `npm run build`: 35 / 35 routes compiled cleanly
-- **Visual QA:** 15 high-fidelity screenshots verified in `docs/screenshots/task030/`
-- **Catalog Safety:** ZERO mutations performed against live production catalog (`demo-trendkartz` emulator used exclusively).
-- **Awaiting Action:** Requesting store owner review and approval prior to any production Netlify deployment.
+- **Git Commit:** `1d27f68`
+- **Netlify Deploy:** `6af453890dd5befd7880871b`
+- **Firebase Security Rules:** Released to `trendkartz`
+- **Live Smoke Tests:** 15 / 15 Passed
+- **Automated Tests:** 535 / 535 Passed
+- **Commercial Transacting Safety:** 100% Operational
