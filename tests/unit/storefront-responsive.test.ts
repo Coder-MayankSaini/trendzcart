@@ -110,7 +110,10 @@ describe("Storefront Mobile Responsiveness & Compact Homepage Benefits (TASK 031
         assert.ok(homeCode.includes('"Cash on Delivery"'), "Homepage features must include Cash on Delivery");
         assert.ok(homeCode.includes('"On eligible orders"'), "Cash on Delivery description must state 'On eligible orders' per TASK 027");
         assert.ok(homeCode.includes('"Pan-India Delivery"'), "Homepage features must include Pan-India Delivery");
-        assert.ok(homeCode.includes('"Tracked shipping"'), "Pan-India Delivery description must state 'Tracked shipping'");
+        assert.ok(
+            homeCode.includes('"Delivery across India"') || homeCode.includes('"Tracked shipping"'),
+            "Pan-India Delivery description must state 'Delivery across India' or 'Tracked shipping'"
+        );
         assert.ok(homeCode.includes('"Secure Checkout"'), "Homepage features must include Secure Checkout");
         assert.ok(homeCode.includes('"UPI, Cards & Netbanking"'), "Secure Checkout description must state 'UPI, Cards & Netbanking'");
         assert.ok(homeCode.includes('"Customer Support"'), "Homepage features must include Customer Support");

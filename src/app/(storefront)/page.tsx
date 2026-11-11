@@ -36,7 +36,7 @@ const features = [
       </svg>
     ),
     title: "Pan-India Delivery",
-    desc: "Tracked shipping",
+    desc: "Delivery across India",
   },
   {
     icon: (

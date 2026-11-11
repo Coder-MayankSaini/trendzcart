@@ -1,0 +1,870 @@
+[
+  {
+    "width": 479,
+    "pdp": {
+      "rootScrollWidth": 479,
+      "rootClientWidth": 479,
+      "bodyScrollWidth": 479,
+      "bodyClientWidth": 479,
+      "galleryBox": {
+        "width": 447,
+        "height": 644.75,
+        "top": 80,
+        "left": 16,
+        "right": 463,
+        "bottom": 724.75
+      },
+      "mainImageBox": {
+        "width": 447,
+        "height": 558.75,
+        "top": 80,
+        "left": 16,
+        "right": 463,
+        "bottom": 638.75
+      },
+      "titleBox": {
+        "width": 447,
+        "height": 131,
+        "top": 778.75,
+        "left": 16,
+        "right": 463,
+        "bottom": 909.75
+      },
+      "infoBox": {
+        "width": 447,
+        "height": 769.83,
+        "top": 748.75,
+        "left": 16,
+        "right": 463,
+        "bottom": 1518.58
+      },
+      "actionsBox": {
+        "width": 447,
+        "height": 166,
+        "top": 1087.14,
+        "left": 16,
+        "right": 463,
+        "bottom": 1253.14
+      },
+      "qtyBox": {
+        "width": 447,
+        "height": 44,
+        "top": 1087.14,
+        "left": 16,
+        "right": 463,
+        "bottom": 1131.14
+      },
+      "addBtnBox": {
+        "width": 447,
+        "height": 49,
+        "top": 1145.14,
+        "left": 16,
+        "right": 463,
+        "bottom": 1194.14
+      },
+      "buyBtnBox": {
+        "width": 447,
+        "height": 49,
+        "top": 1204.14,
+        "left": 16,
+        "right": 463,
+        "bottom": 1253.14
+      },
+      "waBox": {
+        "width": 50,
+        "height": 50,
+        "top": 834,
+        "left": 413,
+        "right": 463,
+        "bottom": 884
+      },
+      "addBtnClickable": true,
+      "buyBtnClickable": true
+    },
+    "variant": {
+      "rootScrollWidth": 479,
+      "rootClientWidth": 479,
+      "bodyScrollWidth": 479,
+      "bodyClientWidth": 479,
+      "colorBtns": [],
+      "sizeBtns": []
+    },
+    "home": {
+      "rootScrollWidth": 479,
+      "rootClientWidth": 479,
+      "bodyScrollWidth": 479,
+      "bodyClientWidth": 479,
+      "featuresHeight": 272,
+      "cards": [
+        {
+          "width": 210.5,
+          "height": 110,
+          "right": 234.5,
+          "left": 24
+        },
+        {
+          "width": 210.5,
+          "height": 110,
+          "right": 455,
+          "left": 244.5
+        },
+        {
+          "width": 210.5,
+          "height": 110,
+          "right": 234.5,
+          "left": 24
+        },
+        {
+          "width": 210.5,
+          "height": 110,
+          "right": 455,
+          "left": 244.5
+        }
+      ]
+    }
+  },
+  {
+    "width": 480,
+    "pdp": {
+      "rootScrollWidth": 480,
+      "rootClientWidth": 480,
+      "bodyScrollWidth": 480,
+      "bodyClientWidth": 480,
+      "galleryBox": {
+        "width": 448,
+        "height": 646,
+        "top": 80,
+        "left": 16,
+        "right": 464,
+        "bottom": 726
+      },
+      "mainImageBox": {
+        "width": 448,
+        "height": 560,
+        "top": 80,
+        "left": 16,
+        "right": 464,
+        "bottom": 640
+      },
+      "titleBox": {
+        "width": 448,
+        "height": 98.25,
+        "top": 780,
+        "left": 16,
+        "right": 464,
+        "bottom": 878.25
+      },
+      "infoBox": {
+        "width": 448,
+        "height": 737.08,
+        "top": 750,
+        "left": 16,
+        "right": 464,
+        "bottom": 1487.08
+      },
+      "actionsBox": {
+        "width": 448,
+        "height": 166,
+        "top": 1055.64,
+        "left": 16,
+        "right": 464,
+        "bottom": 1221.64
+      },
+      "qtyBox": {
+        "width": 448,
+        "height": 44,
+        "top": 1055.64,
+        "left": 16,
+        "right": 464,
+        "bottom": 1099.64
+      },
+      "addBtnBox": {
+        "width": 448,
+        "height": 49,
+        "top": 1113.64,
+        "left": 16,
+        "right": 464,
+        "bottom": 1162.64
+      },
+      "buyBtnBox": {
+        "width": 448,
+        "height": 49,
+        "top": 1172.64,
+        "left": 16,
+        "right": 464,
+        "bottom": 1221.64
+      },
+      "waBox": {
+        "width": 50,
+        "height": 50,
+        "top": 834,
+        "left": 414,
+        "right": 464,
+        "bottom": 884
+      },
+      "addBtnClickable": true,
+      "buyBtnClickable": true
+    },
+    "variant": {
+      "rootScrollWidth": 480,
+      "rootClientWidth": 480,
+      "bodyScrollWidth": 480,
+      "bodyClientWidth": 480,
+      "colorBtns": [],
+      "sizeBtns": []
+    },
+    "home": {
+      "rootScrollWidth": 480,
+      "rootClientWidth": 480,
+      "bodyScrollWidth": 480,
+      "bodyClientWidth": 480,
+      "featuresHeight": 272,
+      "cards": [
+        {
+          "width": 211,
+          "height": 110,
+          "right": 235,
+          "left": 24
+        },
+        {
+          "width": 211,
+          "height": 110,
+          "right": 456,
+          "left": 245
+        },
+        {
+          "width": 211,
+          "height": 110,
+          "right": 235,
+          "left": 24
+        },
+        {
+          "width": 211,
+          "height": 110,
+          "right": 456,
+          "left": 245
+        }
+      ]
+    }
+  },
+  {
+    "width": 767,
+    "pdp": {
+      "rootScrollWidth": 767,
+      "rootClientWidth": 767,
+      "bodyScrollWidth": 767,
+      "bodyClientWidth": 767,
+      "galleryBox": {
+        "width": 735,
+        "height": 1014.75,
+        "top": 80,
+        "left": 16,
+        "right": 751,
+        "bottom": 1094.75
+      },
+      "mainImageBox": {
+        "width": 735,
+        "height": 918.75,
+        "top": 80,
+        "left": 16,
+        "right": 751,
+        "bottom": 998.75
+      },
+      "titleBox": {
+        "width": 735,
+        "height": 129.42,
+        "top": 1148.75,
+        "left": 16,
+        "right": 751,
+        "bottom": 1278.17
+      },
+      "infoBox": {
+        "width": 735,
+        "height": 713.25,
+        "top": 1118.75,
+        "left": 16,
+        "right": 751,
+        "bottom": 1832
+      },
+      "actionsBox": {
+        "width": 735,
+        "height": 107,
+        "top": 1459.56,
+        "left": 16,
+        "right": 751,
+        "bottom": 1566.56
+      },
+      "qtyBox": {
+        "width": 735,
+        "height": 44,
+        "top": 1459.56,
+        "left": 16,
+        "right": 751,
+        "bottom": 1503.56
+      },
+      "addBtnBox": {
+        "width": 361.5,
+        "height": 49,
+        "top": 1517.56,
+        "left": 16,
+        "right": 377.5,
+        "bottom": 1566.56
+      },
+      "buyBtnBox": {
+        "width": 361.5,
+        "height": 49,
+        "top": 1517.56,
+        "left": 389.5,
+        "right": 751,
+        "bottom": 1566.56
+      },
+      "waBox": {
+        "width": 50,
+        "height": 50,
+        "top": 834,
+        "left": 701,
+        "right": 751,
+        "bottom": 884
+      },
+      "addBtnClickable": true,
+      "buyBtnClickable": true
+    },
+    "variant": {
+      "rootScrollWidth": 767,
+      "rootClientWidth": 767,
+      "bodyScrollWidth": 767,
+      "bodyClientWidth": 767,
+      "colorBtns": [],
+      "sizeBtns": []
+    },
+    "home": {
+      "rootScrollWidth": 767,
+      "rootClientWidth": 767,
+      "bodyScrollWidth": 767,
+      "bodyClientWidth": 767,
+      "featuresHeight": 272,
+      "cards": [
+        {
+          "width": 354.5,
+          "height": 110,
+          "right": 378.5,
+          "left": 24
+        },
+        {
+          "width": 354.5,
+          "height": 110,
+          "right": 743,
+          "left": 388.5
+        },
+        {
+          "width": 354.5,
+          "height": 110,
+          "right": 378.5,
+          "left": 24
+        },
+        {
+          "width": 354.5,
+          "height": 110,
+          "right": 743,
+          "left": 388.5
+        }
+      ]
+    }
+  },
+  {
+    "width": 768,
+    "pdp": {
+      "rootScrollWidth": 768,
+      "rootClientWidth": 768,
+      "bodyScrollWidth": 768,
+      "bodyClientWidth": 768,
+      "galleryBox": {
+        "width": 366.66,
+        "height": 886.25,
+        "top": 80,
+        "left": 16,
+        "right": 382.66,
+        "bottom": 966.25
+      },
+      "mainImageBox": {
+        "width": 286.66,
+        "height": 560,
+        "top": 80,
+        "left": 96,
+        "right": 382.66,
+        "bottom": 640
+      },
+      "titleBox": {
+        "width": 333.34,
+        "height": 302.42,
+        "top": 110,
+        "left": 418.66,
+        "right": 752,
+        "bottom": 412.42
+      },
+      "infoBox": {
+        "width": 333.34,
+        "height": 886.25,
+        "top": 80,
+        "left": 418.66,
+        "right": 752,
+        "bottom": 966.25
+      },
+      "actionsBox": {
+        "width": 333.34,
+        "height": 107,
+        "top": 593.81,
+        "left": 418.66,
+        "right": 752,
+        "bottom": 700.81
+      },
+      "qtyBox": {
+        "width": 333.34,
+        "height": 44,
+        "top": 593.81,
+        "left": 418.66,
+        "right": 752,
+        "bottom": 637.81
+      },
+      "addBtnBox": {
+        "width": 160.67,
+        "height": 49,
+        "top": 651.81,
+        "left": 418.66,
+        "right": 579.33,
+        "bottom": 700.81
+      },
+      "buyBtnBox": {
+        "width": 160.67,
+        "height": 49,
+        "top": 651.81,
+        "left": 591.33,
+        "right": 752,
+        "bottom": 700.81
+      },
+      "waBox": {
+        "width": 50,
+        "height": 50,
+        "top": 834,
+        "left": 702,
+        "right": 752,
+        "bottom": 884
+      },
+      "addBtnClickable": true,
+      "buyBtnClickable": true
+    },
+    "variant": {
+      "rootScrollWidth": 768,
+      "rootClientWidth": 768,
+      "bodyScrollWidth": 768,
+      "bodyClientWidth": 768,
+      "colorBtns": [],
+      "sizeBtns": []
+    },
+    "home": {
+      "rootScrollWidth": 768,
+      "rootClientWidth": 768,
+      "bodyScrollWidth": 768,
+      "bodyClientWidth": 768,
+      "featuresHeight": 272,
+      "cards": [
+        {
+          "width": 355,
+          "height": 110,
+          "right": 379,
+          "left": 24
+        },
+        {
+          "width": 355,
+          "height": 110,
+          "right": 744,
+          "left": 389
+        },
+        {
+          "width": 355,
+          "height": 110,
+          "right": 379,
+          "left": 24
+        },
+        {
+          "width": 355,
+          "height": 110,
+          "right": 744,
+          "left": 389
+        }
+      ]
+    }
+  },
+  {
+    "width": 959,
+    "pdp": {
+      "rootScrollWidth": 959,
+      "rootClientWidth": 959,
+      "bodyScrollWidth": 959,
+      "bodyClientWidth": 959,
+      "galleryBox": {
+        "width": 458.33,
+        "height": 883.83,
+        "top": 120,
+        "left": 24,
+        "right": 482.33,
+        "bottom": 1003.83
+      },
+      "mainImageBox": {
+        "width": 378.33,
+        "height": 560,
+        "top": 120,
+        "left": 104,
+        "right": 482.33,
+        "bottom": 680
+      },
+      "titleBox": {
+        "width": 416.67,
+        "height": 300,
+        "top": 150,
+        "left": 518.33,
+        "right": 935,
+        "bottom": 450
+      },
+      "infoBox": {
+        "width": 416.67,
+        "height": 883.83,
+        "top": 120,
+        "left": 518.33,
+        "right": 935,
+        "bottom": 1003.83
+      },
+      "actionsBox": {
+        "width": 416.67,
+        "height": 107,
+        "top": 631.39,
+        "left": 518.33,
+        "right": 935,
+        "bottom": 738.39
+      },
+      "qtyBox": {
+        "width": 416.67,
+        "height": 44,
+        "top": 631.39,
+        "left": 518.33,
+        "right": 935,
+        "bottom": 675.39
+      },
+      "addBtnBox": {
+        "width": 202.34,
+        "height": 49,
+        "top": 689.39,
+        "left": 518.33,
+        "right": 720.67,
+        "bottom": 738.39
+      },
+      "buyBtnBox": {
+        "width": 202.33,
+        "height": 49,
+        "top": 689.39,
+        "left": 732.67,
+        "right": 935,
+        "bottom": 738.39
+      },
+      "waBox": {
+        "width": 60,
+        "height": 60,
+        "top": 816,
+        "left": 875,
+        "right": 935,
+        "bottom": 876
+      },
+      "addBtnClickable": true,
+      "buyBtnClickable": true
+    },
+    "variant": {
+      "rootScrollWidth": 959,
+      "rootClientWidth": 959,
+      "bodyScrollWidth": 959,
+      "bodyClientWidth": 959,
+      "colorBtns": [],
+      "sizeBtns": []
+    },
+    "home": {
+      "rootScrollWidth": 959,
+      "rootClientWidth": 959,
+      "bodyScrollWidth": 959,
+      "bodyClientWidth": 959,
+      "featuresHeight": 252.39,
+      "cards": [
+        {
+          "width": 209.75,
+          "height": 154.39,
+          "right": 233.75,
+          "left": 24
+        },
+        {
+          "width": 209.75,
+          "height": 154.39,
+          "right": 467.5,
+          "left": 257.75
+        },
+        {
+          "width": 209.75,
+          "height": 154.39,
+          "right": 701.25,
+          "left": 491.5
+        },
+        {
+          "width": 209.75,
+          "height": 154.39,
+          "right": 935,
+          "left": 725.25
+        }
+      ]
+    }
+  },
+  {
+    "width": 960,
+    "pdp": {
+      "rootScrollWidth": 945,
+      "rootClientWidth": 945,
+      "bodyScrollWidth": 945,
+      "bodyClientWidth": 945,
+      "galleryBox": {
+        "width": 451,
+        "height": 844.83,
+        "top": 120,
+        "left": 24,
+        "right": 475,
+        "bottom": 964.83
+      },
+      "mainImageBox": {
+        "width": 361,
+        "height": 560,
+        "top": 120,
+        "left": 114,
+        "right": 475,
+        "bottom": 680
+      },
+      "titleBox": {
+        "width": 410,
+        "height": 300,
+        "top": 150,
+        "left": 511,
+        "right": 921,
+        "bottom": 450
+      },
+      "infoBox": {
+        "width": 410,
+        "height": 844.83,
+        "top": 120,
+        "left": 511,
+        "right": 921,
+        "bottom": 964.83
+      },
+      "actionsBox": {
+        "width": 410,
+        "height": 68,
+        "top": 631.39,
+        "left": 511,
+        "right": 921,
+        "bottom": 699.39
+      },
+      "qtyBox": {
+        "width": 130,
+        "height": 44,
+        "top": 643.39,
+        "left": 511,
+        "right": 641,
+        "bottom": 687.39
+      },
+      "addBtnBox": {
+        "width": 147.75,
+        "height": 68,
+        "top": 631.39,
+        "left": 657,
+        "right": 804.75,
+        "bottom": 699.39
+      },
+      "buyBtnBox": {
+        "width": 104.25,
+        "height": 68,
+        "top": 631.39,
+        "left": 816.75,
+        "right": 921,
+        "bottom": 699.39
+      },
+      "waBox": {
+        "width": 60,
+        "height": 60,
+        "top": 816,
+        "left": 861,
+        "right": 921,
+        "bottom": 876
+      },
+      "addBtnClickable": true,
+      "buyBtnClickable": true
+    },
+    "variant": {
+      "rootScrollWidth": 945,
+      "rootClientWidth": 945,
+      "bodyScrollWidth": 945,
+      "bodyClientWidth": 945,
+      "colorBtns": [],
+      "sizeBtns": []
+    },
+    "home": {
+      "rootScrollWidth": 945,
+      "rootClientWidth": 945,
+      "bodyScrollWidth": 945,
+      "bodyClientWidth": 945,
+      "featuresHeight": 252.39,
+      "cards": [
+        {
+          "width": 206.25,
+          "height": 154.39,
+          "right": 230.25,
+          "left": 24
+        },
+        {
+          "width": 206.25,
+          "height": 154.39,
+          "right": 460.5,
+          "left": 254.25
+        },
+        {
+          "width": 206.25,
+          "height": 154.39,
+          "right": 690.75,
+          "left": 484.5
+        },
+        {
+          "width": 206.25,
+          "height": 154.39,
+          "right": 921,
+          "left": 714.75
+        }
+      ]
+    }
+  },
+  {
+    "width": 980,
+    "pdp": {
+      "rootScrollWidth": 965,
+      "rootClientWidth": 965,
+      "bodyScrollWidth": 965,
+      "bodyClientWidth": 965,
+      "galleryBox": {
+        "width": 461.47,
+        "height": 844.83,
+        "top": 120,
+        "left": 24,
+        "right": 485.47,
+        "bottom": 964.83
+      },
+      "mainImageBox": {
+        "width": 371.47,
+        "height": 560,
+        "top": 120,
+        "left": 114,
+        "right": 485.47,
+        "bottom": 680
+      },
+      "titleBox": {
+        "width": 419.53,
+        "height": 300,
+        "top": 150,
+        "left": 521.47,
+        "right": 941,
+        "bottom": 450
+      },
+      "infoBox": {
+        "width": 419.53,
+        "height": 844.83,
+        "top": 120,
+        "left": 521.47,
+        "right": 941,
+        "bottom": 964.83
+      },
+      "actionsBox": {
+        "width": 419.53,
+        "height": 68,
+        "top": 631.39,
+        "left": 521.47,
+        "right": 941,
+        "bottom": 699.39
+      },
+      "qtyBox": {
+        "width": 130,
+        "height": 44,
+        "top": 643.39,
+        "left": 521.47,
+        "right": 651.47,
+        "bottom": 687.39
+      },
+      "addBtnBox": {
+        "width": 153.75,
+        "height": 68,
+        "top": 631.39,
+        "left": 667.47,
+        "right": 821.22,
+        "bottom": 699.39
+      },
+      "buyBtnBox": {
+        "width": 107.78,
+        "height": 68,
+        "top": 631.39,
+        "left": 833.22,
+        "right": 941,
+        "bottom": 699.39
+      },
+      "waBox": {
+        "width": 60,
+        "height": 60,
+        "top": 816,
+        "left": 881,
+        "right": 941,
+        "bottom": 876
+      },
+      "addBtnClickable": true,
+      "buyBtnClickable": true
+    },
+    "variant": {
+      "rootScrollWidth": 965,
+      "rootClientWidth": 965,
+      "bodyScrollWidth": 965,
+      "bodyClientWidth": 965,
+      "colorBtns": [],
+      "sizeBtns": []
+    },
+    "home": {
+      "rootScrollWidth": 965,
+      "rootClientWidth": 965,
+      "bodyScrollWidth": 965,
+      "bodyClientWidth": 965,
+      "featuresHeight": 252.39,
+      "cards": [
+        {
+          "width": 211.25,
+          "height": 154.39,
+          "right": 235.25,
+          "left": 24
+        },
+        {
+          "width": 211.25,
+          "height": 154.39,
+          "right": 470.5,
+          "left": 259.25
+        },
+        {
+          "width": 211.25,
+          "height": 154.39,
+          "right": 705.75,
+          "left": 494.5
+        },
+        {
+          "width": 211.25,
+          "height": 154.39,
+          "right": 941,
+          "left": 729.75
+        }
+      ]
+    }
+  }
+]
