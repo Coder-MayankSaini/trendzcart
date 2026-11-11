@@ -31,7 +31,59 @@ export function buildProductPreview(options: {
 
     let status: "new" | "existing_update" | "conflict" | "invalid" | "skipped" = "new";
 
-    // If initial grouping already found fatal errors, mark invalid immediately
+    // 1. Price Safety Invariant: New products must have a valid positive base price
+    if (!existingProduct) {
+        if (isNaN(group.basePrice) || group.basePrice <= 0) {
+            errors.push({
+                rowNumber: group.firstRowNumber,
+                handle: group.handle,
+                field: "price",
+                providedValue: String(group.basePrice),
+                message: `New product '${group.title}' has invalid or missing base price (${group.basePrice}). Products cannot be created with missing or zero price.`,
+                suggestedCorrection: "Provide a valid positive number for product base price.",
+                fatal: true,
+            });
+        }
+    }
+
+    // 2. Variant Price and Inventory Safety Invariants
+    for (const v of group.variants) {
+        if (isNaN(v.inventory) || v.inventory < 0) {
+            errors.push({
+                rowNumber: v.csvRowNumber,
+                handle: group.handle,
+                field: "inventory",
+                providedValue: String(v.inventory),
+                message: `Variant '${v.sku || v.sizeName || "item"}' on '${group.title}' has negative stock count (${v.inventory}). Inventory cannot be negative.`,
+                suggestedCorrection: "Provide a non-negative integer for inventory (0 or greater).",
+                fatal: true,
+            });
+        }
+        if (v.price !== null && v.price !== undefined && (isNaN(v.price) || v.price <= 0)) {
+            errors.push({
+                rowNumber: v.csvRowNumber,
+                handle: group.handle,
+                field: "price",
+                providedValue: String(v.price),
+                message: `Variant '${v.sku || v.sizeName || "item"}' on '${group.title}' has non-positive price override (${v.price}). Variant prices must be positive numbers.`,
+                suggestedCorrection: "Provide a positive price override or leave blank to inherit base price.",
+                fatal: true,
+            });
+        }
+    }
+
+    // 3. Image completeness warning on new products
+    if (!existingProduct && group.images.length === 0) {
+        warnings.push({
+            rowNumber: group.firstRowNumber,
+            handle: group.handle,
+            field: "images",
+            providedValue: "none",
+            message: `New product '${group.title}' has no image URLs in the CSV. Products without photographs will render fallback placeholder imagery.`,
+        });
+    }
+
+    // If initial grouping or validations found fatal errors, mark invalid immediately
     if (errors.some(e => e.fatal)) {
         status = "invalid";
     }

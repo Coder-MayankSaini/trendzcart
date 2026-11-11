@@ -2,11 +2,13 @@
  * Bazaarvilla Shopify-Compatible CSV Bulk Product Import (TASK 030)
  * Secure Cloudflare R2 Remote Image Ingestion Engine
  *
- * Implements strict SSRF protection, DNS pre-flight verification, redirect guards,
- * magic byte format validation, timeout limits, and content deduplication.
+ * Implements strict SSRF protection, IP pinning against DNS rebinding, redirect guards,
+ * IPv4-mapped IPv6 detection, magic byte format validation, timeout limits, and content deduplication.
  */
 
 import dns from "dns";
+import https from "node:https";
+import http from "node:http";
 import crypto from "crypto";
 import { uploadBufferToR2, getPublicAssetUrl } from "../../storage/r2.ts";
 
@@ -27,48 +29,111 @@ export interface IngestImageResult {
 
 /**
  * Checks if an IPv4 or IPv6 address is in a private, loopback, link-local,
- * or cloud metadata range (SSRF defense).
+ * cloud metadata, documentation, multicast, broadcast, or reserved range (SSRF defense).
+ * Fully handles standard IPv4, standard IPv6, and IPv4-mapped IPv6 (::ffff:x.x.x.x).
  */
 export function isPrivateIp(ip: string): boolean {
+    if (!ip || typeof ip !== "string") return true;
     const cleanIp = ip.trim().toLowerCase();
 
-    // IPv6 checks
-    if (cleanIp === "::1" || cleanIp === "::" || cleanIp.startsWith("fe80:") || cleanIp.startsWith("fc00:") || cleanIp.startsWith("fd00:")) {
+    // 1. Handle IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1, ::ffff:169.254.169.254, 0:0:0:0:0:ffff:10.0.0.1)
+    if (cleanIp.startsWith("::ffff:") || cleanIp.startsWith("0:0:0:0:0:ffff:")) {
+        const lastPart = cleanIp.split(":").pop() || "";
+        if (lastPart.includes(".")) {
+            return isPrivateIp(lastPart);
+        } else {
+            // Hex-encoded IPv4 (e.g. ::ffff:7f00:0001)
+            const hexParts = cleanIp.replace(/^.*ffff:/, "").split(":");
+            if (hexParts.length === 2) {
+                const hex1 = parseInt(hexParts[0], 16);
+                const hex2 = parseInt(hexParts[1], 16);
+                if (!isNaN(hex1) && !isNaN(hex2)) {
+                    const ip4 = `${(hex1 >> 8) & 0xff}.${hex1 & 0xff}.${(hex2 >> 8) & 0xff}.${hex2 & 0xff}`;
+                    return isPrivateIp(ip4);
+                }
+            }
+        }
+        return true; // Malformed mapped address -> fail closed
+    }
+
+    // 2. IPv4-compatible IPv6 (deprecated, e.g. ::127.0.0.1)
+    if (cleanIp.startsWith("::") && cleanIp.includes(".")) {
+        const lastPart = cleanIp.slice(2);
+        return isPrivateIp(lastPart);
+    }
+
+    // 3. Standard IPv6 checks
+    if (
+        cleanIp === "::" ||
+        cleanIp === "::1" ||
+        cleanIp.startsWith("fe80:") || // Link-local (fe80::/10)
+        cleanIp.startsWith("fe90:") ||
+        cleanIp.startsWith("fea0:") ||
+        cleanIp.startsWith("feb0:") ||
+        cleanIp.startsWith("fc00:") || // Unique local (fc00::/7)
+        cleanIp.startsWith("fd") ||
+        cleanIp.startsWith("ff") ||    // Multicast (ff00::/8)
+        cleanIp.startsWith("2001:db8:") || // Documentation
+        cleanIp.startsWith("100::")    // Discard prefix
+    ) {
         return true;
     }
 
-    // IPv4 checks
+    // 4. Standard IPv4 checks
     const parts = cleanIp.split(".").map(Number);
     if (parts.length !== 4 || parts.some(p => isNaN(p) || p < 0 || p > 255)) {
-        return false;
+        // Not a standard dotted-decimal IPv4 address, and not caught by IPv6 -> reject
+        return true;
     }
 
-    const [a, b] = parts;
+    const [a, b, c, d] = parts;
 
-    // 0.0.0.0/8
+    // 0.0.0.0/8 (Current network / "this host")
     if (a === 0) return true;
     // 10.0.0.0/8 (Private network)
     if (a === 10) return true;
+    // 100.64.0.0/10 (Carrier-grade NAT)
+    if (a === 100 && b >= 64 && b <= 127) return true;
     // 127.0.0.0/8 (Loopback)
     if (a === 127) return true;
     // 169.254.0.0/16 (Link-local & AWS/GCP/Cloud Metadata 169.254.169.254)
     if (a === 169 && b === 254) return true;
     // 172.16.0.0/12 (Private network: 172.16.0.0 to 172.31.255.255)
     if (a === 172 && b >= 16 && b <= 31) return true;
+    // 192.0.0.0/24 (IETF Protocol Assignments)
+    if (a === 192 && b === 0 && c === 0) return true;
+    // 192.0.2.0/24 (TEST-NET-1 documentation)
+    if (a === 192 && b === 0 && c === 2) return true;
+    // 192.88.99.0/24 (6to4 Relay Anycast)
+    if (a === 192 && b === 88 && c === 99) return true;
     // 192.168.0.0/16 (Private network)
     if (a === 192 && b === 168) return true;
-    // 100.64.0.0/10 (Carrier-grade NAT)
-    if (a === 100 && b >= 64 && b <= 127) return true;
-    // 198.18.0.0/15 (Benchmark testing)
+    // 198.18.0.0/15 (Network benchmark testing)
     if (a === 198 && (b === 18 || b === 19)) return true;
+    // 198.51.100.0/24 (TEST-NET-2 documentation)
+    if (a === 198 && b === 51 && c === 100) return true;
+    // 203.0.113.0/24 (TEST-NET-3 documentation)
+    if (a === 203 && b === 0 && c === 113) return true;
+    // 224.0.0.0/4 (Multicast)
+    if (a >= 224 && a <= 239) return true;
+    // 240.0.0.0/4 (Reserved / Future use)
+    if (a >= 240 && a <= 255) return true;
+    // 255.255.255.255 (Limited Broadcast)
+    if (a === 255 && b === 255 && c === 255 && d === 255) return true;
 
     return false;
 }
 
 /**
- * Pre-flight SSRF check: ensures URL is HTTPS and resolves to a public, non-private IP.
+ * Pre-flight SSRF check: validates URL scheme, prohibited hostnames, and resolves DNS.
+ * Checks that ALL resolved addresses are non-private.
  */
-export async function validateRemoteImageUrl(rawUrl: string): Promise<{ valid: boolean; error?: string; urlObj?: URL }> {
+export async function validateRemoteImageUrl(rawUrl: string): Promise<{
+    valid: boolean;
+    error?: string;
+    urlObj?: URL;
+    pinnedIp?: string;
+}> {
     let urlObj: URL;
     try {
         urlObj = new URL(rawUrl);
@@ -81,7 +146,13 @@ export async function validateRemoteImageUrl(rawUrl: string): Promise<{ valid: b
         return { valid: false, error: `Insecure protocol '${urlObj.protocol}'. Only HTTPS URLs are permitted.` };
     }
 
-    // 2. Reject localhost and local domain names
+    // 2. Port must be standard 443 (or default/empty)
+    const port = urlObj.port ? parseInt(urlObj.port, 10) : 443;
+    if (port !== 443) {
+        return { valid: false, error: `Prohibited non-standard HTTPS port ${port}. Only port 443 is permitted.` };
+    }
+
+    // 3. Reject localhost and local domain names
     const hostname = urlObj.hostname.toLowerCase();
     if (
         hostname === "localhost" ||
@@ -93,22 +164,28 @@ export async function validateRemoteImageUrl(rawUrl: string): Promise<{ valid: b
         return { valid: false, error: `Forbidden local destination: '${hostname}'` };
     }
 
-    // 3. DNS Pre-flight: resolve IP and verify it is not in a private/metadata range
+    // 4. DNS Resolution: resolve all A and AAAA records
     try {
         const lookupResult = await dns.promises.lookup(hostname, { all: true });
+        if (!lookupResult || lookupResult.length === 0) {
+            return { valid: false, error: `DNS resolution returned no addresses for '${hostname}'` };
+        }
+
+        // If ANY returned address is private/prohibited, reject the entire destination!
         for (const entry of lookupResult) {
             if (isPrivateIp(entry.address)) {
                 return {
                     valid: false,
-                    error: `SSRF Blocked: Host '${hostname}' resolved to prohibited private/internal address (${entry.address}).`,
+                    error: `SSRF Blocked: Host '${hostname}' resolved to prohibited address (${entry.address}).`,
                 };
             }
         }
+
+        // Pin to the first validated IP
+        return { valid: true, urlObj, pinnedIp: lookupResult[0].address };
     } catch (err: any) {
         return { valid: false, error: `DNS resolution failed for '${hostname}': ${err.message}` };
     }
-
-    return { valid: true, urlObj };
 }
 
 /**
@@ -168,70 +245,147 @@ export function detectImageMagicBytes(buffer: Buffer): { contentType: string; ex
 }
 
 /**
- * Securely fetches a remote image with redirect validation and streaming size caps.
+ * Securely fetches a remote image buffer.
+ * PINNED DESTINATION: Connects TCP socket directly to the validated pinned IP address
+ * to mathematically prevent DNS rebinding attacks between preflight and connection.
+ * Enforces manual redirect tracking, streaming size caps, and socket timeouts.
  */
-async function fetchSecureRemoteBuffer(
+export async function fetchSecureRemoteBuffer(
     targetUrl: string,
     redirectDepth = 0
-): Promise<{ buffer: Buffer; finalUrl: string }> {
+): Promise<{ buffer: Buffer; finalUrl: string; contentType?: string }> {
     if (redirectDepth > MAX_REDIRECT_DEPTH) {
         throw new Error(`Exceeded maximum redirect depth (${MAX_REDIRECT_DEPTH})`);
     }
 
     const validation = await validateRemoteImageUrl(targetUrl);
-    if (!validation.valid || !validation.urlObj) {
+    if (!validation.valid || !validation.urlObj || !validation.pinnedIp) {
         throw new Error(validation.error || "Prohibited target URL");
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), IMAGE_FETCH_TIMEOUT_MS);
+    const { urlObj, pinnedIp } = validation;
 
-    try {
-        const response = await fetch(targetUrl, {
-            method: "GET",
-            headers: {
-                "User-Agent": "Bazaarvilla-ProductImporter/1.0",
-                Accept: "image/webp,image/jpeg,image/png,image/*;q=0.8",
-            },
-            signal: controller.signal,
-            redirect: "manual", // Handle redirects manually to enforce SSRF validation at every hop
-        });
+    return new Promise<{ buffer: Buffer; finalUrl: string; contentType?: string }>((resolve, reject) => {
+        let isDone = false;
+        let timer: NodeJS.Timeout | null = null;
+        let clientReq: http.ClientRequest | null = null;
 
-        // Handle Redirects
-        if (response.status >= 300 && response.status < 400) {
-            const location = response.headers.get("location");
-            if (!location) {
-                throw new Error(`HTTP ${response.status} redirect without Location header`);
+        const cleanup = () => {
+            if (timer) clearTimeout(timer);
+        };
+
+        const finalizeError = (err: Error) => {
+            if (isDone) return;
+            isDone = true;
+            cleanup();
+            if (clientReq) {
+                try { clientReq.destroy(); } catch {}
             }
-            const nextUrl = new URL(location, targetUrl).toString();
-            return await fetchSecureRemoteBuffer(nextUrl, redirectDepth + 1);
+            reject(err);
+        };
+
+        // Enforce total connection & download timeout
+        timer = setTimeout(() => {
+            finalizeError(new Error(`Image fetch timed out after ${IMAGE_FETCH_TIMEOUT_MS}ms`));
+        }, IMAGE_FETCH_TIMEOUT_MS);
+
+        try {
+            // Connect TCP directly to pinnedIp, while passing original hostname for SNI and Host header
+            clientReq = https.request({
+                host: pinnedIp, // Direct IP socket connection (zero second DNS lookup!)
+                port: 443,
+                path: urlObj.pathname + urlObj.search,
+                method: "GET",
+                headers: {
+                    Host: urlObj.host, // Virtual host
+                    "User-Agent": "Bazaarvilla-ProductImporter/1.0",
+                    Accept: "image/webp,image/jpeg,image/png,image/*;q=0.8",
+                    Connection: "close",
+                },
+                servername: urlObj.hostname, // TLS SNI matches domain for valid cert verification
+                timeout: IMAGE_FETCH_TIMEOUT_MS,
+            }, (res) => {
+                // Redirect Handling
+                if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400) {
+                    cleanup();
+                    res.resume(); // Discard redirect body
+                    const location = res.headers.location;
+                    if (!location) {
+                        return finalizeError(new Error(`HTTP ${res.statusCode} redirect missing Location header`));
+                    }
+                    const nextUrl = new URL(location, targetUrl).toString();
+                    const nextObj = new URL(nextUrl);
+                    if (nextObj.protocol !== "https:") {
+                        return finalizeError(new Error(`Redirect attempted downgrade to insecure protocol '${nextObj.protocol}'`));
+                    }
+                    const nextPort = nextObj.port ? parseInt(nextObj.port, 10) : 443;
+                    if (nextPort !== 443) {
+                        return finalizeError(new Error(`Redirect to prohibited port ${nextPort}`));
+                    }
+                    // Recursively fetch with incremented depth
+                    return fetchSecureRemoteBuffer(nextUrl, redirectDepth + 1).then(
+                        (val) => {
+                            if (!isDone) {
+                                isDone = true;
+                                resolve(val);
+                            }
+                        },
+                        (err) => finalizeError(err)
+                    );
+                }
+
+                if (res.statusCode !== 200) {
+                    cleanup();
+                    res.resume();
+                    return finalizeError(new Error(`Remote server returned HTTP ${res.statusCode} ${res.statusMessage || ""}`));
+                }
+
+                const contentLengthStr = res.headers["content-length"];
+                if (contentLengthStr) {
+                    const cl = parseInt(contentLengthStr, 10);
+                    if (!isNaN(cl) && cl > MAX_REMOTE_IMAGE_SIZE_BYTES) {
+                        cleanup();
+                        res.destroy();
+                        return finalizeError(new Error(`Image Content-Length (${cl} bytes) exceeds 10MB limit`));
+                    }
+                }
+
+                const chunks: Buffer[] = [];
+                let totalBytes = 0;
+
+                res.on("data", (chunk: Buffer) => {
+                    totalBytes += chunk.length;
+                    if (totalBytes > MAX_REMOTE_IMAGE_SIZE_BYTES) {
+                        cleanup();
+                        res.destroy();
+                        return finalizeError(new Error(`Image stream exceeded 10MB limit during transfer`));
+                    }
+                    chunks.push(chunk);
+                });
+
+                res.on("end", () => {
+                    if (isDone) return;
+                    isDone = true;
+                    cleanup();
+                    const buffer = Buffer.concat(chunks);
+                    const ct = (res.headers["content-type"] || "application/octet-stream").split(";")[0].trim();
+                    resolve({ buffer, finalUrl: targetUrl, contentType: ct });
+                });
+
+                res.on("error", (err) => finalizeError(err));
+            });
+
+            clientReq.on("timeout", () => {
+                finalizeError(new Error(`Socket connection timed out after ${IMAGE_FETCH_TIMEOUT_MS}ms`));
+            });
+
+            clientReq.on("error", (err) => finalizeError(err));
+
+            clientReq.end();
+        } catch (err: any) {
+            finalizeError(err);
         }
-
-        if (!response.ok) {
-            throw new Error(`Remote server returned HTTP ${response.status} ${response.statusText}`);
-        }
-
-        // Check Content-Length header if present
-        const contentLength = response.headers.get("content-length");
-        if (contentLength && parseInt(contentLength, 10) > MAX_REMOTE_IMAGE_SIZE_BYTES) {
-            throw new Error(
-                `Remote image size (${contentLength} bytes) exceeds the maximum limit of ${MAX_REMOTE_IMAGE_SIZE_BYTES} bytes (10MB)`
-            );
-        }
-
-        const arrayBuf = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuf);
-
-        if (buffer.length > MAX_REMOTE_IMAGE_SIZE_BYTES) {
-            throw new Error(
-                `Remote image payload (${buffer.length} bytes) exceeds the maximum limit of ${MAX_REMOTE_IMAGE_SIZE_BYTES} bytes`
-            );
-        }
-
-        return { buffer, finalUrl: targetUrl };
-    } finally {
-        clearTimeout(timeout);
-    }
+    });
 }
 
 /**
@@ -258,8 +412,41 @@ export async function ingestRemoteProductImage(options: {
         };
     }
 
+    // Handle data: URIs safely (e.g. fixtures in testing or inline thumbnails)
+    if (url.startsWith("data:")) {
+        try {
+            const matches = url.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+            if (!matches || matches.length !== 3) {
+                return { success: false, originalUrl: url, error: "Malformed data URI" };
+            }
+            const buffer = Buffer.from(matches[2], "base64");
+            const magic = detectImageMagicBytes(buffer);
+            if (!magic) {
+                return { success: false, originalUrl: url, error: "Invalid data URI image magic bytes" };
+            }
+            const hash = crypto.createHash("sha256").update(buffer).digest("hex").slice(0, 16);
+            const storageKey = `products/${productId}/${hash}.${magic.ext}`;
+            const uploaded = await uploadBufferToR2({
+                buffer,
+                key: storageKey,
+                contentType: magic.contentType,
+            });
+            return {
+                success: true,
+                originalUrl: url,
+                publicUrl: uploaded.publicUrl,
+                storageKey,
+                contentType: magic.contentType,
+                sizeBytes: buffer.length,
+                contentHash: hash,
+            };
+        } catch (err: any) {
+            return { success: false, originalUrl: url, error: err.message };
+        }
+    }
+
     try {
-        // 1. Fetch remote image with SSRF protections
+        // 1. Fetch remote image with pinned IP and strict SSRF protections
         const { buffer } = await fetchSecureRemoteBuffer(url);
 
         // 2. Validate magic bytes
@@ -288,7 +475,7 @@ export async function ingestRemoteProductImage(options: {
             };
         }
 
-        // 4. Stable R2 object key: products/{productId}/{hash}.{ext}
+        // 4. Stable R2 object key: products/{productId}/${hash}.{ext}
         const storageKey = `products/${productId}/${hash}.${magic.ext}`;
 
         // 5. Upload buffer to Cloudflare R2

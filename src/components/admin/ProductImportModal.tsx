@@ -39,6 +39,11 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
     const [isProcessing, setIsProcessing] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
     const [confirmedNotice, setConfirmedNotice] = useState(false);
+    const [confirmPriceChanges, setConfirmPriceChanges] = useState(false);
+    const [confirmInventoryChanges, setConfirmInventoryChanges] = useState(false);
+    const [confirmExistingProductUpdates, setConfirmExistingProductUpdates] = useState(false);
+    const [allowPublishNewProducts, setAllowPublishNewProducts] = useState(false);
+    const [commitProgress, setCommitProgress] = useState<{ processed: number; total: number }>({ processed: 0, total: 0 });
     const [completedBatch, setCompletedBatch] = useState<ProductImportBatchRecord | null>(null);
 
     // History State
@@ -57,6 +62,11 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
             setCurrentStep("upload");
             setErrorMessage(null);
             setConfirmedNotice(false);
+            setConfirmPriceChanges(false);
+            setConfirmInventoryChanges(false);
+            setConfirmExistingProductUpdates(false);
+            setAllowPublishNewProducts(false);
+            setCommitProgress({ processed: 0, total: 0 });
         }
     }, [isOpen]);
 
@@ -128,7 +138,7 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
             setFileChecksum(data.fileChecksum);
             setFileErrors(data.fileErrors || []);
             setFileWarnings(data.fileWarnings || []);
-            setBatchId(crypto.randomUUID());
+            setBatchId(data.batchId || crypto.randomUUID());
 
             // Advance to mapping inspection
             setCurrentStep("mapping");
@@ -139,7 +149,7 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
         }
     };
 
-    // Step 4: Execute Batch Commit
+    // Step 4: Execute Batch Commit (Bounded Resumable Execution)
     const handleExecuteCommit = async () => {
         if (!previewSummary || !batchId) return;
 
@@ -148,42 +158,77 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
             return;
         }
 
+        if (previewSummary.priceChangeCount > 0 && !confirmPriceChanges) {
+            setErrorMessage(`Confirmation Required: The CSV updates prices on ${previewSummary.priceChangeCount} existing products. You must explicitly verify and check 'Confirm Price Changes'.`);
+            return;
+        }
+
+        if (previewSummary.inventoryChangeCount > 0 && !confirmInventoryChanges) {
+            setErrorMessage(`Confirmation Required: The CSV adjusts inventory on ${previewSummary.inventoryChangeCount} existing products. You must explicitly verify and check 'Confirm Inventory Changes'.`);
+            return;
+        }
+
+        if (previewSummary.existingProducts > 0 && importMode !== "create_only" && !confirmExistingProductUpdates) {
+            setErrorMessage(`Confirmation Required: The CSV updates ${previewSummary.existingProducts} existing products. You must explicitly check 'Confirm Existing Product Updates'.`);
+            return;
+        }
+
         setIsProcessing(true);
         setCurrentStep("importing");
         setErrorMessage(null);
+        setCommitProgress({ processed: 0, total: previewSummary.totalProducts });
 
         try {
-            const token = await getIdToken();
-            const res = await fetch("/api/admin/products/import/commit", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    batchId,
-                    previews: previewSummary.productPreviews,
-                    importMode,
-                    sourceFileName,
-                    fileChecksum,
-                    totalRows: previewSummary.totalRows,
-                    formatDetected: previewSummary.detectedFormat,
-                }),
-            });
+            let hasMore = true;
+            let finalRecord: ProductImportBatchRecord | null = null;
 
-            const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data.error || "Failed to commit product import.");
+            while (hasMore) {
+                const token = await getIdToken();
+                const res = await fetch("/api/admin/products/import/commit", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                        batchId,
+                        fileChecksum,
+                        confirmations: {
+                            confirmedNotice: true,
+                            confirmPriceChanges,
+                            confirmInventoryChanges,
+                            confirmExistingProductUpdates,
+                            allowPublishNewProducts,
+                        },
+                        chunkSize: 10,
+                    }),
+                });
+
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || "Failed to commit product import.");
+                }
+
+                finalRecord = data.batchRecord;
+                hasMore = Boolean(data.hasMore);
+                setCommitProgress({
+                    processed: data.processedCount || 0,
+                    total: data.totalProducts || previewSummary.totalProducts,
+                });
+
+                if (data.isIdempotentReplay) {
+                    break;
+                }
             }
 
-            setCompletedBatch(data.batchRecord);
+            setCompletedBatch(finalRecord);
             setCurrentStep("complete");
             if (onImportSuccess) {
                 onImportSuccess();
             }
         } catch (err: any) {
             setErrorMessage(err.message || "Import commit failed.");
-            setCurrentStep("preview");
+            setCurrentStep("confirm");
         } finally {
             setIsProcessing(false);
         }
@@ -960,29 +1005,80 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                         Administrator Confirmation Checkpoint
                                     </h4>
                                     <p style={{ fontSize: "0.82rem", color: "var(--text-primary)", margin: "0 0 12px 0" }}>
-                                        No CSV data will overwrite prices, stock, or photos without this confirmation. Review the summary above:
+                                        No CSV data will overwrite prices, stock, or photos without this explicit confirmation. Review the summary above:
                                     </p>
                                     <ul style={{ fontSize: "0.78rem", color: "var(--text-secondary)", margin: "0 0 14px 18px", padding: 0 }}>
-                                        <li>{previewSummary.newProducts} new products will be created as <strong>Drafts (invisible to storefront shoppers)</strong>.</li>
+                                        <li>{previewSummary.newProducts} new products will be created as <strong>Drafts (invisible to storefront shoppers by default)</strong>.</li>
                                         <li>{previewSummary.existingProducts} existing products will be safely merged with concurrency safeguards.</li>
                                         <li>{previewSummary.expectedR2Transfers} remote product photographs will be ingested and stored in Cloudflare R2.</li>
                                     </ul>
-                                    <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "0.86rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                                        <input
-                                            type="checkbox"
-                                            checked={confirmedNotice}
-                                            onChange={(e) => setConfirmedNotice(e.target.checked)}
-                                            style={{ width: "18px", height: "18px", accentColor: "#006B3C" }}
-                                        />
-                                        I confirm that I have reviewed the proposed catalog modifications and authorize the import.
-                                    </label>
+
+                                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px dashed var(--border-color)", paddingTop: "12px" }}>
+                                        <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "0.86rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={confirmedNotice}
+                                                onChange={(e) => setConfirmedNotice(e.target.checked)}
+                                                style={{ width: "18px", height: "18px", accentColor: "#006B3C", marginTop: "2px" }}
+                                            />
+                                            <span>I confirm that I have reviewed the proposed catalog modifications and authorize the import.</span>
+                                        </label>
+
+                                        {previewSummary.priceChangeCount > 0 && (
+                                            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "0.84rem", fontWeight: 600, color: "#b45309" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={confirmPriceChanges}
+                                                    onChange={(e) => setConfirmPriceChanges(e.target.checked)}
+                                                    style={{ width: "18px", height: "18px", accentColor: "#d97706", marginTop: "2px" }}
+                                                />
+                                                <span>Confirm Price Changes: I authorize updating prices on {previewSummary.priceChangeCount} existing catalog products.</span>
+                                            </label>
+                                        )}
+
+                                        {previewSummary.inventoryChangeCount > 0 && (
+                                            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "0.84rem", fontWeight: 600, color: "#0369a1" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={confirmInventoryChanges}
+                                                    onChange={(e) => setConfirmInventoryChanges(e.target.checked)}
+                                                    style={{ width: "18px", height: "18px", accentColor: "#0284c7", marginTop: "2px" }}
+                                                />
+                                                <span>Confirm Inventory Changes: I authorize updating stock on {previewSummary.inventoryChangeCount} existing catalog products.</span>
+                                            </label>
+                                        )}
+
+                                        {previewSummary.existingProducts > 0 && importMode !== "create_only" && (
+                                            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "0.84rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={confirmExistingProductUpdates}
+                                                    onChange={(e) => setConfirmExistingProductUpdates(e.target.checked)}
+                                                    style={{ width: "18px", height: "18px", accentColor: "#006B3C", marginTop: "2px" }}
+                                                />
+                                                <span>Confirm Existing Product Updates: I authorize modifying {previewSummary.existingProducts} existing catalog products.</span>
+                                            </label>
+                                        )}
+
+                                        {previewSummary.newProducts > 0 && (
+                                            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={allowPublishNewProducts}
+                                                    onChange={(e) => setAllowPublishNewProducts(e.target.checked)}
+                                                    style={{ width: "16px", height: "16px", accentColor: "#006B3C", marginTop: "2px" }}
+                                                />
+                                                <span>Publish newly imported products immediately (default: draft/hidden).</span>
+                                            </label>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </div>
                     )}
 
                     {/* ========================================================================= */}
-                    {/* STEP 5: IMPORTING PROGRESS */}
+                    {/* STEP 5: IMPORTING PROGRESS (BOUNDED RESUMABLE) */}
                     {/* ========================================================================= */}
                     {currentStep === "importing" && (
                         <div style={{ textAlign: "center", padding: "48px 20px" }}>
@@ -990,9 +1086,20 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                             <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", margin: "0 0 6px 0" }}>
                                 Importing Products to Catalog...
                             </h3>
-                            <p style={{ fontSize: "0.84rem", color: "var(--text-secondary)", margin: 0 }}>
-                                Ingesting images to Cloudflare R2 and committing transactional catalog updates. Please do not close this window.
+                            <p style={{ fontSize: "0.84rem", color: "var(--text-secondary)", margin: "0 0 16px 0" }}>
+                                Ingesting remote images to Cloudflare R2 and committing transactional catalog updates. Please do not close this window.
                             </p>
+                            {commitProgress.total > 0 && (
+                                <div style={{ maxWidth: "360px", margin: "0 auto" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "6px" }}>
+                                        <span>Progress</span>
+                                        <span>{commitProgress.processed} of {commitProgress.total} ({Math.round((commitProgress.processed / Math.max(1, commitProgress.total)) * 100)}%)</span>
+                                    </div>
+                                    <div style={{ height: "8px", borderRadius: "4px", backgroundColor: "var(--border-color, #e2e8f0)", overflow: "hidden" }}>
+                                        <div style={{ height: "100%", width: `${Math.round((commitProgress.processed / Math.max(1, commitProgress.total)) * 100)}%`, backgroundColor: "#006B3C", transition: "width 0.3s ease" }} />
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
 

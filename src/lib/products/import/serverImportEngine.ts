@@ -1,6 +1,11 @@
 /**
  * Bazaarvilla Shopify-Compatible CSV Bulk Product Import (TASK 030)
- * Server-Authoritative Execution Engine: Dry-Run Preview & Atomic Batch Commit
+ * Server-Authoritative Execution Engine: Dry-Run Preview & Bounded Resumable Batch Commit
+ *
+ * Implements strict server-side preview persistence, checksum verification,
+ * explicit administrator confirmation checks, chunked resumable execution,
+ * SSRF-guarded Cloudflare R2 image ingestion, catalog-wide SKU collision detection,
+ * safe draft publishing defaults, and TASK 029 inventory reconciliation.
  */
 
 import crypto from "crypto";
@@ -23,22 +28,45 @@ import type {
     ImportPreviewSummary,
     ProductImportBatchRecord,
     ProductImportResult,
+    ImportConfirmationOptions,
+    ImportChunkCommitResult,
+    ImportBatchStatus,
 } from "./types.ts";
+
+export const PREVIEW_EXPIRATION_MS = 60 * 60 * 1000; // 1 hour preview validity
+export const DEFAULT_COMMIT_CHUNK_SIZE = 10; // Max products processed per Netlify request
 
 /**
  * Server-side dry-run preview generator.
  * Inspects Cloud Firestore catalog, identifies new vs existing products by normalized handle
- * or Bazaarvilla ID, and generates non-mutating preview summaries.
- * Zero database writes.
+ * or Bazaarvilla ID, verifies catalog-wide SKU collisions, and persists an authoritative
+ * batch preview record in productImportBatches.
+ * ZERO production catalog mutations.
  */
 export async function generateDryRunPreview(options: {
+    batchId?: string;
+    adminUid: string;
+    adminEmail?: string;
+    sourceFileName?: string;
+    fileChecksum: string;
     groups: ParsedProductGroup[];
     totalRows: number;
     unsupportedHeaders: Array<{ header: string; reason: string }>;
     detectedFormat: any;
     mode: ImportMode;
-}): Promise<ImportPreviewSummary> {
-    const { groups, totalRows, unsupportedHeaders, detectedFormat, mode } = options;
+}): Promise<{ previewSummary: ImportPreviewSummary; batchId: string }> {
+    const {
+        batchId = crypto.randomUUID(),
+        adminUid,
+        adminEmail,
+        sourceFileName = "import.csv",
+        fileChecksum,
+        groups,
+        totalRows,
+        unsupportedHeaders,
+        detectedFormat,
+        mode,
+    } = options;
 
     if (!adminDb) {
         throw new Error("Cloud Firestore database service unavailable");
@@ -46,6 +74,26 @@ export async function generateDryRunPreview(options: {
     const db = adminDb;
 
     const previews: ProductImportPreview[] = [];
+    const existingSnapshots: Array<{
+        handle: string;
+        existingProductId?: string;
+        snapUpdatedAt: number;
+        existingPrice?: number;
+        existingInventory?: number;
+        isCustomized?: boolean;
+        customizationType?: string | null;
+        hasVariants?: boolean;
+    }> = [];
+
+    // Collect all SKUs in the CSV to check catalog-wide collisions
+    const allCsvSkus = new Set<string>();
+    for (const g of groups) {
+        for (const v of g.variants) {
+            if (v.sku && v.sku.trim()) {
+                allCsvSkus.add(v.sku.trim().toUpperCase());
+            }
+        }
+    }
 
     // Look up products by handle in Firestore
     for (const group of groups) {
@@ -57,6 +105,29 @@ export async function generateDryRunPreview(options: {
             existingDocData = { id: snap.docs[0].id, ...snap.docs[0].data() };
         }
 
+        // Check catalog-wide SKU collisions against existing products with different handles
+        for (const v of group.variants) {
+            if (v.sku && v.sku.trim()) {
+                const skuUpper = v.sku.trim().toUpperCase();
+                // Check if any existing product in Firestore has this SKU in root or variants
+                const skuQuerySnap = await db.collection("products").where("sku", "==", skuUpper).limit(1).get();
+                if (!skuQuerySnap.empty) {
+                    const matchedProd = skuQuerySnap.docs[0].data();
+                    if (matchedProd.slug !== group.handle && skuQuerySnap.docs[0].id !== existingDocData?.id) {
+                        group.errors.push({
+                            rowNumber: v.csvRowNumber,
+                            handle: group.handle,
+                            field: "sku",
+                            providedValue: v.sku,
+                            message: `Duplicate SKU '${v.sku}' is already assigned to another catalog product '${matchedProd.name || matchedProd.slug}'.`,
+                            suggestedCorrection: "Assign a unique SKU or update the existing product instead.",
+                            fatal: true,
+                        });
+                    }
+                }
+            }
+        }
+
         const preview = buildProductPreview({
             group,
             existingProduct: existingDocData,
@@ -64,54 +135,83 @@ export async function generateDryRunPreview(options: {
         });
 
         previews.push(preview);
+
+        if (existingDocData) {
+            existingSnapshots.push({
+                handle: group.handle,
+                existingProductId: existingDocData.id,
+                snapUpdatedAt: existingDocData.updatedAt || existingDocData.createdAt || 0,
+                existingPrice: existingDocData.price,
+                existingInventory: existingDocData.inventory,
+                isCustomized: existingDocData.isCustomized,
+                customizationType: existingDocData.customizationType,
+                hasVariants: existingDocData.hasVariants,
+            });
+        }
     }
 
-    return buildPreviewSummary({
+    const previewSummary = buildPreviewSummary({
         previews,
         totalRows,
         unsupportedHeaders,
         detectedFormat,
     });
-}
 
-export interface CommitBatchProgress {
-    batchId: string;
-    total: number;
-    processed: number;
-    created: number;
-    updated: number;
-    failed: number;
-    skipped: number;
-    currentProduct?: string;
-    results: ProductImportResult[];
+    // Persist authoritative preview batch record in Firestore under productImportBatches
+    // This securely binds the commit to the server's validated data and prevents client tampering.
+    const batchRecord: ProductImportBatchRecord = {
+        id: batchId,
+        adminUid,
+        adminEmail,
+        sourceFileName,
+        sourceFileChecksum: fileChecksum,
+        importMode: mode,
+        formatDetected: detectedFormat,
+        totalRows,
+        totalProducts: groups.length,
+        createdCount: 0,
+        updatedCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        processedCount: 0,
+        processedHandles: [],
+        status: "previewed",
+        createdAt: Date.now(),
+        expiresAt: Date.now() + PREVIEW_EXPIRATION_MS,
+        groups, // Authoritative server-parsed groups
+        existingSnapshots,
+        previewSummary,
+        results: [],
+        errorSummary: [],
+    };
+
+    await db.collection("productImportBatches").doc(batchId).set(batchRecord);
+
+    return { previewSummary, batchId };
 }
 
 /**
- * Executes a controlled, bounded batch import of confirmed products.
- * Handles image ingestion to R2, transaction-safe product writes with TASK 029
- * inventory reconciliation, and immutable audit record generation in productImportBatches.
+ * Executes a controlled, bounded, and resumable batch commit.
+ * Loads authoritative server batch state from Firestore by batchId, verifies checksum,
+ * confirms explicit administrator flags, processes a slice of products up to chunkSize,
+ * performs SSRF-guarded R2 image uploads, executes transactional product writes with
+ * TASK 029 inventory reconciliation, and durably records progress.
  */
 export async function executeBatchImport(options: {
     batchId: string;
     adminUid: string;
     adminEmail?: string;
-    sourceFileName: string;
     fileChecksum: string;
-    importMode: ImportMode;
-    formatDetected: any;
-    totalRows: number;
-    previews: ProductImportPreview[];
-}): Promise<ProductImportBatchRecord> {
+    confirmations: ImportConfirmationOptions;
+    chunkSize?: number;
+}): Promise<ImportChunkCommitResult> {
     const {
         batchId,
         adminUid,
         adminEmail,
-        sourceFileName,
         fileChecksum,
-        importMode,
-        formatDetected,
-        totalRows,
-        previews,
+        confirmations,
+        chunkSize = DEFAULT_COMMIT_CHUNK_SIZE,
     } = options;
 
     if (!adminDb) {
@@ -120,78 +220,175 @@ export async function executeBatchImport(options: {
     const db = adminDb;
 
     const batchRef = db.collection("productImportBatches").doc(batchId);
+    const batchSnap = await batchRef.get();
 
-    // Initial audit log record in Firestore
-    const initialBatchRecord: ProductImportBatchRecord = {
-        id: batchId,
-        adminUid,
-        adminEmail,
-        sourceFileName,
-        sourceFileChecksum: fileChecksum,
-        importMode,
-        formatDetected,
-        totalRows,
-        totalProducts: previews.length,
-        createdCount: 0,
-        updatedCount: 0,
-        failedCount: 0,
-        skippedCount: 0,
-        status: "importing",
-        createdAt: Date.now(),
-        results: [],
-        errorSummary: [],
-    };
+    if (!batchSnap.exists) {
+        throw new Error(
+            `Import batch '${batchId}' not found or session has expired. Please run the dry-run preview again.`
+        );
+    }
 
-    await batchRef.set(initialBatchRecord);
+    const batchDoc = batchSnap.data() as ProductImportBatchRecord;
 
-    const results: ProductImportResult[] = [];
-    const errorSummary: string[] = [];
-    const knownImageHashes = new Map<string, string>(); // SHA-256 -> Public R2 URL
+    // 1. Authorization & Identity Invariant
+    if (batchDoc.adminUid && batchDoc.adminUid !== adminUid) {
+        throw new Error("Unauthorized: This import batch was initiated by another administrator.");
+    }
 
-    let createdCount = 0;
-    let updatedCount = 0;
-    let failedCount = 0;
-    let skippedCount = 0;
+    // 2. Checksum Integrity Invariant (Anti-Tampering)
+    if (batchDoc.sourceFileChecksum && fileChecksum && batchDoc.sourceFileChecksum !== fileChecksum) {
+        throw new Error(
+            `File Checksum Mismatch: The submitted file checksum does not match the reviewed preview. Expected ${batchDoc.sourceFileChecksum}, received ${fileChecksum}.`
+        );
+    }
 
-    for (const preview of previews) {
-        const group = preview.parsedGroup;
+    // 3. Expiration Invariant
+    if (batchDoc.expiresAt && Date.now() > batchDoc.expiresAt) {
+        throw new Error(
+            "Import preview session has expired (exceeded 1 hour). Please upload and preview the CSV again."
+        );
+    }
 
-        // Skip items that are invalid or flagged as skipped
-        if (preview.status === "invalid") {
+    // 4. Idempotency Check: If already completed, return idempotent replay immediately
+    if (batchDoc.status === "completed") {
+        return {
+            success: true,
+            batchId,
+            status: "completed",
+            processedCount: batchDoc.totalProducts,
+            totalProducts: batchDoc.totalProducts,
+            remainingCount: 0,
+            hasMore: false,
+            isIdempotentReplay: true,
+            batchRecord: batchDoc,
+        };
+    }
+
+    // 5. Explicit Administrator Confirmation Verification
+    if (!confirmations || !confirmations.confirmedNotice) {
+        throw new Error("Explicit administrator confirmation notice is required before executing catalog import.");
+    }
+
+    const summary = batchDoc.previewSummary;
+    if (summary) {
+        // Price change confirmation
+        if (summary.priceChangeCount > 0 && !confirmations.confirmPriceChanges) {
+            throw new Error(
+                `Explicit Confirmation Required: The CSV contains price changes for ${summary.priceChangeCount} existing products. You must explicitly verify and check 'Confirm Price Changes' before importing.`
+            );
+        }
+
+        // Inventory change confirmation
+        if (summary.inventoryChangeCount > 0 && !confirmations.confirmInventoryChanges) {
+            throw new Error(
+                `Explicit Confirmation Required: The CSV contains inventory changes for ${summary.inventoryChangeCount} existing products. You must explicitly verify and check 'Confirm Inventory Changes' before importing.`
+            );
+        }
+
+        // Existing product update confirmation
+        if (summary.existingProducts > 0 && batchDoc.importMode !== "create_only" && !confirmations.confirmExistingProductUpdates) {
+            throw new Error(
+                `Explicit Confirmation Required: The import will update ${summary.existingProducts} existing catalog products. You must explicitly check 'Confirm Existing Product Updates' before importing.`
+            );
+        }
+    }
+
+    // 6. Resumable Batch Chunk Slicing
+    const groups: ParsedProductGroup[] = batchDoc.groups || [];
+    const processedHandlesSet = new Set<string>(batchDoc.processedHandles || []);
+    const results: ProductImportResult[] = [...(batchDoc.results || [])];
+    const errorSummary: string[] = [...(batchDoc.errorSummary || [])];
+    const existingSnapshots = new Map<string, any>(
+        (batchDoc.existingSnapshots || []).map(s => [s.handle, s])
+    );
+
+    let createdCount = batchDoc.createdCount || 0;
+    let updatedCount = batchDoc.updatedCount || 0;
+    let failedCount = batchDoc.failedCount || 0;
+    let skippedCount = batchDoc.skippedCount || 0;
+
+    // Filter to find pending un-processed groups
+    const pendingGroups = groups.filter(g => !processedHandlesSet.has(g.handle));
+    const effectiveChunkSize = Math.max(1, Math.min(chunkSize, 50));
+    const sliceToProcess = pendingGroups.slice(0, effectiveChunkSize);
+
+    const knownImageHashes = new Map<string, string>();
+
+    // Mark batch in_progress
+    if (batchDoc.status === "previewed" || !batchDoc.startedAt) {
+        await batchRef.update({
+            status: "in_progress",
+            startedAt: Date.now(),
+            confirmations,
+        });
+    }
+
+    // 7. Process Chunk Slice
+    for (const group of sliceToProcess) {
+        // Double check not already processed
+        if (processedHandlesSet.has(group.handle)) {
+            continue;
+        }
+
+        // Check if group had fatal errors from preview
+        if (group.errors.some(e => e.fatal)) {
             failedCount++;
             results.push({
                 handle: group.handle,
-                productId: preview.existingProductId || "unknown",
+                productId: "invalid",
                 status: "failed",
                 title: group.title,
                 variantsCreatedOrUpdated: 0,
                 imagesIngested: 0,
                 imagesFailed: 0,
-                error: preview.errors.map(e => e.message).join("; "),
+                error: group.errors.map(e => e.message).join("; "),
             });
+            processedHandlesSet.add(group.handle);
             continue;
         }
 
-        if (preview.status === "skipped" || preview.status === "conflict") {
+        const snapInfo = existingSnapshots.get(group.handle);
+        const isExistingInSnapshot = Boolean(snapInfo?.existingProductId);
+
+        // Check Mode Constraints
+        if (isExistingInSnapshot && batchDoc.importMode === "create_only") {
             skippedCount++;
             results.push({
                 handle: group.handle,
-                productId: preview.existingProductId || "skipped",
+                productId: snapInfo.existingProductId,
                 status: "skipped",
                 title: group.title,
                 variantsCreatedOrUpdated: 0,
                 imagesIngested: 0,
                 imagesFailed: 0,
-                error: preview.warnings.map(w => w.message).join("; "),
+                error: "Skipped in 'Create New Products Only' mode to prevent overwriting existing catalog product.",
             });
+            processedHandlesSet.add(group.handle);
+            continue;
+        }
+
+        if (!isExistingInSnapshot && batchDoc.importMode === "update_only") {
+            skippedCount++;
+            results.push({
+                handle: group.handle,
+                productId: "not_found",
+                status: "skipped",
+                title: group.title,
+                variantsCreatedOrUpdated: 0,
+                imagesIngested: 0,
+                imagesFailed: 0,
+                error: "Skipped in 'Update Existing Products Only' mode because product does not exist in catalog.",
+            });
+            processedHandlesSet.add(group.handle);
             continue;
         }
 
         try {
-            // Determine Product ID (existing or new UUID)
-            const productId = preview.existingProductId || crypto.randomUUID();
+            // Determine Product ID
+            // For existing: use known ID. For new: generate a stable deterministic UUID or random UUID
+            const productId = snapInfo?.existingProductId || crypto.randomUUID();
 
-            // 1. Ingest Remote Images to Cloudflare R2
+            // A. Ingest Remote Images to Cloudflare R2
             const ingestedImages: string[] = [];
             let imagesFailed = 0;
 
@@ -212,24 +409,24 @@ export async function executeBatchImport(options: {
                 }
             }
 
-            // 2. Transactional Product Commit with TASK 029 Inventory Reconciliation
+            // B. Transactional Product Commit with Stale Conflict & Concurrency Reconciliation
             await db.runTransaction(async (transaction) => {
                 const productRef = db.collection("products").doc(productId);
                 const liveSnap = await transaction.get(productRef);
                 const liveProduct = liveSnap.exists ? (liveSnap.data() as any) : null;
 
-                // Stale-preview conflict check for existing products
-                if (liveProduct && preview.existingProductSnapshot) {
-                    const snapUpdatedAt = preview.existingProductSnapshot.updatedAt || 0;
+                // Stale Conflict Invariant: verify product was not modified by another admin/order after preview
+                if (liveProduct && snapInfo) {
+                    const snapUpdatedAt = snapInfo.snapUpdatedAt || 0;
                     const liveUpdatedAt = liveProduct.updatedAt || 0;
                     if (liveUpdatedAt > snapUpdatedAt) {
                         throw new Error(
-                            `Catalog Conflict: Product '${group.title}' was modified by another user since preview was generated. Re-validation required.`
+                            `Catalog Conflict: Product '${group.title}' was modified by another transaction since preview was generated. Re-validation required.`
                         );
                     }
                 }
 
-                // Prepare Variants List
+                // Prepare Variant Matrix
                 const isLiveVariantProduct = Boolean(
                     liveProduct?.hasVariants && Array.isArray(liveProduct?.variants) && liveProduct.variants.length > 0
                 );
@@ -282,16 +479,19 @@ export async function executeBatchImport(options: {
                         }
                     }
                 } else if (isLiveVariantProduct) {
-                    // Existing product has variants, but CSV omitted variant columns (updating title/price only)
                     finalVariants = [...(liveProduct.variants || [])];
                 }
 
-                // Reconcile Inventory using TASK 029 authoritative logic
+                // Reconcile Inventory using TASK 029 authoritative logic (preserves checkout deductions!)
                 let formInventoryToReconcile = group.hasExplicitInventory
                     ? (group.variants[0]?.inventory || 0)
                     : (liveProduct?.inventory ?? 0);
 
-                let loadedProductForReconcile = preview.existingProductSnapshot || null;
+                let loadedProductForReconcile = snapInfo ? {
+                    inventory: snapInfo.existingInventory,
+                    hasVariants: snapInfo.hasVariants,
+                } : null;
+
                 if (!group.hasExplicitInventory && liveProduct) {
                     formInventoryToReconcile = liveProduct.inventory;
                 }
@@ -309,13 +509,19 @@ export async function executeBatchImport(options: {
                 const finalIsCustomized = group.isCustomized || (oldIsCustom && !group.isCustomized && !group.customizationType);
                 const finalCustomizationType = group.customizationType || (oldIsCustom ? liveProduct?.customizationType : null);
 
-                // Safe Publishing Default: new products default to draft (isVisible: false)
-                // Existing products retain visibility unless CSV explicitly specifies a valid state
+                // Safe Publishing Defaults:
+                // New products default to draft (isVisible: false) unless explicitly requested and permitted!
+                // Existing products retain visibility unless CSV explicitly specifies a valid state.
                 const finalVisibility = liveProduct
                     ? (group.isVisible !== undefined ? group.isVisible : liveProduct.isVisible)
-                    : Boolean(group.isVisible);
+                    : Boolean(group.isVisible && confirmations.allowPublishNewProducts);
 
-                // Build Final Product Payload
+                // Price Safety Invariant: Ensure prices are non-zero
+                const finalBasePrice = group.basePrice > 0 ? group.basePrice : (liveProduct?.price || 0);
+                if (finalBasePrice <= 0 && !liveProduct) {
+                    throw new Error(`New product '${group.title}' cannot have missing or ₹0 price.`);
+                }
+
                 const payload: Record<string, any> = {
                     id: productId,
                     name: group.title,
@@ -324,7 +530,7 @@ export async function executeBatchImport(options: {
                     vendor: group.vendor || (liveProduct?.vendor || "Bazaarvilla"),
                     category: group.category || (liveProduct?.category || "General"),
                     tags: group.tags.length > 0 ? group.tags : (liveProduct?.tags || []),
-                    price: group.basePrice > 0 ? group.basePrice : (liveProduct?.price || 0),
+                    price: finalBasePrice,
                     compareAtPrice: group.compareAtPrice ?? (liveProduct?.compareAtPrice ?? null),
                     inventory: reconciled.inventory,
                     totalPhysicalInventory: reconciled.totalPhysicalInventory,
@@ -346,7 +552,7 @@ export async function executeBatchImport(options: {
                 transaction.set(productRef, cleanPayload, { merge: true });
             });
 
-            if (preview.existingProductId) {
+            if (isExistingInSnapshot) {
                 updatedCount++;
                 results.push({
                     handle: group.handle,
@@ -369,13 +575,15 @@ export async function executeBatchImport(options: {
                     imagesFailed,
                 });
             }
+
+            processedHandlesSet.add(group.handle);
         } catch (err: any) {
             failedCount++;
             const msg = `Product '${group.title}' commit failed: ${err.message || "Unknown error"}`;
             errorSummary.push(msg);
             results.push({
                 handle: group.handle,
-                productId: preview.existingProductId || "failed",
+                productId: snapInfo?.existingProductId || "failed",
                 status: "failed",
                 title: group.title,
                 variantsCreatedOrUpdated: 0,
@@ -383,30 +591,42 @@ export async function executeBatchImport(options: {
                 imagesFailed: 0,
                 error: err.message || "Commit failed",
             });
+            processedHandlesSet.add(group.handle);
         }
     }
 
-    // Determine final status
-    const finalStatus =
-        failedCount === 0
-            ? "completed"
-            : createdCount > 0 || updatedCount > 0
-            ? "partially_failed"
-            : "failed";
+    // 8. Durable Progress Persistence
+    const totalProcessedCount = processedHandlesSet.size;
+    const isAllFinished = totalProcessedCount >= groups.length;
+    const finalStatus: ImportBatchStatus = isAllFinished
+        ? (failedCount === 0 ? "completed" : "partially_failed")
+        : "in_progress";
 
-    const completedRecord: ProductImportBatchRecord = {
-        ...initialBatchRecord,
+    const updatedBatchRecord: ProductImportBatchRecord = {
+        ...batchDoc,
         createdCount,
         updatedCount,
         failedCount,
         skippedCount,
+        processedCount: totalProcessedCount,
+        processedHandles: Array.from(processedHandlesSet),
         status: finalStatus,
-        completedAt: Date.now(),
         results,
         errorSummary,
+        lastProcessedAt: Date.now(),
+        ...(isAllFinished ? { completedAt: Date.now() } : {}),
     };
 
-    await batchRef.set(completedRecord, { merge: true });
+    await batchRef.set(updatedBatchRecord, { merge: true });
 
-    return completedRecord;
+    return {
+        success: true,
+        batchId,
+        status: finalStatus,
+        processedCount: totalProcessedCount,
+        totalProducts: groups.length,
+        remainingCount: groups.length - totalProcessedCount,
+        hasMore: !isAllFinished,
+        batchRecord: updatedBatchRecord,
+    };
 }

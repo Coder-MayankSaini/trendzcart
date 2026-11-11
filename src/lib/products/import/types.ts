@@ -17,6 +17,7 @@ export type ImportBatchStatus =
     | "staged"
     | "validating"
     | "previewed"
+    | "in_progress"
     | "importing"
     | "completed"
     | "partially_failed"
@@ -179,6 +180,15 @@ export interface ProductImportResult {
     error?: string;
 }
 
+export interface ImportConfirmationOptions {
+    confirmedNotice: boolean;
+    confirmPriceChanges?: boolean;
+    confirmInventoryChanges?: boolean;
+    confirmExistingProductUpdates?: boolean;
+    confirmPersonalizationChanges?: boolean;
+    allowPublishNewProducts?: boolean;
+}
+
 export interface ProductImportBatchRecord {
     id: string; // Stable UUID
     adminUid: string;
@@ -193,9 +203,40 @@ export interface ProductImportBatchRecord {
     updatedCount: number;
     failedCount: number;
     skippedCount: number;
+    processedCount?: number;
+    processedHandles?: string[];
     status: ImportBatchStatus;
     createdAt: number;
+    expiresAt?: number;
+    startedAt?: number;
     completedAt?: number;
+    lastProcessedAt?: number;
+    confirmations?: ImportConfirmationOptions;
+    groups?: ParsedProductGroup[];
+    existingSnapshots?: Array<{
+        handle: string;
+        existingProductId?: string;
+        snapUpdatedAt: number;
+        existingPrice?: number;
+        existingInventory?: number;
+        isCustomized?: boolean;
+        customizationType?: string | null;
+        hasVariants?: boolean;
+    }>;
+    previewSummary?: ImportPreviewSummary;
     errorSummary?: string[];
     results?: ProductImportResult[];
+}
+
+export interface ImportChunkCommitResult {
+    success: boolean;
+    batchId: string;
+    status: ImportBatchStatus;
+    processedCount: number;
+    totalProducts: number;
+    remainingCount: number;
+    hasMore: boolean;
+    isIdempotentReplay?: boolean;
+    batchRecord: ProductImportBatchRecord;
+    error?: string;
 }

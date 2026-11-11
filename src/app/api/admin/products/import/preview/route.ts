@@ -83,8 +83,17 @@ export async function POST(req: NextRequest) {
         // 4. Group rows by handle and extract variant matrices
         const { groups, fileErrors, fileWarnings } = groupCsvRows(rawRows);
 
-        // 5. Generate Dry-Run Preview against Cloud Firestore (ZERO database writes)
-        const previewSummary = await generateDryRunPreview({
+        const clientBatchId = typeof body.batchId === "string" && body.batchId.trim() ? body.batchId.trim() : crypto.randomUUID();
+        const sourceFileName = typeof body.fileName === "string" && body.fileName.trim() ? body.fileName.trim() : "import.csv";
+
+        // 5. Generate Dry-Run Preview against Cloud Firestore (ZERO catalog mutations)
+        // Durably persists authoritative session record in productImportBatches/{batchId}
+        const { previewSummary, batchId } = await generateDryRunPreview({
+            batchId: clientBatchId,
+            adminUid: authResult.uid || "admin",
+            adminEmail: authResult.email,
+            sourceFileName,
+            fileChecksum,
             groups,
             totalRows: rawRows.length,
             unsupportedHeaders: mappingResult.unsupportedHeaders,
@@ -94,6 +103,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             success: true,
+            batchId,
             fileChecksum,
             mappingResult,
             previewSummary,

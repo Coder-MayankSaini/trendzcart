@@ -35,7 +35,9 @@ import {
 import {
     isPrivateIp,
     detectImageMagicBytes,
+    validateRemoteImageUrl,
 } from "../../src/lib/products/import/imageIngestion.ts";
+import { buildProductPreview } from "../../src/lib/products/import/validation.ts";
 import { isCustomizableProduct } from "../../src/lib/orders/customizationEligibility.ts";
 import {
     STANDARD_PRODUCT_TEMPLATE_CSV,
@@ -489,6 +491,121 @@ describe("CSV Bulk Product Import Unit Tests (TASK 030)", () => {
             for (const g of groups) {
                 assert.equal(isCustomizableProduct(g), true);
             }
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // 9. Production Safety & SSRF Hardening Unit Tests (TASK 030 Extended)
+    // -------------------------------------------------------------------------
+    describe("9. Production Safety & SSRF Hardening Verification", () => {
+        it("CSV-036: isPrivateIp strictly blocks IPv4-mapped IPv6 private & metadata addresses", () => {
+            // IPv4-mapped IPv6 loopback
+            assert.equal(isPrivateIp("::ffff:127.0.0.1"), true);
+            // IPv4-mapped IPv6 cloud metadata
+            assert.equal(isPrivateIp("::ffff:169.254.169.254"), true);
+            // IPv4-mapped IPv6 RFC 1918 private
+            assert.equal(isPrivateIp("::ffff:10.0.0.1"), true);
+            assert.equal(isPrivateIp("::ffff:192.168.1.1"), true);
+            assert.equal(isPrivateIp("::ffff:172.16.0.1"), true);
+            assert.equal(isPrivateIp("0:0:0:0:0:ffff:127.0.0.1"), true);
+
+            // Carrier-grade NAT and benchmark subnets
+            assert.equal(isPrivateIp("100.64.0.1"), true);
+            assert.equal(isPrivateIp("198.18.0.1"), true);
+            assert.equal(isPrivateIp("224.0.0.1"), true); // Multicast
+            assert.equal(isPrivateIp("255.255.255.255"), true); // Broadcast
+
+            // Genuine public IPv4-mapped IPv6 must pass
+            assert.equal(isPrivateIp("::ffff:8.8.8.8"), false);
+            assert.equal(isPrivateIp("::ffff:1.1.1.1"), false);
+        });
+
+        it("CSV-037: validateRemoteImageUrl strictly blocks non-443 ports and non-HTTPS protocols", async () => {
+            const httpResult = await validateRemoteImageUrl("http://images.unsplash.com/photo-123.jpg");
+            assert.equal(httpResult.valid, false);
+            assert.match(httpResult.error || "", /only https/i);
+
+            const portResult = await validateRemoteImageUrl("https://images.unsplash.com:8080/photo-123.jpg");
+            assert.equal(portResult.valid, false);
+            assert.match(portResult.error || "", /prohibited non-standard/i);
+
+            const ftpResult = await validateRemoteImageUrl("ftp://example.com/img.png");
+            assert.equal(ftpResult.valid, false);
+        });
+
+        it("CSV-038: buildProductPreview rejects missing, zero, or negative base prices for new products", () => {
+            // Missing / zero price
+            const zeroPriceGroup: any = {
+                handle: "free-gift",
+                title: "Free Gift",
+                basePrice: 0,
+                variants: [{ inventory: 10, isActive: true, csvRowNumber: 2 }],
+                errors: [],
+                warnings: [],
+                images: [],
+                firstRowNumber: 2,
+            };
+            const previewZero = buildProductPreview({ group: zeroPriceGroup, mode: "create_only" });
+            assert.equal(previewZero.status, "invalid");
+            assert.ok(previewZero.errors.some(e => e.field === "price" && e.fatal));
+
+            // Negative price
+            const negPriceGroup: any = {
+                handle: "neg-product",
+                title: "Negative Product",
+                basePrice: -100,
+                variants: [{ inventory: 10, isActive: true, csvRowNumber: 2 }],
+                errors: [],
+                warnings: [],
+                images: [],
+                firstRowNumber: 2,
+            };
+            const previewNeg = buildProductPreview({ group: negPriceGroup, mode: "create_only" });
+            assert.equal(previewNeg.status, "invalid");
+            assert.ok(previewNeg.errors.some(e => e.field === "price" && e.fatal));
+        });
+
+        it("CSV-039: buildProductPreview rejects negative variant inventory", () => {
+            const negStockGroup: any = {
+                handle: "cushion-neg-stock",
+                title: "Cushion",
+                basePrice: 599,
+                variants: [{ sku: "CSH-01", inventory: -5, isActive: true, csvRowNumber: 3 }],
+                errors: [],
+                warnings: [],
+                images: [],
+                firstRowNumber: 2,
+            };
+            const preview = buildProductPreview({ group: negStockGroup, mode: "create_and_update" });
+            assert.equal(preview.status, "invalid");
+            assert.ok(preview.errors.some(e => e.field === "inventory" && e.fatal));
+        });
+
+        it("CSV-040: PapaParse cleanly handles UTF-8 BOM, multiline quoted descriptions, and commas", () => {
+            const bomCsv = "\uFEFFHandle,Title,Body (HTML),Variant Price\n" +
+                '"luxe-candle","Luxe Aromatherapy Candle","<p>Notes of vanilla, sandalwood,\nand amber.</p>",899\n';
+
+            const parsed = Papa.parse(bomCsv, { header: true, skipEmptyLines: "greedy" });
+            assert.equal(parsed.errors.length, 0);
+            assert.equal(parsed.data.length, 1);
+            const row: any = parsed.data[0];
+            assert.equal(row["Handle"], "luxe-candle");
+            assert.equal(row["Title"], "Luxe Aromatherapy Candle");
+            assert.ok(row["Body (HTML)"].includes("vanilla, sandalwood,\nand amber"));
+            assert.equal(row["Variant Price"], "899");
+        });
+
+        it("CSV-041: sanitizeCsvCellValue strictly escapes all formula trigger characters", () => {
+            assert.equal(sanitizeCsvCellValue("=cmd|'/C calc'!A0"), "'=cmd|'/C calc'!A0");
+            assert.equal(sanitizeCsvCellValue("+123456"), "'+123456");
+            assert.equal(sanitizeCsvCellValue("-100"), "'-100");
+            assert.equal(sanitizeCsvCellValue("@SUM(A1:A10)"), "'@SUM(A1:A10)");
+            assert.equal(sanitizeCsvCellValue("\tmalicious"), "'\tmalicious");
+            assert.equal(sanitizeCsvCellValue("\rmalicious"), "'\rmalicious");
+
+            // Normal text remains untouched
+            assert.equal(sanitizeCsvCellValue("Standard Product Title"), "Standard Product Title");
+            assert.equal(sanitizeCsvCellValue("100% Cotton"), "100% Cotton");
         });
     });
 });

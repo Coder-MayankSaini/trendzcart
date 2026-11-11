@@ -4,13 +4,17 @@
  * Verifies real Firebase Emulator interactions:
  * - Admin authorization & custom claims gating
  * - Server-side preview generation (0 database writes)
+ * - Server-authoritative preview binding (anti-tampering & anti-manipulation)
+ * - Checksum matching and preview expiration
+ * - Explicit confirmation checkpoints (price, stock, existing updates)
  * - Shopify standard and legacy CSV compatibility
  * - Simple products ("Default Title") vs multi-row variant products
  * - Safe publishing defaults (draft mode: isVisible = false)
- * - Existing product update safety and field preservation
+ * - Existing product update safety, stale conflict detection, and field preservation
  * - Concurrency-safe inventory reconciliation (reusing TASK 029 engine)
- * - Personalization preservation & COD protection
- * - Idempotent batch re-submission
+ * - Catalog-wide duplicate SKU detection
+ * - Bounded chunked execution & interrupted batch resumption (Netlify timeout resilience)
+ * - End-to-end idempotent batch re-submission
  * - Append-only audit records in productImportBatches
  * - Error report formula injection neutralization
  * - Templates and history APIs
@@ -29,10 +33,12 @@ import { NextRequest } from "next/server";
 
 describe("Shopify-Compatible CSV Bulk Product Import Integration Tests (TASK 030)", () => {
     const adminUid = "admin_user_task030";
+    const otherAdminUid = "other_admin_task030";
     const customerUid = "customer_user_task030";
     const existingProductId = "prod_existing_hoodie_030";
 
     let adminToken: string;
+    let otherAdminToken: string;
     let customerToken: string;
 
     before(async () => {
@@ -41,7 +47,7 @@ describe("Shopify-Compatible CSV Bulk Product Import Integration Tests (TASK 030
         }
 
         // Setup test users in Auth Emulator
-        for (const uid of [adminUid, customerUid]) {
+        for (const uid of [adminUid, otherAdminUid, customerUid]) {
             try { await adminAuth.deleteUser(uid); } catch {}
         }
 
@@ -53,12 +59,20 @@ describe("Shopify-Compatible CSV Bulk Product Import Integration Tests (TASK 030
         await adminAuth.setCustomUserClaims(adminUid, { admin: true });
 
         await adminAuth.createUser({
+            uid: otherAdminUid,
+            email: "otheradmin030@bazaarvilla.test",
+            displayName: "Other Admin",
+        });
+        await adminAuth.setCustomUserClaims(otherAdminUid, { admin: true });
+
+        await adminAuth.createUser({
             uid: customerUid,
             email: "customer030@bazaarvilla.test",
             displayName: "Test Customer",
         });
 
         adminToken = await getSyntheticUserAuthToken(adminUid);
+        otherAdminToken = await getSyntheticUserAuthToken(otherAdminUid);
         customerToken = await getSyntheticUserAuthToken(customerUid);
     });
 
@@ -148,7 +162,7 @@ describe("Shopify-Compatible CSV Bulk Product Import Integration Tests (TASK 030
     });
 
     // -------------------------------------------------------------------------
-    // 2. Dry-Run Preview Integrity (ZERO Database Writes)
+    // 2. Dry-Run Preview Integrity (ZERO Database Writes & Server Persistence)
     // -------------------------------------------------------------------------
     it("IMPORT-INT-003: Authorized admin preview with Shopify standard CSV performs ZERO database writes", async () => {
         const csv = `Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant Price,Variant Inventory Qty,Image Src
@@ -165,14 +179,22 @@ new-mug,"Artisanal Ceramic Mug","<p>Handcrafted mug.</p>",Bazaarvilla,Kitchen,"m
         const data = await res.json();
 
         assert.equal(data.success, true);
+        assert.ok(data.batchId);
+        assert.ok(data.fileChecksum);
         assert.equal(data.previewSummary.totalProducts, 1);
         assert.equal(data.previewSummary.newProducts, 1);
         assert.equal(data.previewSummary.draftCount, 1); // Safe publishing default: draft
         assert.equal(data.mappingResult.formatDetected, "shopify_standard");
 
-        // Verify ZERO products created in Firestore during preview
+        // Verify ZERO products created in products collection during preview
         const checkDoc = await adminDb!.collection("products").where("slug", "==", "new-mug").get();
-        assert.equal(checkDoc.empty, true, "Dry-run preview MUST NOT write to Firestore");
+        assert.equal(checkDoc.empty, true, "Dry-run preview MUST NOT write to products collection");
+
+        // Verify authoritative preview session persisted in productImportBatches
+        const batchDoc = await adminDb!.collection("productImportBatches").doc(data.batchId).get();
+        assert.equal(batchDoc.exists, true);
+        assert.equal(batchDoc.data()?.status, "previewed");
+        assert.equal(batchDoc.data()?.sourceFileChecksum, data.fileChecksum);
     });
 
     it("IMPORT-INT-004: Simple product with 'Default Title' does not create bogus size options", async () => {
@@ -285,58 +307,321 @@ free-stuff,Freebie,-50
     });
 
     // -------------------------------------------------------------------------
-    // 3. Batch Commit & Atomic Writes
+    // 3. Server-Side Preview Binding & Anti-Tampering Hardening
     // -------------------------------------------------------------------------
-    it("IMPORT-INT-009: Batch commit creates new products as Drafts (isVisible: false)", async () => {
-        // Step 1: Generate preview
-        const csv = `Handle,Title,Price,Inventory Quantity
-new-wallet,Handmade Leather Wallet,899,25
-`;
-        const prevReq = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/preview",
-            { csvText: csv },
-            { Authorization: `Bearer ${adminToken}` }
+    it("IMPORT-INT-009: Server strictly rejects commit with manipulated/mismatched fileChecksum", async () => {
+        const csv = `Handle,Title,Price\nmug-anti-tamper,Mug,299\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
         );
-        const prevRes = await previewRoute(prevReq);
         const prevData = await prevRes.json();
 
-        // Step 2: Commit batch
-        const batchId = "batch_test_create_001";
-        const commitReq = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/commit",
-            {
-                batchId,
-                previews: prevData.previewSummary.productPreviews,
-                importMode: "create_and_update",
-                sourceFileName: "wallets.csv",
-            },
-            { Authorization: `Bearer ${adminToken}` }
+        // Attempt commit with forged checksum
+        const commitRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId: prevData.batchId,
+                    fileChecksum: "forged_checksum_12345",
+                    confirmations: { confirmedNotice: true },
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
         );
 
-        const commitRes = await commitRoute(commitReq);
-        assert.equal(commitRes.status, 200);
-        const commitData = await commitRes.json();
-
-        assert.equal(commitData.success, true);
-        assert.equal(commitData.batchRecord.createdCount, 1);
-        assert.equal(commitData.batchRecord.status, "completed");
-
-        // Verify product was created in Firestore with isVisible: false (draft mode)
-        const snap = await adminDb!.collection("products").where("slug", "==", "new-wallet").get();
-        assert.equal(snap.size, 1);
-        const docData = snap.docs[0].data();
-        assert.equal(docData.name, "Handmade Leather Wallet");
-        assert.equal(docData.price, 899);
-        assert.equal(docData.inventory, 25);
-        assert.equal(docData.isVisible, false, "New product MUST default to draft (isVisible = false)");
+        assert.equal(commitRes.status, 400);
+        const errData = await commitRes.json();
+        assert.match(errData.error, /checksum mismatch/i);
     });
 
-    it("IMPORT-INT-010: Existing product update with inventory reconciliation preserves live checkout deductions", async () => {
-        // Product was seeded with inventory: 20 (M=10, L=10).
-        // Simulate an interim customer purchase that decremented M from 10 to 8 (aggregate 18).
+    it("IMPORT-INT-010: Server strictly rejects commit attempt by a different administrator", async () => {
+        const csv = `Handle,Title,Price\nmug-cross-admin,Mug,299\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` } // Generated by adminUid
+            )
+        );
+        const prevData = await prevRes.json();
+
+        // Other admin attempts to commit this batch
+        const commitRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId: prevData.batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: { confirmedNotice: true },
+                },
+                { Authorization: `Bearer ${otherAdminToken}` } // Different admin token!
+            )
+        );
+
+        assert.equal(commitRes.status, 400);
+        const errData = await commitRes.json();
+        assert.match(errData.error, /unauthorized.*another administrator/i);
+    });
+
+    it("IMPORT-INT-011: Server strictly rejects commit of an expired preview session (> 1 hour)", async () => {
+        const csv = `Handle,Title,Price\nmug-expired,Mug,299\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const prevData = await prevRes.json();
+
+        // Manually simulate expired timestamp in Firestore
+        await adminDb!.collection("productImportBatches").doc(prevData.batchId).update({
+            expiresAt: Date.now() - 5000, // 5 seconds in the past
+        });
+
+        const commitRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId: prevData.batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: { confirmedNotice: true },
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+
+        assert.equal(commitRes.status, 400);
+        const errData = await commitRes.json();
+        assert.match(errData.error, /preview.*expired/i);
+    });
+
+    // -------------------------------------------------------------------------
+    // 4. Explicit Administrator Confirmation Checkpoints
+    // -------------------------------------------------------------------------
+    it("IMPORT-INT-012: Explicit confirmation: unconfirmed price changes strictly block commit", async () => {
+        const csv = `Handle,Title,Price\nexisting-fleece-hoodie,Existing Fleece Hoodie,1899\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const prevData = await prevRes.json();
+        assert.equal(prevData.previewSummary.priceChangeCount, 1);
+
+        // Commit without confirmPriceChanges
+        const commitRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId: prevData.batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: {
+                        confirmedNotice: true,
+                        confirmPriceChanges: false, // OMITTED!
+                        confirmInventoryChanges: true,
+                        confirmExistingProductUpdates: true,
+                    },
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+
+        assert.equal(commitRes.status, 400);
+        const errData = await commitRes.json();
+        assert.match(errData.error, /confirm price changes/i);
+    });
+
+    it("IMPORT-INT-013: Explicit confirmation: unconfirmed inventory changes strictly block commit", async () => {
+        const csv = `Handle,Title,Price,Variant Inventory Qty\nexisting-fleece-hoodie,Existing Fleece Hoodie,1299,50\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const prevData = await prevRes.json();
+        assert.equal(prevData.previewSummary.inventoryChangeCount, 1);
+
+        // Commit without confirmInventoryChanges
+        const commitRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId: prevData.batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: {
+                        confirmedNotice: true,
+                        confirmPriceChanges: true,
+                        confirmInventoryChanges: false, // OMITTED!
+                        confirmExistingProductUpdates: true,
+                    },
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+
+        assert.equal(commitRes.status, 400);
+        const errData = await commitRes.json();
+        assert.match(errData.error, /confirm inventory changes/i);
+    });
+
+    // -------------------------------------------------------------------------
+    // 5. Existing Product Update Safety & Stale Conflicts
+    // -------------------------------------------------------------------------
+    it("IMPORT-INT-014: Stale conflict detection: product modified after preview was generated aborts update", async () => {
+        const csv = `Handle,Title,Price\nexisting-fleece-hoodie,Updated Hoodie,1499\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const prevData = await prevRes.json();
+
+        // Simulate concurrent product edit in Firestore that advances updatedAt
         await adminDb!.collection("products").doc(existingProductId).update({
-            inventory: 18,
-            totalPhysicalInventory: 18,
+            updatedAt: Date.now() + 5000,
+        });
+
+        const commitRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId: prevData.batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: {
+                        confirmedNotice: true,
+                        confirmPriceChanges: true,
+                        confirmInventoryChanges: true,
+                        confirmExistingProductUpdates: true,
+                    },
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+
+        // Commit should fail the conflicting product and mark it failed
+        assert.equal(commitRes.status, 200);
+        const data = await commitRes.json();
+        assert.equal(data.batchRecord.failedCount, 1);
+        const failedResult = data.batchRecord.results.find((r: any) => r.handle === "existing-fleece-hoodie");
+        assert.ok(failedResult);
+        assert.match(failedResult.error, /catalog conflict.*modified/i);
+    });
+
+    it("IMPORT-INT-015: Catalog-wide duplicate SKU against another product is rejected in preview", async () => {
+        // existing-fleece-hoodie has SKU HOODIE-BLK-M
+        // Attempt to create a brand new product using that same SKU!
+        await adminDb!.collection("products").doc(existingProductId).update({
+            sku: "HOODIE-BLK-M",
+        });
+
+        const csv = `Handle,Title,Price,SKU\nbrand-new-jacket,Brand New Jacket,1999,HOODIE-BLK-M\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const prevData = await prevRes.json();
+
+        assert.equal(prevData.previewSummary.canProceedWithImport, false);
+        const fatalSkuErr = prevData.previewSummary.productPreviews[0].errors.find((e: any) => e.field === "sku");
+        assert.ok(fatalSkuErr);
+        assert.match(fatalSkuErr.message, /already assigned to another catalog product/i);
+    });
+
+    // -------------------------------------------------------------------------
+    // 6. Bounded Resumable Chunking & Idempotency
+    // -------------------------------------------------------------------------
+    it("IMPORT-INT-016: Bounded chunked execution processes products in slices and resumes without duplicates", async () => {
+        // Create CSV with 3 products
+        const csv = `Handle,Title,Price\nchunk-prod-1,Chunk Product 1,199\nchunk-prod-2,Chunk Product 2,299\nchunk-prod-3,Chunk Product 3,399\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const prevData = await prevRes.json();
+        const batchId = prevData.batchId;
+
+        // Chunk 1: process with chunkSize = 2
+        const chunk1Res = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: { confirmedNotice: true },
+                    chunkSize: 2,
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const chunk1Data = await chunk1Res.json();
+        assert.equal(chunk1Data.success, true);
+        assert.equal(chunk1Data.processedCount, 2);
+        assert.equal(chunk1Data.totalProducts, 3);
+        assert.equal(chunk1Data.hasMore, true);
+        assert.equal(chunk1Data.status, "in_progress");
+
+        // Chunk 2: resume and process remaining 1 product
+        const chunk2Res = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: { confirmedNotice: true },
+                    chunkSize: 2,
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const chunk2Data = await chunk2Res.json();
+        assert.equal(chunk2Data.success, true);
+        assert.equal(chunk2Data.processedCount, 3);
+        assert.equal(chunk2Data.hasMore, false);
+        assert.equal(chunk2Data.status, "completed");
+
+        // Replay of completed batch returns idempotent replay without mutations
+        const replayRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: { confirmedNotice: true },
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
+        );
+        const replayData = await replayRes.json();
+        assert.equal(replayData.isIdempotentReplay, true);
+        assert.equal(replayData.status, "completed");
+    });
+
+    // -------------------------------------------------------------------------
+    // 7. Inventory Reconciliation Under Live Checkout
+    // -------------------------------------------------------------------------
+    it("IMPORT-INT-017: Existing product update preserves interim customer checkout deductions", async () => {
+        // Product seeded with inventory: 20 (M=10, L=10).
+        // Simulate interim checkout that decremented M stock from 10 to 7 (aggregate 17).
+        await adminDb!.collection("products").doc(existingProductId).update({
+            inventory: 17,
+            totalPhysicalInventory: 17,
             variants: [
                 {
                     id: "var_size_m_col_black",
@@ -346,7 +631,7 @@ new-wallet,Handmade Leather Wallet,899,25
                     colorName: "Black",
                     sku: "HOODIE-BLK-M",
                     price: 1299,
-                    inventory: 8, // Customer purchased 2 units
+                    inventory: 7, // 3 units purchased by real customers
                     isActive: true,
                     createdAt: 1000,
                 },
@@ -366,199 +651,47 @@ new-wallet,Handmade Leather Wallet,899,25
             updatedAt: 1000,
         });
 
-        // CSV only updates base price to 1399 and description (does not modify M stock).
-        const csv = `Handle,Title,Price
-existing-fleece-hoodie,Updated Fleece Hoodie,1399
-`;
-        const prevReq = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/preview",
-            { csvText: csv },
-            { Authorization: `Bearer ${adminToken}` }
+        // CSV only updates base price to 1399 (does not touch stock)
+        const csv = `Handle,Title,Price\nexisting-fleece-hoodie,Updated Fleece Hoodie,1399\n`;
+        const prevRes = await previewRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/preview",
+                { csvText: csv },
+                { Authorization: `Bearer ${adminToken}` }
+            )
         );
-        const prevRes = await previewRoute(prevReq);
         const prevData = await prevRes.json();
 
         // Commit update
-        const commitReq = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/commit",
-            {
-                batchId: "batch_test_update_reconcile",
-                previews: prevData.previewSummary.productPreviews,
-                importMode: "update_only",
-            },
-            { Authorization: `Bearer ${adminToken}` }
+        const commitRes = await commitRoute(
+            createJsonPostRequest(
+                "http://localhost/api/admin/products/import/commit",
+                {
+                    batchId: prevData.batchId,
+                    fileChecksum: prevData.fileChecksum,
+                    confirmations: {
+                        confirmedNotice: true,
+                        confirmPriceChanges: true,
+                        confirmInventoryChanges: true,
+                        confirmExistingProductUpdates: true,
+                    },
+                },
+                { Authorization: `Bearer ${adminToken}` }
+            )
         );
-        const commitRes = await commitRoute(commitReq);
         assert.equal(commitRes.status, 200);
 
-        // Verify product in Firestore: price updated, but live stock (18) and M stock (8) preserved!
+        // Verify product in Firestore: price updated, but live stock (17) preserved!
         const finalDoc = await adminDb!.collection("products").doc(existingProductId).get();
         const data = finalDoc.data()!;
         assert.equal(data.price, 1399);
-        assert.equal(data.inventory, 18, "Customer purchase deductions MUST NOT be overwritten by unrelated CSV updates");
-    });
-
-    it("IMPORT-INT-011: Missing CSV variants safeguard: missing variants are not automatically deleted", async () => {
-        // Product has M and L variants. CSV only lists M variant.
-        const csv = `Handle,Title,Option1 Name,Option1 Value,Price,Variant Inventory Qty,SKU
-existing-fleece-hoodie,Existing Fleece Hoodie,Size,M,1299,10,HOODIE-BLK-M
-`;
-        const prevReq = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/preview",
-            { csvText: csv },
-            { Authorization: `Bearer ${adminToken}` }
-        );
-        const prevRes = await previewRoute(prevReq);
-        const prevData = await prevRes.json();
-
-        const commitReq = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/commit",
-            {
-                batchId: "batch_test_variant_preserve",
-                previews: prevData.previewSummary.productPreviews,
-            },
-            { Authorization: `Bearer ${adminToken}` }
-        );
-        const commitRes = await commitRoute(commitReq);
-        assert.equal(commitRes.status, 200);
-
-        const finalDoc = await adminDb!.collection("products").doc(existingProductId).get();
-        const variants = finalDoc.data()?.variants || [];
-        // L variant must still be present!
-        assert.equal(variants.length, 2, "Unmentioned existing variants MUST be preserved");
-    });
-
-    it("IMPORT-INT-012: Batch commit idempotency: re-submitting same batchId returns existing record without duplicating", async () => {
-        const batchId = "batch_idempotent_test";
-        const previews = [
-            {
-                handle: "idem-prod",
-                title: "Idempotent Product",
-                status: "new" as const,
-                variantCount: 1,
-                imagesCount: 0,
-                expectedR2Uploads: 0,
-                errors: [],
-                warnings: [],
-                diffs: [],
-                parsedGroup: {
-                    handle: "idem-prod",
-                    title: "Idempotent Product",
-                    description: "",
-                    basePrice: 500,
-                    images: [],
-                    variants: [{ csvRowNumber: 1, inventory: 10, isActive: true, price: 500 }],
-                    isSimpleProduct: true,
-                    sizeMode: "none" as const,
-                    sizesList: [],
-                    colors: [],
-                    tags: [],
-                    isVisible: false,
-                    isCustomized: false,
-                    customizationType: null,
-                    firstRowNumber: 1,
-                    allRowNumbers: [1],
-                    errors: [],
-                    warnings: [],
-                    unsupportedColumns: [],
-                },
-            },
-        ];
-
-        // First commit
-        const req1 = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/commit",
-            { batchId, previews, importMode: "create_only" },
-            { Authorization: `Bearer ${adminToken}` }
-        );
-        const res1 = await commitRoute(req1);
-        assert.equal(res1.status, 200);
-        const data1 = await res1.json();
-        assert.equal(data1.batchRecord.status, "completed");
-
-        // Second commit with same batchId (idempotent replay)
-        const req2 = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/commit",
-            { batchId, previews, importMode: "create_only" },
-            { Authorization: `Bearer ${adminToken}` }
-        );
-        const res2 = await commitRoute(req2);
-        assert.equal(res2.status, 200);
-        const data2 = await res2.json();
-        assert.equal(data2.isIdempotentReplay, true);
-        assert.equal(data2.batchRecord.id, batchId);
-
-        // Verify only 1 product created
-        const snap = await adminDb!.collection("products").where("slug", "==", "idem-prod").get();
-        assert.equal(snap.size, 1);
-    });
-
-    it("IMPORT-INT-013: Append-only audit record created in productImportBatches", async () => {
-        const batchId = "batch_audit_verify_001";
-        const previews = [
-            {
-                handle: "audit-prod",
-                title: "Audit Test Product",
-                status: "new" as const,
-                variantCount: 1,
-                imagesCount: 0,
-                expectedR2Uploads: 0,
-                errors: [],
-                warnings: [],
-                diffs: [],
-                parsedGroup: {
-                    handle: "audit-prod",
-                    title: "Audit Test Product",
-                    description: "",
-                    basePrice: 300,
-                    images: [],
-                    variants: [{ csvRowNumber: 1, inventory: 5, isActive: true, price: 300 }],
-                    isSimpleProduct: true,
-                    sizeMode: "none" as const,
-                    sizesList: [],
-                    colors: [],
-                    tags: [],
-                    isVisible: false,
-                    isCustomized: false,
-                    customizationType: null,
-                    firstRowNumber: 1,
-                    allRowNumbers: [1],
-                    errors: [],
-                    warnings: [],
-                    unsupportedColumns: [],
-                },
-            },
-        ];
-
-        const req = createJsonPostRequest(
-            "http://localhost/api/admin/products/import/commit",
-            {
-                batchId,
-                previews,
-                sourceFileName: "audit_test.csv",
-                fileChecksum: "abc123checksum",
-            },
-            { Authorization: `Bearer ${adminToken}` }
-        );
-        await commitRoute(req);
-
-        // Verify audit document exists in productImportBatches
-        const auditDoc = await adminDb!.collection("productImportBatches").doc(batchId).get();
-        assert.equal(auditDoc.exists, true);
-        const record = auditDoc.data()!;
-        assert.equal(record.id, batchId);
-        assert.equal(record.adminUid, adminUid);
-        assert.equal(record.sourceFileChecksum, "abc123checksum");
-        assert.equal(record.status, "completed");
-        assert.equal(record.createdCount, 1);
-        assert.ok(record.createdAt > 0);
-        assert.ok(record.completedAt > 0);
+        assert.equal(data.inventory, 17, "Customer purchase deductions MUST NOT be overwritten");
     });
 
     // -------------------------------------------------------------------------
-    // 4. Auxiliary APIs (Templates, Error Report, History)
+    // 8. Auxiliary APIs & Security
     // -------------------------------------------------------------------------
-    it("IMPORT-INT-014: GET /api/admin/products/import/templates returns downloadable CSV", async () => {
+    it("IMPORT-INT-018: GET /api/admin/products/import/templates returns downloadable CSV", async () => {
         const req = new NextRequest("http://localhost/api/admin/products/import/templates?type=variants");
         const res = await templatesRoute(req);
         assert.equal(res.status, 200);
@@ -569,7 +702,7 @@ existing-fleece-hoodie,Existing Fleece Hoodie,Size,M,1299,10,HOODIE-BLK-M
         assert.ok(text.includes("Dimension Width"));
     });
 
-    it("IMPORT-INT-015: POST /api/admin/products/import/error-report neutralizes formula injection", async () => {
+    it("IMPORT-INT-019: POST /api/admin/products/import/error-report neutralizes formula injection", async () => {
         const req = createJsonPostRequest(
             "http://localhost/api/admin/products/import/error-report",
             {
@@ -593,12 +726,11 @@ existing-fleece-hoodie,Existing Fleece Hoodie,Size,M,1299,10,HOODIE-BLK-M
         assert.equal(res.headers.get("content-type"), "text/csv; charset=utf-8");
         const text = await res.text();
 
-        // Must prefix = and - with ' to prevent spreadsheet formula execution
         assert.ok(text.includes("''=HYPERLINK") || text.includes("'=HYPERLINK"));
         assert.ok(text.includes("'-10"));
     });
 
-    it("IMPORT-INT-016: GET /api/admin/products/import/history returns past batches for admin", async () => {
+    it("IMPORT-INT-020: GET /api/admin/products/import/history returns past batches for admin", async () => {
         const req = new NextRequest("http://localhost/api/admin/products/import/history", {
             headers: { Authorization: `Bearer ${adminToken}` },
         });

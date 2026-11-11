@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminRequest } from "@/lib/auth/adminAuth";
-import { adminDb } from "@/lib/firebase/admin";
 import { executeBatchImport } from "@/lib/products/import/serverImportEngine";
-import type { ImportMode, ProductImportPreview } from "@/lib/products/import/types";
+import type { ImportConfirmationOptions } from "@/lib/products/import/types";
 
 export const dynamic = "force-dynamic";
 
@@ -20,79 +19,56 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}));
         const {
             batchId,
-            previews,
-            importMode = "create_and_update",
-            sourceFileName = "import.csv",
-            fileChecksum = "",
-            totalRows = 0,
-            formatDetected = "custom",
+            fileChecksum,
+            confirmations,
+            chunkSize,
         } = body as {
             batchId?: string;
-            previews?: ProductImportPreview[];
-            importMode?: ImportMode;
-            sourceFileName?: string;
             fileChecksum?: string;
-            totalRows?: number;
-            formatDetected?: any;
+            confirmations?: ImportConfirmationOptions;
+            chunkSize?: number;
         };
 
-        if (!batchId || typeof batchId !== "string") {
+        if (!batchId || typeof batchId !== "string" || !batchId.trim()) {
             return NextResponse.json(
                 { error: "Valid batchId identifier is required for import commit." },
                 { status: 400 }
             );
         }
 
-        if (!Array.isArray(previews) || previews.length === 0) {
+        if (!fileChecksum || typeof fileChecksum !== "string" || !fileChecksum.trim()) {
             return NextResponse.json(
-                { error: "No confirmed product previews provided to import." },
+                { error: "Valid fileChecksum is required to verify preview integrity before commit." },
                 { status: 400 }
             );
         }
 
-        if (!adminDb) {
+        if (!confirmations || typeof confirmations !== "object") {
             return NextResponse.json(
-                { error: "Cloud Firestore database service unavailable." },
-                { status: 500 }
+                { error: "Administrator confirmation options are required." },
+                { status: 400 }
             );
         }
 
-        // 2. Idempotency Guard:
-        // Check if an import batch with this ID has already been executed or completed
-        const existingBatchSnap = await adminDb.collection("productImportBatches").doc(batchId).get();
-        if (existingBatchSnap.exists) {
-            const data = existingBatchSnap.data();
-            if (data?.status === "completed") {
-                return NextResponse.json({
-                    success: true,
-                    isIdempotentReplay: true,
-                    batchRecord: data,
-                });
-            }
-        }
-
-        // 3. Server-side Execution
-        const completedRecord = await executeBatchImport({
-            batchId,
+        // 2. Server-side Execution & Integrity Check
+        // The server loads authoritative preview data from productImportBatches/{batchId},
+        // validates admin identity, checksum, and explicit confirmation flags,
+        // and processes products in bounded, resumable chunks.
+        const chunkResult = await executeBatchImport({
+            batchId: batchId.trim(),
             adminUid: authResult.uid || "admin",
             adminEmail: authResult.email,
-            sourceFileName,
-            fileChecksum,
-            importMode,
-            formatDetected,
-            totalRows: totalRows || previews.length,
-            previews,
+            fileChecksum: fileChecksum.trim(),
+            confirmations,
+            chunkSize: typeof chunkSize === "number" ? chunkSize : undefined,
         });
 
-        return NextResponse.json({
-            success: true,
-            batchRecord: completedRecord,
-        });
+        return NextResponse.json(chunkResult);
     } catch (err: any) {
         console.error("[API Product Import Commit Error]:", err);
         return NextResponse.json(
             { error: `Batch import commit failed: ${err.message || "Unknown error"}` },
-            { status: 500 }
+            { status: 400 }
         );
     }
 }
