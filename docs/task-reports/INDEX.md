@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/029-flexible-product-variants`  
+**Current Active Git Branch:** `task/030-shopify-csv-product-import`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **TASK 029 — LOCAL IMPLEMENTATION HARDENED, PRODUCTION APPROVAL PENDING.** (Task 029 Flexible Product Variants, Sizing Modes A-E, Dimensions, Color Swatches, Variant Matrix, Server-Authoritative Pricing, Multi-Variant Transaction Integrity & Atomic Inventory Hardening implemented and verified; 457 unique automated tests passing [135 unit + 322 integration across 24 suites]; 11 visual QA screenshots captured; production deploy 6af369e6cbfc6c42b6b41349 preserved; Razorpay Live Mode operational)
+**Current Commercial Transacting Safety Status:** **TASK 030 — LOCALLY IMPLEMENTED, PRODUCTION APPROVAL PENDING.** (Task 030 Bazaarvilla Shopify-Compatible CSV Bulk Product Import & Catalog Safety implemented and verified; 518 unique automated tests passing [174 unit + 344 integration, including 41 security-rule tests across 25 suites]; 15 visual QA screenshots captured across 6 viewports; production deploy 6af40ef0b0506f233476f778 preserved; Razorpay Live Mode operational)
 
 ---
 
@@ -59,13 +59,14 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-027** | Bazaarvilla Customizable Product COD Restriction & Mixed-Cart Safeguards | **COMPLETED & PUBLISHED** | `task/027-customizable-product-cod-restriction` (`87261bc`) | [TASK-027-customizable-product-cod-restriction.md](./TASK-027-customizable-product-cod-restriction.md) | Enforced secure checkout business rule: if shopping cart contains any customizable product, Cash on Delivery is strictly disabled for the entire cart, while regular products retain existing COD eligibility; authoritative personalization detection via trusted catalog metadata (`isCustomized: true`, `customizationType`, legacy custom flags) using shared browser-safe `isCustomizableProduct` utility; anti-flicker pending verification gate (`Checking eligibility...`) and fail-closed catalog verification; mixed-cart protection; mandatory server-side transactional validation on `POST /api/orders/create` before inventory reservations; 396 unique automated tests passing (99 unit + 297 integration); 9 visual QA screenshots captured; published to Netlify production (Deploy ID: `6af358848c8957162298eb3c`); 10/10 live smoke checks passed on `https://bazaarvilla.com`. |
 | **TASK-028** | Bazaarvilla Product Image Containment & No-Crop Gallery Fix | **COMPLETED & PUBLISHED** | `task/028-product-image-containment` (`3e7ff70`) | [TASK-028-product-image-containment.md](./TASK-028-product-image-containment.md) | Eliminated product photograph cropping and clipping on storefront PDP; container-level framing with `aspect-ratio: 4/5` and neutral background provides zero CLS; `object-fit: contain` displays 100% of source pixels across portrait (4:5, 3:4), square (1:1), landscape (16:9), and tall (9:16) photos; updated admin dropzone guidance for 4:5 recommendation while clarifying catalog card cover preview; 11 unit test criteria (CONTAIN-001 to CONTAIN-011); 407 unique automated tests passing (110 unit + 297 integration); 16 before/after visual QA screenshots captured; deployed to Netlify production (`6af369e6cbfc6c42b6b41349`); verified 11/11 post-deployment live checks on `https://bazaarvilla.com`. |
 | **TASK-029** | Bazaarvilla Flexible Product Sizes, Dimensions, Color Variants & Inventory Integrity Hardening | **COMPLETED & PUBLISHED** | `task/029-flexible-product-variants` (`b8cdf28`) | [TASK-029-flexible-product-variants.md](./TASK-029-flexible-product-variants.md) | Multi-attribute variant architecture; Modes A–E sizing (apparel XS–3XL, Free Size auto-selected, named sizes with physical dimensions W×H×D and selectable units, custom labels); color options with hex swatches and R2 photo association; dynamic PDP pricing, stock, and photo switching; distinct variant cart separation; server-authoritative pricing validation; multi-variant transaction audit & elimination of silent clamping; admin inventory concurrency reconciliation; recreated variant identity isolation; fulfillment restock safeguards; 29 real Firebase emulator integration tests added (327 total integration tests across 24 suites); 466 unique automated tests passing (139 unit + 327 integration); deployed to Netlify production (`6af40ef0b0506f233476f778`); 15/15 post-deployment read-only live checks verified on `https://bazaarvilla.com`. |
+| **TASK-030** | Bazaarvilla Shopify-Compatible CSV Bulk Product Import & Catalog Safety | **COMPLETED LOCALLY — PRODUCTION APPROVAL PENDING** | `task/030-shopify-csv-product-import` | [TASK-030-shopify-csv-product-import.md](./TASK-030-shopify-csv-product-import.md) | Comprehensive Shopify-compatible and Bazaarvilla-template bulk product importer; 5-step responsive admin wizard (Upload, Mapping, Dry-Run Preview, Explicit Confirmation, Execution Results); formula injection escaping (`=, +, -, @, \t, \r`); XSS HTML sanitization; prototype pollution defense; bracketed, dash, and 3D dimension parsing into TASK 029 variant schema; multi-row handle grouping; 3rd independent attribute incompatibility guard; explicit personalization preservation & COD prepaid enforcement (TASK 027); SSRF-guarded streaming Cloudflare R2 image ingestion with DNS validation, redirect checks, and binary magic bytes verification; non-destructive read-only dry-run preview (0 mutations); concurrency-safe inventory reconciliation; audit collection security rules (`RULE-015C`); 52 new automated tests added; 518 unique automated tests passing (174 unit + 344 integration, including 41 rules); 15 visual QA screenshots captured across 6 viewports (320px–1440px). |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is on active task branch `task/029-flexible-product-variants`.
+  - Git working tree is on active task branch `task/030-shopify-csv-product-import`.
   - Razorpay merchant account approval confirmed and configured in Live Mode (`rzp_live_Ty8CuwoSSBGpHi`).
   - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af40ef0b0506f233476f778`).
   - Netlify secret scanning is active (`SECRETS_SCAN_ENABLED=true`) with targeted exclusions (`SECRETS_SCAN_OMIT_KEYS`, `SECRETS_SCAN_OMIT_PATHS`), verified passing on remote build (105 files scanned, 0 leaks).
@@ -244,26 +245,23 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 
 ---
 
-## 7. Future Feature Backlog & Engineering Roadmap
+## 7. Feature Roadmap & Milestone Status
 
-The following upcoming features are documented in the authoritative project backlog for future milestones. In accordance with architectural dependencies, the flexible product variant schema must precede the CSV bulk importer to ensure full variant support from inception. Product Image Containment has been implemented in TASK 028.
-
-### 1. Upcoming — Flexible Product Sizes and Variants
+### 1. Flexible Product Sizes and Variants (TASK 029) — COMPLETED & PUBLISHED
 - **Apparel Size Options:** Standard apparel sizes: XS, S, M, L, XL, XXL, and Free Size.
 - **Named & Metric Sizes:** Support named descriptor sizes (e.g. Small, Medium, Large) and explicit physical dimensions per size (e.g., Large — `26 × 26 cm`).
 - **Customizable Labels:** Allow arbitrary custom size and attribute labels per product category.
 - **Multi-Attribute Variants:** Support color variants combined with sizes (multi-attribute variant matrix).
 - **Variant-Level Inventory & Pricing:** Each variant supports its own distinct SKU, price override, inventory stock count, and optional variant-specific image.
 - **Server-Side Trust Boundary:** Comprehensive server-side variant verification during cart additions, order creation (`/api/orders/create`), and Razorpay checkout (`/api/razorpay/create-order`).
+- **Status:** Deployed to Netlify production (`6af40ef0b0506f233476f778`).
 
-### 2. Upcoming — CSV Bulk Product Import
-- **Compatibility:** Shopify-compatible CSV column mapping alongside an authoritative downloadable Bazaarvilla CSV template.
-- **Batch Processing:** Support bulk product creation and catalog updates with pre-import schema validation and interactive preview.
-- **Variant & Dimension Integration:** Full support for multi-variant products, dimensions, and size attributes powered by the flexible variant schema.
-- **Secure Image Ingestion:** Automated ingestion and validation of product images directly to Cloudflare R2 (`bazaarvilla-media`) with MIME checking and size limits.
-- **Audit & Protection:** Duplicate detection, row-level error reporting, and non-destructive batch audit logs.
-
-> [!IMPORTANT]
-> **Implementation Sequence Dependency:**  
-> The flexible product variant schema must be designed, implemented, and verified **prior** to implementing the CSV bulk product importer so that the importer inherently supports single and multi-variant products without schema retrofitting.
+### 2. CSV Bulk Product Import & Catalog Safety (TASK 030) — LOCALLY IMPLEMENTED & VERIFIED
+- **Compatibility:** Shopify-compatible CSV column mapping alongside authoritative downloadable Bazaarvilla CSV templates (Standard, Variant, Personalized).
+- **Batch Processing & Wizard:** 5-step interactive admin wizard with column mapping inspection and non-destructive dry-run preview (0 catalog mutations).
+- **Variant & Dimension Integration:** Full support for multi-variant products, bracketed and 3D dimensions, and size attributes powered by the TASK 029 variant schema.
+- **Personalization & COD Safety:** Explicit personalization preservation; personalized items enforced as prepaid-only while ordinary variants retain COD eligibility (TASK 027 compliance).
+- **Secure Image Ingestion:** Automated SSRF-guarded ingestion and binary magic bytes validation directly to Cloudflare R2 (`bazaarvilla-media`).
+- **Audit & Protection:** Formula injection escaping, stored XSS HTML sanitization, prototype pollution defense, duplicate SKU detection, and durable audit logs in `productImportBatches` (`RULE-015C`).
+- **Status:** Fully implemented locally, 518/518 automated tests passing, 15 visual QA screenshots captured, awaiting explicit store owner production release approval.
 

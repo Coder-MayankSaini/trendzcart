@@ -264,6 +264,45 @@ export async function generateUploadUrl(options: {
     };
 }
 
+/**
+ * Server-authoritatively uploads a raw Buffer directly to Cloudflare R2 (or mock storage).
+ * Used for secure remote image ingestion during CSV imports.
+ */
+export async function uploadBufferToR2(options: {
+    buffer: Buffer;
+    key: string;
+    contentType: string;
+    metadata?: Record<string, string>;
+}): Promise<{ key: string; publicUrl: string }> {
+    const { buffer, key, contentType, metadata = {} } = options;
+    const client = getR2Client();
+    const publicUrl = getPublicAssetUrl(key);
+
+    if (!client) {
+        mockObjectStorage.set(key, {
+            key,
+            contentType,
+            size: buffer.length,
+            metadata,
+            data: buffer,
+            createdAt: Date.now(),
+            etag: `mock-etag-${Date.now()}`,
+        });
+        return { key, publicUrl };
+    }
+
+    const command = new PutObjectCommand({
+        Bucket: getR2BucketName(),
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        Metadata: metadata,
+    });
+
+    await client.send(command);
+    return { key, publicUrl };
+}
+
 export interface ObjectVerificationResult {
     exists: boolean;
     size: number;

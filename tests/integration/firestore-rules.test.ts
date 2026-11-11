@@ -559,6 +559,47 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
         await assertFails(deleteDoc(doc(adminDb, "reviewImportBatches", testBatchId)));
     });
 
+    // RULE-015C — Product Import Batches Audit Logs (TASK 030)
+    it("RULE-015C: Product Import Batches — audit records are read-only for admin; client SDK writes strictly prohibited (TASK 030)", async () => {
+        const custADb = testEnv.authenticatedContext("cust_a").firestore();
+        const adminDb = testEnv.authenticatedContext("admin_uid", { admin: true }).firestore();
+        const unauthDb = testEnv.unauthenticatedContext().firestore();
+
+        const testBatchId = "product_batch_test_030";
+        const sampleBatchData = {
+            id: testBatchId,
+            adminUid: "admin_uid",
+            sourceFileName: "shopify_products.csv",
+            sourceFileChecksum: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            importMode: "create_and_update",
+            formatDetected: "shopify_standard",
+            totalRows: 12,
+            totalProducts: 4,
+            createdCount: 2,
+            updatedCount: 2,
+            failedCount: 0,
+            skippedCount: 0,
+            status: "completed",
+            createdAt: Date.now(),
+        };
+
+        // 1. Unauthenticated access fails completely
+        await assertFails(getDoc(doc(unauthDb, "productImportBatches", testBatchId)));
+        await assertFails(setDoc(doc(unauthDb, "productImportBatches", testBatchId), sampleBatchData));
+
+        // 2. Authenticated customer access fails completely
+        await assertFails(getDoc(doc(custADb, "productImportBatches", testBatchId)));
+        await assertFails(setDoc(doc(custADb, "productImportBatches", testBatchId), sampleBatchData));
+
+        // 3. Verified administrator can READ audit log
+        await assertSucceeds(getDoc(doc(adminDb, "productImportBatches", testBatchId)));
+
+        // 4. Direct client SDK writes/updates/deletions by admin FAIL to prevent audit record tampering
+        await assertFails(setDoc(doc(adminDb, "productImportBatches", "batch_new_attempt"), sampleBatchData));
+        await assertFails(updateDoc(doc(adminDb, "productImportBatches", testBatchId), { status: "tampered" }));
+        await assertFails(deleteDoc(doc(adminDb, "productImportBatches", testBatchId)));
+    });
+
     // RULE-016 — Payment Records
     it("RULE-016: Payment Records — browser client cannot read or modify internal paymentRecords", async () => {
         const custADb = testEnv.authenticatedContext("cust_a").firestore();

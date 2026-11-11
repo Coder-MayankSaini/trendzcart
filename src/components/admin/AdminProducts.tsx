@@ -9,6 +9,7 @@ import imageCompression from "browser-image-compression";
 import AdminPageHeader from "./ui/AdminPageHeader";
 import AdminBadge from "./ui/AdminBadge";
 import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
+import ProductImportModal from "./ProductImportModal";
 import type { PurchaseActivityPeriod } from "@/lib/orders/purchaseActivityTypes";
 import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
 import {
@@ -137,6 +138,7 @@ export default function AdminProducts() {
     const [error, setError] = useState<string | null>(null);
     const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState("");
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Search and filter states
     const [searchQuery, setSearchQuery] = useState("");
@@ -2249,14 +2251,30 @@ export default function AdminProducts() {
                 title="Product Catalog"
                 subtitle={`Manage your store inventory (${products.length} total products)`}
             >
-                <button
-                    type="button"
-                    onClick={handleAddNew}
-                    className="admin-btn admin-btn-primary"
-                    aria-label="Add new product to catalog"
-                >
-                    + Add Product
-                </button>
+                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                    <button
+                        type="button"
+                        onClick={() => setIsImportModalOpen(true)}
+                        className="admin-btn admin-btn-secondary"
+                        aria-label="Import products from CSV"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Import CSV
+                    </button>
+                    <button
+                        type="button"
+                        onClick={handleAddNew}
+                        className="admin-btn admin-btn-primary"
+                        aria-label="Add new product to catalog"
+                    >
+                        + Add Product
+                    </button>
+                </div>
             </AdminPageHeader>
 
             {error && (
@@ -2545,6 +2563,12 @@ export default function AdminProducts() {
                     ))}
                 </div>
             </div>
+
+            {/* Bulk Product Importer Modal (TASK 030) */}
+            <ProductImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+            />
         </div>
     );
 }
