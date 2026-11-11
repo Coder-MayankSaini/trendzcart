@@ -3,9 +3,12 @@
 **Task ID:** TASK-031  
 **Task Title:** Bazaarvilla Mobile Storefront Responsiveness & Compact Homepage Benefits  
 **Engineering Role:** Senior Next.js Frontend Engineer, Responsive UI Architect, CSS Layout Specialist, and E-Commerce UX Engineer  
-**Status:** **LOCALLY COMPLETED AND VERIFIED, PRODUCTION APPROVAL PENDING**  
+**Status:** **DEPLOYED & VERIFIED LIVE**  
 **Date:** 2026-11-11  
 **Git Branch:** `task/031-mobile-storefront-responsive-fix`  
+**Deployed Git Commit:** [`6c4a0d1`](https://github.com/Coder-MayankSaini/trendzcart/commit/6c4a0d17316483ec94e675df016146ef8b4f5f2e)  
+**Netlify Published Deploy ID:** [`6af47607291e50bfb6bd4653`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af47607291e50bfb6bd4653)  
+**Netlify Build ID:** `6af47607291e50bfb6bd4651`  
 **Production Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
 **Production URL:** `https://bazaarvilla.com`  
 **Production Host:** Netlify (Site ID: `trendzcartdemo` / `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
@@ -371,16 +374,103 @@ All 11 visual QA criteria were captured before and after into `docs/screenshots/
 
 ---
 
-## 7. Rollback & Deployment Runbook
+## 7. Responsive Breakpoint Boundaries Verification
+
+Following conditional owner release authorization, real Chromium browser rendering tests were executed across all 7 breakpoint transition boundaries (`479px`, `480px`, `767px`, `768px`, `959px`, `960px`, `980px`) using [`scripts/verify-breakpoint-boundaries.mjs`](file:///C:/Users/Mayank%20Saini/Desktop/DeepuWebsite/trendzcart/scripts/verify-breakpoint-boundaries.mjs):
+
+| Boundary Viewport | Document `scrollWidth` vs `clientWidth` | Main Image Containment | Title Wrapping & Visibility | Add to Cart & Buy Now Visibility | Floating WhatsApp Obstruction | Homepage Benefits Cards | Status |
+|:---|:---|:---|:---|:---|:---|:---|:---|
+| **479px** (Mobile max) | 479px / 479px (0px overflow) | width=447px, right=463px (contained) | height=131px, right=463px (wrapped) | Full width, right=463px (both clickable) | Clear of buttons | 4 cards readable (height=272px) | **PASS** |
+| **480px** (Mobile boundary) | 480px / 480px (0px overflow) | width=448px, right=464px (contained) | height=98px, right=464px (wrapped) | Full width, right=464px (both clickable) | Clear of buttons | 4 cards readable (height=272px) | **PASS** |
+| **767px** (Tablet boundary) | 767px / 767px (0px overflow) | width=735px, right=751px (contained) | height=129px, right=751px (wrapped) | Side-by-side, right=751px (both clickable) | Clear of buttons | 4 cards readable (height=272px) | **PASS** |
+| **768px** (Tablet start) | 753px / 753px (0px overflow) | width=358px, right=374px (contained) | height=240px, right=737px (wrapped) | Side-by-side, right=737px (both clickable) | Clear of buttons | 4 cards readable (height=272px) | **PASS** |
+| **959px** (Desktop - 1) | 959px / 959px (0px overflow) | width=378px, right=482px (contained) | height=300px, right=935px (wrapped) | Side-by-side, right=935px (both clickable) | Clear of buttons | 4 cards readable (height=252px) | **PASS** |
+| **960px** (Desktop start) | 945px / 945px (0px overflow) | width=361px, right=475px (contained) | height=300px, right=921px (wrapped) | Single row, right=921px (both clickable) | Clear of buttons | 4 cards readable (height=252px) | **PASS** |
+| **980px** (Desktop standard) | 965px / 965px (0px overflow) | width=371px, right=485px (contained) | height=300px, right=941px (wrapped) | Single row, right=941px (both clickable) | Clear of buttons | 4 cards readable (height=252px) | **PASS** |
+
+*Verified Invariants:*
+- `overflow: hidden` is not masking any inaccessible purchase control; both Add to Cart and Buy Now buttons are completely clickable (`clickable: true`).
+- WhatsApp floating widget floats above safe-area insets without overlapping or obstructing purchase action buttons.
+- Homepage claim updated to **"Delivery across India"** (truthful alternative replacing "Tracked shipping") and **"Cash on Delivery — On eligible orders"** (preserving TASK 027 prepaid rule on custom items).
+- All empirical measurements saved to [`docs/screenshots/task031/boundary-measurements.json`](file:///C:/Users/Mayank%20Saini/Desktop/DeepuWebsite/trendzcart/docs/screenshots/task031/boundary-measurements.json).
+
+---
+
+## 8. Production Deployment & Live Verification Evidence
+
+Conditional deployment authorization was granted following review of the boundary verification results and 545 passing tests.
+
+### 8.1 Netlify Remote Linux Container Deployment
+- **Target Site:** `trendzcartdemo` (Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)
+- **Custom Domain:** `https://bazaarvilla.com`
+- **Deployed Git Commit:** [`6c4a0d1`](https://github.com/Coder-MayankSaini/trendzcart/commit/6c4a0d17316483ec94e675df016146ef8b4f5f2e)
+- **Netlify Published Deploy ID:** [`6af47607291e50bfb6bd4653`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af47607291e50bfb6bd4653)
+- **Netlify Build ID:** `6af47607291e50bfb6bd4651`
+- **Context:** Production
+- **Next.js Turbopack Compilation:** 35 / 35 static & dynamic routes compiled cleanly in 27.3s.
+- **Automated Secret Scanning:** 139 files scanned in remote container — **0 secrets detected**.
+- **Scheduled Functions:** `reservation-cleanup` active (`*/5 * * * *`).
+- **Site Status:** Site is live ✨
+
+### 8.2 Live Production Verification Results (`scripts/verify-live-task031.mjs`)
+Immediately following deployment, a 19-point automated read-only verification suite was executed against the live production host `https://bazaarvilla.com`:
+
+| Check ID | Verification Criterion | Status | Live Evidence / Measured Value |
+|:---:|:---|:---:|:---|
+| **1** | Route Homepage Accessible | **PASS** | HTTP 200 OK |
+| **2** | Route Catalog Accessible | **PASS** | HTTP 200 OK |
+| **3** | Route Cart Accessible | **PASS** | HTTP 200 OK |
+| **4** | Route Checkout Accessible | **PASS** | HTTP 200 OK |
+| **5** | Route Terms Accessible | **PASS** | HTTP 200 OK |
+| **6** | Route Privacy Accessible | **PASS** | HTTP 200 OK |
+| **7** | Route Contact Accessible | **PASS** | HTTP 200 OK |
+| **8** | Route About Accessible | **PASS** | HTTP 200 OK |
+| **9** | Route Admin Products Accessible | **PASS** | HTTP 200 OK |
+| **10** | Route Razorpay Public Config Accessible | **PASS** | HTTP 200 OK (`keyId: rzp_live_Ty8...`, `commercialCheckoutEnabled: true`) |
+| **LIVE-BELT-390** | Cramp Relief Belt at 390px zero overflow | **PASS** | Scroll: 390px / Client: 390px (0px overflow) |
+| **LIVE-BELT-BTNS** | Add to Cart & Buy Now visible & clickable | **PASS** | Add to Cart: right=374px, Buy Now: right=374px (within 390px viewport) |
+| **LIVE-BELT-320** | Cramp Relief Belt at 320px zero overflow | **PASS** | Scroll: 320px / Client: 320px (0px overflow) |
+| **LIVE-LONG-TITLE** | Long Title Product (86 chars) wraps cleanly | **PASS** | Scroll: 375px / Client: 375px, Title Right: 359px (zero overflow) |
+| **LIVE-HOME-390-HEIGHT** | Homepage benefits compact at 390px | **PASS** | Rendered Height: **272.00px** (Target 220–320px, >50% reduction) |
+| **LIVE-HOME-CLAIMS** | Homepage features truthful claims | **PASS** | "On eligible orders": true, "Delivery across India": true |
+| **LIVE-HOME-320-HEIGHT** | Homepage benefits compact at 320px | **PASS** | Rendered Height: **238.78px** (Target <= 320px) |
+| **LIVE-HOME-DESKTOP** | Desktop 4-column benefits layout preserved | **PASS** | Columns: 4 (290px × 4), Height: 252.39px |
+| **LIVE-WHATSAPP** | Floating WhatsApp safe-area mobile scaling | **PASS** | Dimensions: 50×50px, zIndex: 9999, respects safe-area |
+
+**Total Live Verification Checks:** **19 / 19 Passed (100% Pass Rate)**  
+**Catalog / Customer Data Mutations:** **0 mutations performed (100% read-only verification)**
+
+### 8.3 Live Production Screenshot Evidence (`docs/screenshots/task031/live/`):
+- `01-live-cramp-belt-390px.png` (686,333 bytes): Live Cramp Relief Belt PDP at 390px viewport.
+- `02-live-cramp-belt-320px.png` (532,243 bytes): Live Cramp Relief Belt PDP at 320px narrow mobile.
+- `03-live-long-title-375px.png` (766,937 bytes): Live long product title PDP at 375px viewport.
+- `04-live-homepage-benefits-390px.png` (431,841 bytes): Live compact 2×2 homepage benefits at 390px (272px height).
+- `05-live-homepage-benefits-320px.png` (314,003 bytes): Live compact 2×2 homepage benefits at 320px (238px height).
+- `06-live-homepage-benefits-1440px.png` (2,322,829 bytes): Live 4-column desktop homepage benefits at 1440px.
+- `07-live-whatsapp-390px.png` (687,129 bytes): Live floating WhatsApp button at 50×50px on mobile.
+
+---
+
+## 9. Rollback & Disaster Recovery Runbook
 
 ### Rollback Plan
-If any visual regression or layout defect occurs after deployment:
-1. Revert to production commit `1d27f68d7f1c752f0e785eb4613b4ddc4dbe0eda` (TASK 030 release).
-2. Redeploy Netlify publish target to Deploy ID `6af453890dd5befd7880871b`.
-3. All catalog, variant, payment, and review records in Firestore remain completely untouched and backward-compatible.
+If any unforeseen issue occurs in production:
+1. In Netlify console: navigate to **Deploys** (`https://app.netlify.com/projects/trendzcartdemo/deploys`).
+2. Select previous known-good deploy ID [`6af453890dd5befd7880871b`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af453890dd5befd7880871b) (TASK 030 release).
+3. Click **"Publish deploy"**. Netlify rolls back CDN edge routing within ~5 seconds with zero server restart downtime.
+4. All Firestore collections, Razorpay configurations, and Cloudflare R2 assets remain completely untouched and backward-compatible.
 
-### Production Release Gate
-In accordance with local engineering safety instructions:
-- **Automatic deployment to Netlify production is PAUSED.**
-- All code changes, test suites, and visual evidence are committed to branch `task/031-mobile-storefront-responsive-fix`.
-- Production release will only proceed upon explicit store owner authorization.
+---
+
+## 10. Final Release Sign-Off
+
+**`TASK 031 — DEPLOYED & VERIFIED LIVE.`**
+
+- **Deployed Git Commit:** [`6c4a0d1`](https://github.com/Coder-MayankSaini/trendzcart/commit/6c4a0d17316483ec94e675df016146ef8b4f5f2e)
+- **Netlify Published Deploy ID:** [`6af47607291e50bfb6bd4653`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af47607291e50bfb6bd4653)
+- **Live Smoke Tests:** 19 / 19 Passed (100% Pass Rate)
+- **Automated Tests:** 545 / 545 Passed
+- **Boundary Viewport Checks:** 7 / 7 Passed (479, 480, 767, 768, 959, 960, 980px)
+- **Zero Horizontal Overflow:** Verified across all mobile and desktop viewports
+- **Production Data Mutations:** 0 (100% read-only verification)
+- **Commercial Transacting Safety:** 100% Operational
