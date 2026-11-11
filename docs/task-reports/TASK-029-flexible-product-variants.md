@@ -4,13 +4,16 @@
 **Branch:** `task/029-flexible-product-variants`  
 **Base Commit:** `8d7c843` (Documentation Commit following TASK 028 Deployed Production Baseline `3e7ff7000ab80681867889865e461c052070e104`)  
 **Hardened Implementation Commit:** `b5a26cf`  
-**Production Site:** `https://bazaarvilla.com` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
-**Published Deploy Baseline:** `6af369e6cbfc6c42b6b41349`  
+**Release / Deployed Commit:** `b8cdf28` (`b8cdf28a23ea999278569ab65ba7cfc7b4487f3c`)  
+**Production Site:** `https://bazaarvilla.com` (Netlify Site: `trendzcartdemo` / Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
+**Previous Deploy Baseline:** `6af369e6cbfc6c42b6b41349` (TASK 028)  
+**Netlify Published Deploy ID:** [`6af40ef0b0506f233476f778`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af40ef0b0506f233476f778)  
+**Netlify Build ID:** `6af40ef0b0506f233476f776`  
 **Automated Test Baseline Before:** 407 unique automated tests (110 unit + 297 integration)  
 **Initial Task 029 Test Suite:** 432 unique automated tests (135 unit + 297 integration)  
 **Hardened Test Suite After (Current):** **466 unique automated tests** (139 unit + 327 integration across 24 suites; 100% pass rate)  
 **Security Rules Sub-suite:** 40 / 40 passed (included in integration total; zero double-counting)  
-**Production Deployment Status:** **TASK 029 — DEPLOYMENT AUTHORIZED & IN PROGRESS** (Conditional Production Approval Granted)
+**Production Deployment Status:** **TASK 029 — DEPLOYED & VERIFIED LIVE** (100% Verification Complete)
 
 ---
 
@@ -318,13 +321,33 @@ If an administrator modifies, deletes, or regenerates product variants while sho
 
 ---
 
-## 11. Correct Production Test Strategy (Zero Synthetic Orders)
+## 11. Correct Production Test Strategy & Live Verification Results
 
 - **Production Testing Policy:**
   Synthetic test orders, ₹1 real-money test purchases, or artificial payment captures are **strictly prohibited** in production.
 - **Verification Methodology:**
   1. Local Firebase Emulator executes the 29 automated multi-variant integration tests and 40 rules tests.
   2. Production verification uses **15 read-only live checks**, UI smoke checks, and safe negative validation queries that produce zero database writes or inventory mutations.
+
+### 11.1 Post-Deployment Live Verification Checks (`https://bazaarvilla.com`)
+
+| # | Live Verification Check | Target / Endpoint | Live Result | Status |
+|---|---|---|---|---|
+| **1** | Homepage & Brand Identity | `GET /` | HTTP 200 OK — Brand presence verified, zero console/render errors | **PASS** |
+| **2** | Catalog Listing Render | `GET /products` | HTTP 200 OK — Catalog renders active catalog items cleanly | **PASS** |
+| **3** | Legacy Product PDP Compatibility | `GET /products/bazaarvilla-cramease-pro...` | HTTP 200 OK — Full layout, price, and media render with zero variant crash | **PASS** |
+| **4** | Image Aspect Ratio Containment | Live PDP gallery | `object-fit: contain` and 4/5 container verified without visual cropping | **PASS** |
+| **5** | Dynamic Price Recalculation | PDP variant state engine | Selectors bound to authoritative catalog records, fallback to base price | **PASS** |
+| **6** | Variant Photo Synchronization | PDP Gallery | Hero image syncs dynamically to selected color swatch/variant | **PASS** |
+| **7** | Cart Multi-Variant Separation | Client cart state | Distinct variants of same product partition into separate line items | **PASS** |
+| **8** | Cart Quantity Modification Isolation | Cart item controllers | Updating quantity on one variant produces zero cross-variant side effects | **PASS** |
+| **9** | Out-of-Stock / Disabled Variant Badge | Storefront UI selectors | Inactive/disabled variants rendered non-selectable or badged appropriately | **PASS** |
+| **10** | Custom Dimension Human-Readable Display | Storefront & Cart | Displays clean format (`26 × 26 cm`) rather than raw JSON | **PASS** |
+| **11** | Admin Products UI & Matrix Generator | `GET /admin/products` | HTTP 200 OK — Protected route loads, Section 2 variant editor intact | **PASS** |
+| **12** | Public Reviews Endpoint Integrity | `GET /api/reviews?productId=...` | HTTP 200 OK — Review stats and empty/populated lists returned without provenance leaks | **PASS** |
+| **13** | Purchase Activity Counter Read | Storefront PDP | Verified buyer count renders correctly without unauthenticated write ability | **PASS** |
+| **14** | Payment Config Health Check | `GET /api/razorpay/public-config` | HTTP 200 OK — Valid `keyId: rzp_live_*`, commercial checkout enabled, 0 secrets | **PASS** |
+| **15** | Negative Checkout Validation | `POST /api/orders/create` (empty/fake) | HTTP 400 Bad Request — Strict rejection, zero database writes or inventory leaks | **PASS** |
 
 ---
 
@@ -340,8 +363,13 @@ If an administrator modifies, deletes, or regenerates product variants while sho
 ## 13. Production Release Status
 
 > [!IMPORTANT]
-> **TASK 029 — CONDITIONALLY APPROVED FOR PRODUCTION DEPLOYMENT.**  
+> **TASK 029 — DEPLOYED & VERIFIED LIVE**
 >
-> All 466 automated tests pass with 100% success rate. Admin concurrency protection, recreated variant identity isolation, fulfillment restock guards, and backward compatibility are fully verified. Deployment proceeding to Netlify production site `trendzcartdemo`.
+> - **Production URL:** `https://bazaarvilla.com`
+> - **Deploy ID:** `6af40ef0b0506f233476f778`
+> - **Build ID:** `6af40ef0b0506f233476f776`
+> - **Release Commit:** `b8cdf28` (`b8cdf28a23ea999278569ab65ba7cfc7b4487f3c`)
+> - **Automated Tests:** **466 / 466 passed** (100% pass rate across 139 unit tests, 40 rules tests, and 287 integration tests)
+> - **Live Verification:** 15 / 15 read-only checks verified with zero synthetic orders and zero state mutations.
 >
-> Awaiting owner authorization to proceed with production release.
+> TASK 029 is complete, deployed, and verified live on production.
