@@ -107,7 +107,7 @@ export default async function ProductDetailsPage({ params }: Props) {
       <ProductDetailClient product={product} />
 
       <div className="pdp-layout" style={{ marginTop: '24px' }}>
-        <div style={{ width: '100%' }}>
+        <div style={{ width: '100%', minWidth: 0, maxWidth: '100%' }}>
           <ProductReviews productId={product.id} productSlug={product.slug || baseSlug} />
         </div>
       </div>

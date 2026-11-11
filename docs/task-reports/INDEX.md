@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/030-shopify-csv-product-import`  
+**Current Active Git Branch:** `task/031-mobile-storefront-responsive-fix`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **TASK 030 — DEPLOYED & VERIFIED LIVE.** (Task 030 Bazaarvilla Shopify-Compatible CSV Bulk Product Import & Catalog Safety deployed and verified live on production; Netlify deploy `6af453890dd5befd7880871b`; Firestore security rules released to `trendkartz`; 15/15 live smoke checks passed on `https://bazaarvilla.com`; 535 unique automated tests passing [180 unit + 355 integration, including 41 security-rule tests]; 15 visual QA screenshots captured; Razorpay Live Mode operational)
+**Current Commercial Transacting Safety Status:** **TASK 031 — LOCALLY COMPLETED AND VERIFIED, PRODUCTION APPROVAL PENDING.** (Task 031 Bazaarvilla Mobile Storefront Responsiveness & Compact Homepage Benefits locally implemented and verified across 8 viewports 320px–1440px; 545 unique automated tests passing [190 unit + 355 integration, including 41 security-rule tests]; 22 visual QA screenshots captured; 0px horizontal overflow; >50% homepage benefits height reduction; Netlify production deploy safely paused awaiting explicit owner authorization)
 
 ---
 
@@ -60,6 +60,7 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-028** | Bazaarvilla Product Image Containment & No-Crop Gallery Fix | **COMPLETED & PUBLISHED** | `task/028-product-image-containment` (`3e7ff70`) | [TASK-028-product-image-containment.md](./TASK-028-product-image-containment.md) | Eliminated product photograph cropping and clipping on storefront PDP; container-level framing with `aspect-ratio: 4/5` and neutral background provides zero CLS; `object-fit: contain` displays 100% of source pixels across portrait (4:5, 3:4), square (1:1), landscape (16:9), and tall (9:16) photos; updated admin dropzone guidance for 4:5 recommendation while clarifying catalog card cover preview; 11 unit test criteria (CONTAIN-001 to CONTAIN-011); 407 unique automated tests passing (110 unit + 297 integration); 16 before/after visual QA screenshots captured; deployed to Netlify production (`6af369e6cbfc6c42b6b41349`); verified 11/11 post-deployment live checks on `https://bazaarvilla.com`. |
 | **TASK-029** | Bazaarvilla Flexible Product Sizes, Dimensions, Color Variants & Inventory Integrity Hardening | **COMPLETED & PUBLISHED** | `task/029-flexible-product-variants` (`b8cdf28`) | [TASK-029-flexible-product-variants.md](./TASK-029-flexible-product-variants.md) | Multi-attribute variant architecture; Modes A–E sizing (apparel XS–3XL, Free Size auto-selected, named sizes with physical dimensions W×H×D and selectable units, custom labels); color options with hex swatches and R2 photo association; dynamic PDP pricing, stock, and photo switching; distinct variant cart separation; server-authoritative pricing validation; multi-variant transaction audit & elimination of silent clamping; admin inventory concurrency reconciliation; recreated variant identity isolation; fulfillment restock safeguards; 29 real Firebase emulator integration tests added (327 total integration tests across 24 suites); 466 unique automated tests passing (139 unit + 327 integration); deployed to Netlify production (`6af40ef0b0506f233476f778`); 15/15 post-deployment read-only live checks verified on `https://bazaarvilla.com`. |
 | **TASK-030** | Bazaarvilla Shopify-Compatible CSV Bulk Product Import & Catalog Safety | **COMPLETED & PUBLISHED** | `task/030-shopify-csv-product-import` (`1d27f68`) | [TASK-030-shopify-csv-product-import.md](./TASK-030-shopify-csv-product-import.md) | Comprehensive Shopify-compatible and Bazaarvilla-template bulk product importer; 5-step responsive admin wizard (Upload, Mapping, Dry-Run Preview, Explicit Confirmation, Execution Results); zero client trust with server preview persistence & SHA-256 checksum binding; atomic per-product Firestore transactions committing product and item status together; subcollection partitioning (`productImportBatches/{batchId}/items`) overcoming Firestore 1 MiB limit (< 25 KB parent doc for 105 products); server-side concurrency lease (45s) rejecting overlapping chunk/batch requests; wall-clock execution budget (25s per chunk vs Netlify 60s ceiling, no new paid queues); SSRF destination IP pinning eliminating TOCTOU DNS rebinding; safe draft defaults (`isVisible: false`); server-enforced confirmation gates; catalog-wide duplicate SKU checks; formula injection escaping; XSS HTML sanitization; dimension parsing into TASK 029 variant schema; multi-row handle grouping; 3rd attribute incompatibility guard; explicit personalization preservation & COD prepaid enforcement (TASK 027); concurrency-safe inventory reconciliation; audit collection security rules (`RULE-015C`) deployed to `trendkartz`; 69 new automated tests added; 535 unique automated tests passing (180 unit + 355 integration, including 41 rules); 15 visual QA screenshots captured across 6 viewports (320px–1440px); published Netlify deploy `6af453890dd5befd7880871b`; 15/15 post-deployment live checks verified on `https://bazaarvilla.com`. |
+| **TASK-031** | Bazaarvilla Mobile Storefront Responsiveness & Compact Homepage Benefits | **COMPLETED LOCALLY — APPROVAL PENDING** | `task/031-mobile-storefront-responsive-fix` | [TASK-031-mobile-storefront-responsive-fix.md](./TASK-031-mobile-storefront-responsive-fix.md) | Fixed customer-facing mobile responsiveness defects across 320px–1440px viewports; eliminated gallery and imagery grid-track blowout via `minmax(0, 1fr)` and thumbnail scroll containment; resolved purchase controls and title overflow via responsive typography and vertical action stacking (<960px); 44px minimum touch targets on variant buttons; redesigned homepage benefits into compact 2×2 mobile grid (reduced vertical height by >50% from 573px to 272–313px) with TASK 027 COD accuracy ("On eligible orders"); safe-area floating WhatsApp alignment; 10 new layout unit tests (545 unique passing tests: 190 unit + 355 integration, including 41 rules); 22 before/after visual QA screenshots captured; 0px overflow across all 8 viewports; Next.js 35 routes Turbopack build verified; paused awaiting owner release approval. |
 
 ---
 
@@ -83,12 +84,21 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
-    - `npm test`: 109/109 unit tests passing across 9 suites (14 pricing, 11 staging guard, 5 responsive admin, 5 gallery layout, 6 image quality, 19 review validation, 25 purchase activity, 14 customizable product COD restriction, and **10 product image containment tests**).
-    - `npm run test:rules`: 39/39 rules and authorization tests passing (subset of integration suite).
-    - `npm run test:integration`: 297/297 integration tests across 23 suites passing (including 14 COD restriction integration tests, 10 purchase activity API & security tests, 14 bulk review management tests, 39 security rules tests, and 25 media isolation tests).
+    - `npm test`: 190/190 unit tests passing across 30 suites (including 10 new layout and responsive criteria RESP-001 through RESP-010).
+    - `npm run test:rules`: 41/41 rules and authorization tests passing (subset of integration suite).
+    - `npm run test:integration`: 355/355 integration tests across 25 suites passing.
     - `npm run typecheck`: 0 TypeScript errors.
     - `npm run build`: 35/35 Next.js routes compiling cleanly with Turbopack.
-    - Total unique automated tests: **406 passing** (109 unit + 297 integration; zero double-counting).
+    - Total unique automated tests: **545 passing** (190 unit + 355 integration; zero double-counting).
+  - TASK 031 Status:
+    - Mobile storefront responsiveness and compact homepage benefits fully implemented and verified across 8 viewports (320px–1440px).
+    - Grid track and gallery containment eliminated image blowout; 4:5 image ratio and `object-fit: contain` preserved without CLS.
+    - Product title fluid clamping and word-break rules prevent text clipping and container blowout.
+    - Purchase controls re-architected into mobile vertical stack (<960px) and side-by-side desktop (>=960px) with 44px+ touch targets.
+    - Homepage selling points redesigned into compact 2×2 mobile grid (272px height at 390px, >50% reduction) with accurate COD copy ("On eligible orders").
+    - 22 before/after visual QA screenshots captured in `docs/screenshots/task031/`.
+    - Zero horizontal overflow verified across all 8 target viewports.
+    - Production deployment safely paused awaiting explicit owner authorization.
   - TASK 028 Status:
     - Product photograph cropping, clipping, and distortion eliminated on storefront PDP.
     - Container-level framing with `aspect-ratio: 4/5`, flex centering, and neutral background prevents Cumulative Layout Shift (CLS = 0).
@@ -256,12 +266,20 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 - **Server-Side Trust Boundary:** Comprehensive server-side variant verification during cart additions, order creation (`/api/orders/create`), and Razorpay checkout (`/api/razorpay/create-order`).
 - **Status:** Deployed to Netlify production (`6af40ef0b0506f233476f778`).
 
-### 2. CSV Bulk Product Import & Catalog Safety (TASK 030) — LOCALLY IMPLEMENTED & VERIFIED
+### 2. CSV Bulk Product Import & Catalog Safety (TASK 030) — COMPLETED & PUBLISHED
 - **Compatibility:** Shopify-compatible CSV column mapping alongside authoritative downloadable Bazaarvilla CSV templates (Standard, Variant, Personalized).
 - **Batch Processing & Wizard:** 5-step interactive admin wizard with column mapping inspection and non-destructive dry-run preview (0 catalog mutations).
 - **Variant & Dimension Integration:** Full support for multi-variant products, bracketed and 3D dimensions, and size attributes powered by the TASK 029 variant schema.
 - **Personalization & COD Safety:** Explicit personalization preservation; personalized items enforced as prepaid-only while ordinary variants retain COD eligibility (TASK 027 compliance).
 - **Secure Image Ingestion:** Automated SSRF-guarded ingestion and binary magic bytes validation directly to Cloudflare R2 (`bazaarvilla-media`).
 - **Audit & Protection:** Formula injection escaping, stored XSS HTML sanitization, prototype pollution defense, duplicate SKU detection, and durable audit logs in `productImportBatches` (`RULE-015C`).
-- **Status:** Fully implemented locally, 518/518 automated tests passing, 15 visual QA screenshots captured, awaiting explicit store owner production release approval.
+- **Status:** Deployed to Netlify production (`6af453890dd5befd7880871b`).
+
+### 3. Storefront Mobile Responsiveness & Compact Homepage Benefits (TASK 031) — LOCALLY IMPLEMENTED & VERIFIED
+- **Viewport Containment:** Fixed mobile image gallery and purchase controls blowout across all viewports (320px–1440px).
+- **Aspect Ratio & Containment:** Preserved TASK 028 `aspect-ratio: 4/5` and `object-fit: contain` with zero CLS and touch thumbnail scrolling.
+- **Fluid Typography & Actions:** Fluid product title clamping and mobile vertical action stacking (<960px) with minimum 44px touch targets on variant and quantity controls.
+- **Compact Homepage Benefits:** Redesigned selling points into a compact 2×2 mobile grid reducing section height by >50% (573px to 272–313px) with TASK 027 COD accuracy ("On eligible orders").
+- **Empirical QA:** Verified zero horizontal overflow across 8 target viewports with Playwright/CDP measurements; 22 before/after screenshots captured.
+- **Status:** Fully implemented locally, 545/545 automated tests passing (190 unit + 355 integration), awaiting explicit store owner production release approval.
 

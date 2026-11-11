@@ -434,7 +434,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                             </span>
                         )}
                     </h4>
-                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", maxWidth: "100%" }}>
                         {activeColors.map((color) => {
                             const isSelected = selectedColorId === color.id;
                             return (
@@ -457,7 +457,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                                         fontSize: "0.85rem",
                                         cursor: "pointer",
                                         transition: "all 0.15s ease",
-                                        minHeight: "40px",
+                                        minHeight: "44px",
                                     }}
                                 >
                                     {color.hex && (
@@ -499,12 +499,12 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                     </h4>
 
                     {product.sizeMode === "free_size" ? (
-                        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "8px", backgroundColor: "rgba(0, 107, 60, 0.08)", border: "1.5px solid var(--accent)", color: "var(--accent)", fontWeight: 700, fontSize: "0.9rem" }}>
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", padding: "8px 16px", borderRadius: "8px", backgroundColor: "rgba(0, 107, 60, 0.08)", border: "1.5px solid var(--accent)", color: "var(--accent)", fontWeight: 700, fontSize: "0.9rem", minHeight: "44px" }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                             Free Size (Universal Fit)
                         </div>
                     ) : (
-                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", maxWidth: "100%" }}>
                             {activeSizes.map((size) => {
                                 const isSelected = selectedSizeId === size.id;
                                 const displayLabel = formatSizeDisplay(size, "parens");
@@ -527,7 +527,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                                             cursor: "pointer",
                                             transition: "all 0.15s ease",
                                             fontFamily: "inherit",
-                                            minHeight: "40px",
+                                            minHeight: "44px",
                                         }}
                                     >
                                         {displayLabel}
@@ -546,7 +546,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></svg>
                         Size
                     </h4>
-                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", maxWidth: "100%" }}>
                         {product.sizes.map((s, index) => (
                             <button
                                 key={index}
@@ -562,7 +562,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                                     cursor: "pointer",
                                     transition: "all 0.2s ease",
                                     fontFamily: "inherit",
-                                    minHeight: "40px",
+                                    minHeight: "44px",
                                 }}
                             >
                                 {s}
@@ -631,36 +631,38 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                 </div>
             )}
 
-            {/* Quantity + Add to Cart */}
-            <div className="pc-actions">
-                <div className="pc-qty">
-                    <button
-                        className="pc-qty-btn"
-                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                        aria-label="Decrease quantity"
-                        type="button"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                    </button>
-                    <span className="pc-qty-value">{quantity}</span>
-                    <button
-                        className="pc-qty-btn"
-                        onClick={() => setQuantity(q => q + 1)}
-                        aria-label="Increase quantity"
-                        type="button"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                    </button>
+            {/* Quantity + Purchase Actions */}
+            <div className="pc-actions" data-testid="pc-actions">
+                <div className="pc-qty-wrapper">
+                    <span className="pc-qty-label">Quantity</span>
+                    <div className="pc-qty">
+                        <button
+                            className="pc-qty-btn"
+                            onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                            aria-label="Decrease quantity"
+                            type="button"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        </button>
+                        <span className="pc-qty-value">{quantity}</span>
+                        <button
+                            className="pc-qty-btn"
+                            onClick={() => setQuantity(q => q + 1)}
+                            aria-label="Increase quantity"
+                            type="button"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                        </button>
+                    </div>
                 </div>
 
-                <div style={{ display: "flex", gap: "12px", flex: 1 }}>
+                <div className="pc-btn-group">
                     <button
                         type="button"
                         onClick={() => handleAddToCart(false)}
                         disabled={isUploading || isVariantDisabled || isOutOfStock}
-                        className={`pc-add-btn ${addedToCart ? "pc-added" : ""}`}
+                        className={`pc-add-btn pc-btn-secondary ${addedToCart ? "pc-added" : ""}`}
                         style={{
-                            flex: 1,
                             backgroundColor: (isVariantDisabled || isOutOfStock) ? "var(--bg-secondary)" : "var(--bg-secondary)",
                             color: (isVariantDisabled || isOutOfStock) ? "var(--text-secondary)" : "var(--text-primary)",
                             border: "1px solid var(--border-color)",
@@ -669,20 +671,20 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                         }}
                     >
                         {isUploading ? (
-                            `Uploading (${uploadProgress}%)...`
+                            <span>{`Uploading (${uploadProgress}%)...`}</span>
                         ) : addedToCart ? (
                             <>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                                Added to Cart
+                                <span>Added to Cart</span>
                             </>
                         ) : isVariantDisabled ? (
-                            "Unavailable"
+                            <span>Unavailable</span>
                         ) : isOutOfStock ? (
-                            "Out of Stock"
+                            <span>Out of Stock</span>
                         ) : (
                             <>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1" /><circle cx="20" cy="21" r="1" /><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" /></svg>
-                                Add to Cart
+                                <span>Add to Cart</span>
                             </>
                         )}
                     </button>
@@ -691,15 +693,14 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                         type="button"
                         onClick={handleBuyNow}
                         disabled={isUploading || addedToCart || isVariantDisabled || isOutOfStock}
-                        className="pc-add-btn"
+                        className="pc-add-btn pc-btn-primary"
                         style={{
-                            flex: 1,
                             border: "1px solid var(--text-primary)",
                             opacity: (isVariantDisabled || isOutOfStock) ? 0.6 : 1,
                             cursor: (isVariantDisabled || isOutOfStock) ? "not-allowed" : "pointer",
                         }}
                     >
-                        {isUploading ? "..." : (isVariantDisabled || isOutOfStock) ? "Unavailable" : "Buy Now"}
+                        <span>{isUploading ? "..." : (isVariantDisabled || isOutOfStock) ? "Unavailable" : "Buy Now"}</span>
                     </button>
                 </div>
             </div>

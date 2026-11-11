@@ -1,0 +1,2086 @@
+{
+  "belt_390px": {
+    "rootScrollWidth": 390,
+    "rootClientWidth": 390,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 390,
+    "bodyClientWidth": 390,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 358,
+      "height": 534,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "mainImage": {
+      "width": 358,
+      "height": 448,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 528,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "thumbStrip": {
+      "width": 358,
+      "height": 74,
+      "top": 540,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 440,
+      "clientWidth": 358
+    },
+    "productTitle": {
+      "width": 358,
+      "height": 55,
+      "top": 668,
+      "left": 16,
+      "right": 374,
+      "bottom": 722,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "priceRow": {
+      "width": 358,
+      "height": 36,
+      "top": 734,
+      "left": 16,
+      "right": 374,
+      "bottom": 770,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "actionsContainer": {
+      "width": 358,
+      "height": 166,
+      "top": 1129,
+      "left": 16,
+      "right": 374,
+      "bottom": 1295,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtyWrapper": {
+      "width": 358,
+      "height": 44,
+      "top": 1129,
+      "left": 16,
+      "right": 374,
+      "bottom": 1173,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1129,
+      "left": 244,
+      "right": 374,
+      "bottom": 1173,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 358,
+      "height": 108,
+      "top": 1187,
+      "left": 16,
+      "right": 374,
+      "bottom": 1295,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "addBtn": {
+      "width": 358,
+      "height": 49,
+      "top": 1187,
+      "left": 16,
+      "right": 374,
+      "bottom": 1236,
+      "scrollWidth": 356,
+      "clientWidth": 356
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 778,
+      "left": 324,
+      "right": 374,
+      "bottom": 828,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "belt_320px": {
+    "rootScrollWidth": 320,
+    "rootClientWidth": 320,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 320,
+    "bodyClientWidth": 320,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 296,
+      "height": 456,
+      "top": 76,
+      "left": 12,
+      "right": 308,
+      "bottom": 532,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "mainImage": {
+      "width": 296,
+      "height": 370,
+      "top": 76,
+      "left": 12,
+      "right": 308,
+      "bottom": 446,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "thumbStrip": {
+      "width": 296,
+      "height": 74,
+      "top": 458,
+      "left": 12,
+      "right": 308,
+      "bottom": 532,
+      "scrollWidth": 440,
+      "clientWidth": 296
+    },
+    "productTitle": {
+      "width": 296,
+      "height": 49,
+      "top": 586,
+      "left": 12,
+      "right": 308,
+      "bottom": 635,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "priceRow": {
+      "width": 296,
+      "height": 36,
+      "top": 647,
+      "left": 12,
+      "right": 308,
+      "bottom": 683,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "actionsContainer": {
+      "width": 296,
+      "height": 166,
+      "top": 1068,
+      "left": 12,
+      "right": 308,
+      "bottom": 1234,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "qtyWrapper": {
+      "width": 296,
+      "height": 44,
+      "top": 1068,
+      "left": 12,
+      "right": 308,
+      "bottom": 1112,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1068,
+      "left": 178,
+      "right": 308,
+      "bottom": 1112,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 296,
+      "height": 108,
+      "top": 1126,
+      "left": 12,
+      "right": 308,
+      "bottom": 1234,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "addBtn": {
+      "width": 296,
+      "height": 49,
+      "top": 1126,
+      "left": 12,
+      "right": 308,
+      "bottom": 1175,
+      "scrollWidth": 294,
+      "clientWidth": 294
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 502,
+      "left": 254,
+      "right": 304,
+      "bottom": 552,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "landscape_390px": {
+    "rootScrollWidth": 390,
+    "rootClientWidth": 390,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 390,
+    "bodyClientWidth": 390,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 358,
+      "height": 534,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "mainImage": {
+      "width": 358,
+      "height": 448,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 528,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "thumbStrip": {
+      "width": 358,
+      "height": 74,
+      "top": 540,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "productTitle": {
+      "width": 358,
+      "height": 165,
+      "top": 704,
+      "left": 16,
+      "right": 374,
+      "bottom": 869,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "priceRow": {
+      "width": 358,
+      "height": 36,
+      "top": 881,
+      "left": 16,
+      "right": 374,
+      "bottom": 917,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "actionsContainer": {
+      "width": 358,
+      "height": 166,
+      "top": 1304,
+      "left": 16,
+      "right": 374,
+      "bottom": 1470,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtyWrapper": {
+      "width": 358,
+      "height": 44,
+      "top": 1304,
+      "left": 16,
+      "right": 374,
+      "bottom": 1348,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1304,
+      "left": 244,
+      "right": 374,
+      "bottom": 1348,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 358,
+      "height": 108,
+      "top": 1362,
+      "left": 16,
+      "right": 374,
+      "bottom": 1470,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "addBtn": {
+      "width": 358,
+      "height": 49,
+      "top": 1362,
+      "left": 16,
+      "right": 374,
+      "bottom": 1411,
+      "scrollWidth": 356,
+      "clientWidth": 356
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 778,
+      "left": 324,
+      "right": 374,
+      "bottom": 828,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "tall_portrait_390px": {
+    "rootScrollWidth": 390,
+    "rootClientWidth": 390,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 390,
+    "bodyClientWidth": 390,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 358,
+      "height": 534,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "mainImage": {
+      "width": 358,
+      "height": 448,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 528,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "thumbStrip": {
+      "width": 358,
+      "height": 74,
+      "top": 540,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "productTitle": {
+      "width": 358,
+      "height": 165,
+      "top": 704,
+      "left": 16,
+      "right": 374,
+      "bottom": 869,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "priceRow": {
+      "width": 358,
+      "height": 36,
+      "top": 881,
+      "left": 16,
+      "right": 374,
+      "bottom": 917,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "actionsContainer": {
+      "width": 358,
+      "height": 166,
+      "top": 1304,
+      "left": 16,
+      "right": 374,
+      "bottom": 1470,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtyWrapper": {
+      "width": 358,
+      "height": 44,
+      "top": 1304,
+      "left": 16,
+      "right": 374,
+      "bottom": 1348,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1304,
+      "left": 244,
+      "right": 374,
+      "bottom": 1348,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 358,
+      "height": 108,
+      "top": 1362,
+      "left": 16,
+      "right": 374,
+      "bottom": 1470,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "addBtn": {
+      "width": 358,
+      "height": 49,
+      "top": 1362,
+      "left": 16,
+      "right": 374,
+      "bottom": 1411,
+      "scrollWidth": 356,
+      "clientWidth": 356
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 778,
+      "left": 324,
+      "right": 374,
+      "bottom": 828,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "long_title_375px": {
+    "rootScrollWidth": 375,
+    "rootClientWidth": 375,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 375,
+    "bodyClientWidth": 375,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 343,
+      "height": 515,
+      "top": 80,
+      "left": 16,
+      "right": 359,
+      "bottom": 595,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "mainImage": {
+      "width": 343,
+      "height": 429,
+      "top": 80,
+      "left": 16,
+      "right": 359,
+      "bottom": 509,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "thumbStrip": {
+      "width": 343,
+      "height": 74,
+      "top": 521,
+      "left": 16,
+      "right": 359,
+      "bottom": 595,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "productTitle": {
+      "width": 343,
+      "height": 158,
+      "top": 686,
+      "left": 16,
+      "right": 359,
+      "bottom": 844,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "priceRow": {
+      "width": 343,
+      "height": 36,
+      "top": 856,
+      "left": 16,
+      "right": 359,
+      "bottom": 892,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "actionsContainer": {
+      "width": 343,
+      "height": 166,
+      "top": 1279,
+      "left": 16,
+      "right": 359,
+      "bottom": 1445,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "qtyWrapper": {
+      "width": 343,
+      "height": 44,
+      "top": 1279,
+      "left": 16,
+      "right": 359,
+      "bottom": 1323,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1279,
+      "left": 229,
+      "right": 359,
+      "bottom": 1323,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 343,
+      "height": 108,
+      "top": 1337,
+      "left": 16,
+      "right": 359,
+      "bottom": 1445,
+      "scrollWidth": 343,
+      "clientWidth": 343
+    },
+    "addBtn": {
+      "width": 343,
+      "height": 49,
+      "top": 1337,
+      "left": 16,
+      "right": 359,
+      "bottom": 1386,
+      "scrollWidth": 341,
+      "clientWidth": 341
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 601,
+      "left": 309,
+      "right": 359,
+      "bottom": 651,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "buttons_320px": {
+    "rootScrollWidth": 320,
+    "rootClientWidth": 320,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 320,
+    "bodyClientWidth": 320,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 296,
+      "height": 456,
+      "top": 76,
+      "left": 12,
+      "right": 308,
+      "bottom": 532,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "mainImage": {
+      "width": 296,
+      "height": 370,
+      "top": 76,
+      "left": 12,
+      "right": 308,
+      "bottom": 446,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "thumbStrip": {
+      "width": 296,
+      "height": 74,
+      "top": 458,
+      "left": 12,
+      "right": 308,
+      "bottom": 532,
+      "scrollWidth": 440,
+      "clientWidth": 296
+    },
+    "productTitle": {
+      "width": 296,
+      "height": 49,
+      "top": 586,
+      "left": 12,
+      "right": 308,
+      "bottom": 635,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "priceRow": {
+      "width": 296,
+      "height": 36,
+      "top": 647,
+      "left": 12,
+      "right": 308,
+      "bottom": 683,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "actionsContainer": {
+      "width": 296,
+      "height": 166,
+      "top": 1068,
+      "left": 12,
+      "right": 308,
+      "bottom": 1234,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "qtyWrapper": {
+      "width": 296,
+      "height": 44,
+      "top": 1068,
+      "left": 12,
+      "right": 308,
+      "bottom": 1112,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1068,
+      "left": 178,
+      "right": 308,
+      "bottom": 1112,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 296,
+      "height": 108,
+      "top": 1126,
+      "left": 12,
+      "right": 308,
+      "bottom": 1234,
+      "scrollWidth": 296,
+      "clientWidth": 296
+    },
+    "addBtn": {
+      "width": 296,
+      "height": 49,
+      "top": 1126,
+      "left": 12,
+      "right": 308,
+      "bottom": 1175,
+      "scrollWidth": 294,
+      "clientWidth": 294
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 502,
+      "left": 254,
+      "right": 304,
+      "bottom": 552,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "variants_390px": {
+    "rootScrollWidth": 390,
+    "rootClientWidth": 390,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 390,
+    "bodyClientWidth": 390,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 358,
+      "height": 534,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "mainImage": {
+      "width": 358,
+      "height": 448,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 528,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "thumbStrip": {
+      "width": 358,
+      "height": 74,
+      "top": 540,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "productTitle": {
+      "width": 358,
+      "height": 55,
+      "top": 668,
+      "left": 16,
+      "right": 374,
+      "bottom": 722,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "priceRow": {
+      "width": 358,
+      "height": 36,
+      "top": 734,
+      "left": 16,
+      "right": 374,
+      "bottom": 770,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "actionsContainer": {
+      "width": 358,
+      "height": 166,
+      "top": 1319,
+      "left": 16,
+      "right": 374,
+      "bottom": 1485,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtyWrapper": {
+      "width": 358,
+      "height": 44,
+      "top": 1319,
+      "left": 16,
+      "right": 374,
+      "bottom": 1363,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1319,
+      "left": 244,
+      "right": 374,
+      "bottom": 1363,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 358,
+      "height": 108,
+      "top": 1377,
+      "left": 16,
+      "right": 374,
+      "bottom": 1485,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "addBtn": {
+      "width": 358,
+      "height": 49,
+      "top": 1377,
+      "left": 16,
+      "right": 374,
+      "bottom": 1426,
+      "scrollWidth": 356,
+      "clientWidth": 356
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 778,
+      "left": 324,
+      "right": 374,
+      "bottom": 828,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "home_benefits_390px": {
+    "rootScrollWidth": 390,
+    "rootClientWidth": 390,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 390,
+    "bodyClientWidth": 390,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": null,
+    "mainImage": null,
+    "thumbStrip": null,
+    "productTitle": null,
+    "priceRow": null,
+    "actionsContainer": null,
+    "qtyWrapper": null,
+    "qtySelector": null,
+    "btnGroup": null,
+    "addBtn": null,
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 778,
+      "left": 324,
+      "right": 374,
+      "bottom": 828,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": 272
+  },
+  "home_benefits_320px": {
+    "rootScrollWidth": 320,
+    "rootClientWidth": 320,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 320,
+    "bodyClientWidth": 320,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": null,
+    "mainImage": null,
+    "thumbStrip": null,
+    "productTitle": null,
+    "priceRow": null,
+    "actionsContainer": null,
+    "qtyWrapper": null,
+    "qtySelector": null,
+    "btnGroup": null,
+    "addBtn": null,
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 502,
+      "left": 254,
+      "right": 304,
+      "bottom": 552,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": 313
+  },
+  "home_benefits_1440px": {
+    "rootScrollWidth": 1425,
+    "rootClientWidth": 1425,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 1425,
+    "bodyClientWidth": 1425,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": null,
+    "mainImage": null,
+    "thumbStrip": null,
+    "productTitle": null,
+    "priceRow": null,
+    "actionsContainer": null,
+    "qtyWrapper": null,
+    "qtySelector": null,
+    "btnGroup": null,
+    "addBtn": null,
+    "whatsAppFloat": {
+      "width": 60,
+      "height": 60,
+      "top": 816,
+      "left": 1341,
+      "right": 1401,
+      "bottom": 876,
+      "scrollWidth": 60,
+      "clientWidth": 60
+    },
+    "benefitsHeight": 252
+  },
+  "whatsapp_390px": {
+    "rootScrollWidth": 390,
+    "rootClientWidth": 390,
+    "hasHorizontalOverflow": false,
+    "overflowDelta": 0,
+    "bodyScrollWidth": 390,
+    "bodyClientWidth": 390,
+    "bodyOverflowDelta": 0,
+    "galleryContainer": {
+      "width": 358,
+      "height": 534,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "mainImage": {
+      "width": 358,
+      "height": 448,
+      "top": 80,
+      "left": 16,
+      "right": 374,
+      "bottom": 528,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "thumbStrip": {
+      "width": 358,
+      "height": 74,
+      "top": 540,
+      "left": 16,
+      "right": 374,
+      "bottom": 614,
+      "scrollWidth": 440,
+      "clientWidth": 358
+    },
+    "productTitle": {
+      "width": 358,
+      "height": 55,
+      "top": 668,
+      "left": 16,
+      "right": 374,
+      "bottom": 722,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "priceRow": {
+      "width": 358,
+      "height": 36,
+      "top": 734,
+      "left": 16,
+      "right": 374,
+      "bottom": 770,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "actionsContainer": {
+      "width": 358,
+      "height": 166,
+      "top": 1129,
+      "left": 16,
+      "right": 374,
+      "bottom": 1295,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtyWrapper": {
+      "width": 358,
+      "height": 44,
+      "top": 1129,
+      "left": 16,
+      "right": 374,
+      "bottom": 1173,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "qtySelector": {
+      "width": 130,
+      "height": 44,
+      "top": 1129,
+      "left": 244,
+      "right": 374,
+      "bottom": 1173,
+      "scrollWidth": 128,
+      "clientWidth": 128
+    },
+    "btnGroup": {
+      "width": 358,
+      "height": 108,
+      "top": 1187,
+      "left": 16,
+      "right": 374,
+      "bottom": 1295,
+      "scrollWidth": 358,
+      "clientWidth": 358
+    },
+    "addBtn": {
+      "width": 358,
+      "height": 49,
+      "top": 1187,
+      "left": 16,
+      "right": 374,
+      "bottom": 1236,
+      "scrollWidth": 356,
+      "clientWidth": 356
+    },
+    "whatsAppFloat": {
+      "width": 50,
+      "height": 50,
+      "top": 778,
+      "left": 324,
+      "right": 374,
+      "bottom": 828,
+      "scrollWidth": 50,
+      "clientWidth": 50
+    },
+    "benefitsHeight": null
+  },
+  "sweep": [
+    {
+      "viewport": {
+        "w": 320,
+        "h": 568,
+        "mobile": true,
+        "name": "320px (Ultra-narrow Mobile)"
+      },
+      "measurements": {
+        "rootScrollWidth": 320,
+        "rootClientWidth": 320,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 320,
+        "bodyClientWidth": 320,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 296,
+          "height": 456,
+          "top": 76,
+          "left": 12,
+          "right": 308,
+          "bottom": 532,
+          "scrollWidth": 296,
+          "clientWidth": 296
+        },
+        "mainImage": {
+          "width": 296,
+          "height": 370,
+          "top": 76,
+          "left": 12,
+          "right": 308,
+          "bottom": 446,
+          "scrollWidth": 296,
+          "clientWidth": 296
+        },
+        "thumbStrip": {
+          "width": 296,
+          "height": 74,
+          "top": 458,
+          "left": 12,
+          "right": 308,
+          "bottom": 532,
+          "scrollWidth": 440,
+          "clientWidth": 296
+        },
+        "productTitle": {
+          "width": 296,
+          "height": 49,
+          "top": 586,
+          "left": 12,
+          "right": 308,
+          "bottom": 635,
+          "scrollWidth": 296,
+          "clientWidth": 296
+        },
+        "priceRow": {
+          "width": 296,
+          "height": 36,
+          "top": 647,
+          "left": 12,
+          "right": 308,
+          "bottom": 683,
+          "scrollWidth": 296,
+          "clientWidth": 296
+        },
+        "actionsContainer": {
+          "width": 296,
+          "height": 166,
+          "top": 1068,
+          "left": 12,
+          "right": 308,
+          "bottom": 1234,
+          "scrollWidth": 296,
+          "clientWidth": 296
+        },
+        "qtyWrapper": {
+          "width": 296,
+          "height": 44,
+          "top": 1068,
+          "left": 12,
+          "right": 308,
+          "bottom": 1112,
+          "scrollWidth": 296,
+          "clientWidth": 296
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 1068,
+          "left": 178,
+          "right": 308,
+          "bottom": 1112,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 296,
+          "height": 108,
+          "top": 1126,
+          "left": 12,
+          "right": 308,
+          "bottom": 1234,
+          "scrollWidth": 296,
+          "clientWidth": 296
+        },
+        "addBtn": {
+          "width": 296,
+          "height": 49,
+          "top": 1126,
+          "left": 12,
+          "right": 308,
+          "bottom": 1175,
+          "scrollWidth": 294,
+          "clientWidth": 294
+        },
+        "whatsAppFloat": {
+          "width": 50,
+          "height": 50,
+          "top": 502,
+          "left": 254,
+          "right": 304,
+          "bottom": 552,
+          "scrollWidth": 50,
+          "clientWidth": 50
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    },
+    {
+      "viewport": {
+        "w": 360,
+        "h": 800,
+        "mobile": true,
+        "name": "360px (Standard Android)"
+      },
+      "measurements": {
+        "rootScrollWidth": 360,
+        "rootClientWidth": 360,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 360,
+        "bodyClientWidth": 360,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 336,
+          "height": 506,
+          "top": 76,
+          "left": 12,
+          "right": 348,
+          "bottom": 582,
+          "scrollWidth": 336,
+          "clientWidth": 336
+        },
+        "mainImage": {
+          "width": 336,
+          "height": 420,
+          "top": 76,
+          "left": 12,
+          "right": 348,
+          "bottom": 496,
+          "scrollWidth": 336,
+          "clientWidth": 336
+        },
+        "thumbStrip": {
+          "width": 336,
+          "height": 74,
+          "top": 508,
+          "left": 12,
+          "right": 348,
+          "bottom": 582,
+          "scrollWidth": 440,
+          "clientWidth": 336
+        },
+        "productTitle": {
+          "width": 336,
+          "height": 51,
+          "top": 636,
+          "left": 12,
+          "right": 348,
+          "bottom": 687,
+          "scrollWidth": 336,
+          "clientWidth": 336
+        },
+        "priceRow": {
+          "width": 336,
+          "height": 36,
+          "top": 699,
+          "left": 12,
+          "right": 348,
+          "bottom": 735,
+          "scrollWidth": 336,
+          "clientWidth": 336
+        },
+        "actionsContainer": {
+          "width": 336,
+          "height": 166,
+          "top": 1093,
+          "left": 12,
+          "right": 348,
+          "bottom": 1259,
+          "scrollWidth": 336,
+          "clientWidth": 336
+        },
+        "qtyWrapper": {
+          "width": 336,
+          "height": 44,
+          "top": 1093,
+          "left": 12,
+          "right": 348,
+          "bottom": 1137,
+          "scrollWidth": 336,
+          "clientWidth": 336
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 1093,
+          "left": 218,
+          "right": 348,
+          "bottom": 1137,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 336,
+          "height": 108,
+          "top": 1151,
+          "left": 12,
+          "right": 348,
+          "bottom": 1259,
+          "scrollWidth": 336,
+          "clientWidth": 336
+        },
+        "addBtn": {
+          "width": 336,
+          "height": 49,
+          "top": 1151,
+          "left": 12,
+          "right": 348,
+          "bottom": 1200,
+          "scrollWidth": 334,
+          "clientWidth": 334
+        },
+        "whatsAppFloat": {
+          "width": 50,
+          "height": 50,
+          "top": 734,
+          "left": 294,
+          "right": 344,
+          "bottom": 784,
+          "scrollWidth": 50,
+          "clientWidth": 50
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    },
+    {
+      "viewport": {
+        "w": 375,
+        "h": 667,
+        "mobile": true,
+        "name": "375px (iPhone SE / 8)"
+      },
+      "measurements": {
+        "rootScrollWidth": 375,
+        "rootClientWidth": 375,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 375,
+        "bodyClientWidth": 375,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 343,
+          "height": 515,
+          "top": 80,
+          "left": 16,
+          "right": 359,
+          "bottom": 595,
+          "scrollWidth": 343,
+          "clientWidth": 343
+        },
+        "mainImage": {
+          "width": 343,
+          "height": 429,
+          "top": 80,
+          "left": 16,
+          "right": 359,
+          "bottom": 509,
+          "scrollWidth": 343,
+          "clientWidth": 343
+        },
+        "thumbStrip": {
+          "width": 343,
+          "height": 74,
+          "top": 521,
+          "left": 16,
+          "right": 359,
+          "bottom": 595,
+          "scrollWidth": 440,
+          "clientWidth": 343
+        },
+        "productTitle": {
+          "width": 343,
+          "height": 53,
+          "top": 649,
+          "left": 16,
+          "right": 359,
+          "bottom": 702,
+          "scrollWidth": 343,
+          "clientWidth": 343
+        },
+        "priceRow": {
+          "width": 343,
+          "height": 36,
+          "top": 714,
+          "left": 16,
+          "right": 359,
+          "bottom": 750,
+          "scrollWidth": 343,
+          "clientWidth": 343
+        },
+        "actionsContainer": {
+          "width": 343,
+          "height": 166,
+          "top": 1108,
+          "left": 16,
+          "right": 359,
+          "bottom": 1274,
+          "scrollWidth": 343,
+          "clientWidth": 343
+        },
+        "qtyWrapper": {
+          "width": 343,
+          "height": 44,
+          "top": 1108,
+          "left": 16,
+          "right": 359,
+          "bottom": 1152,
+          "scrollWidth": 343,
+          "clientWidth": 343
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 1108,
+          "left": 229,
+          "right": 359,
+          "bottom": 1152,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 343,
+          "height": 108,
+          "top": 1166,
+          "left": 16,
+          "right": 359,
+          "bottom": 1274,
+          "scrollWidth": 343,
+          "clientWidth": 343
+        },
+        "addBtn": {
+          "width": 343,
+          "height": 49,
+          "top": 1166,
+          "left": 16,
+          "right": 359,
+          "bottom": 1215,
+          "scrollWidth": 341,
+          "clientWidth": 341
+        },
+        "whatsAppFloat": {
+          "width": 50,
+          "height": 50,
+          "top": 601,
+          "left": 309,
+          "right": 359,
+          "bottom": 651,
+          "scrollWidth": 50,
+          "clientWidth": 50
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    },
+    {
+      "viewport": {
+        "w": 390,
+        "h": 844,
+        "mobile": true,
+        "name": "390px (iPhone 12/13/14)"
+      },
+      "measurements": {
+        "rootScrollWidth": 390,
+        "rootClientWidth": 390,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 390,
+        "bodyClientWidth": 390,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 358,
+          "height": 534,
+          "top": 80,
+          "left": 16,
+          "right": 374,
+          "bottom": 614,
+          "scrollWidth": 358,
+          "clientWidth": 358
+        },
+        "mainImage": {
+          "width": 358,
+          "height": 448,
+          "top": 80,
+          "left": 16,
+          "right": 374,
+          "bottom": 528,
+          "scrollWidth": 358,
+          "clientWidth": 358
+        },
+        "thumbStrip": {
+          "width": 358,
+          "height": 74,
+          "top": 540,
+          "left": 16,
+          "right": 374,
+          "bottom": 614,
+          "scrollWidth": 440,
+          "clientWidth": 358
+        },
+        "productTitle": {
+          "width": 358,
+          "height": 55,
+          "top": 668,
+          "left": 16,
+          "right": 374,
+          "bottom": 722,
+          "scrollWidth": 358,
+          "clientWidth": 358
+        },
+        "priceRow": {
+          "width": 358,
+          "height": 36,
+          "top": 734,
+          "left": 16,
+          "right": 374,
+          "bottom": 770,
+          "scrollWidth": 358,
+          "clientWidth": 358
+        },
+        "actionsContainer": {
+          "width": 358,
+          "height": 166,
+          "top": 1129,
+          "left": 16,
+          "right": 374,
+          "bottom": 1295,
+          "scrollWidth": 358,
+          "clientWidth": 358
+        },
+        "qtyWrapper": {
+          "width": 358,
+          "height": 44,
+          "top": 1129,
+          "left": 16,
+          "right": 374,
+          "bottom": 1173,
+          "scrollWidth": 358,
+          "clientWidth": 358
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 1129,
+          "left": 244,
+          "right": 374,
+          "bottom": 1173,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 358,
+          "height": 108,
+          "top": 1187,
+          "left": 16,
+          "right": 374,
+          "bottom": 1295,
+          "scrollWidth": 358,
+          "clientWidth": 358
+        },
+        "addBtn": {
+          "width": 358,
+          "height": 49,
+          "top": 1187,
+          "left": 16,
+          "right": 374,
+          "bottom": 1236,
+          "scrollWidth": 356,
+          "clientWidth": 356
+        },
+        "whatsAppFloat": {
+          "width": 50,
+          "height": 50,
+          "top": 778,
+          "left": 324,
+          "right": 374,
+          "bottom": 828,
+          "scrollWidth": 50,
+          "clientWidth": 50
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    },
+    {
+      "viewport": {
+        "w": 430,
+        "h": 932,
+        "mobile": true,
+        "name": "430px (iPhone Pro Max)"
+      },
+      "measurements": {
+        "rootScrollWidth": 430,
+        "rootClientWidth": 430,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 430,
+        "bodyClientWidth": 430,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 398,
+          "height": 584,
+          "top": 80,
+          "left": 16,
+          "right": 414,
+          "bottom": 664,
+          "scrollWidth": 398,
+          "clientWidth": 398
+        },
+        "mainImage": {
+          "width": 398,
+          "height": 498,
+          "top": 80,
+          "left": 16,
+          "right": 414,
+          "bottom": 578,
+          "scrollWidth": 398,
+          "clientWidth": 398
+        },
+        "thumbStrip": {
+          "width": 398,
+          "height": 74,
+          "top": 590,
+          "left": 16,
+          "right": 414,
+          "bottom": 664,
+          "scrollWidth": 440,
+          "clientWidth": 398
+        },
+        "productTitle": {
+          "width": 398,
+          "height": 61,
+          "top": 718,
+          "left": 16,
+          "right": 414,
+          "bottom": 778,
+          "scrollWidth": 398,
+          "clientWidth": 398
+        },
+        "priceRow": {
+          "width": 398,
+          "height": 36,
+          "top": 790,
+          "left": 16,
+          "right": 414,
+          "bottom": 826,
+          "scrollWidth": 398,
+          "clientWidth": 398
+        },
+        "actionsContainer": {
+          "width": 398,
+          "height": 166,
+          "top": 1185,
+          "left": 16,
+          "right": 414,
+          "bottom": 1351,
+          "scrollWidth": 398,
+          "clientWidth": 398
+        },
+        "qtyWrapper": {
+          "width": 398,
+          "height": 44,
+          "top": 1185,
+          "left": 16,
+          "right": 414,
+          "bottom": 1229,
+          "scrollWidth": 398,
+          "clientWidth": 398
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 1185,
+          "left": 284,
+          "right": 414,
+          "bottom": 1229,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 398,
+          "height": 108,
+          "top": 1243,
+          "left": 16,
+          "right": 414,
+          "bottom": 1351,
+          "scrollWidth": 398,
+          "clientWidth": 398
+        },
+        "addBtn": {
+          "width": 398,
+          "height": 49,
+          "top": 1243,
+          "left": 16,
+          "right": 414,
+          "bottom": 1292,
+          "scrollWidth": 396,
+          "clientWidth": 396
+        },
+        "whatsAppFloat": {
+          "width": 50,
+          "height": 50,
+          "top": 866,
+          "left": 364,
+          "right": 414,
+          "bottom": 916,
+          "scrollWidth": 50,
+          "clientWidth": 50
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    },
+    {
+      "viewport": {
+        "w": 768,
+        "h": 1024,
+        "mobile": false,
+        "name": "768px (Tablet Portrait)"
+      },
+      "measurements": {
+        "rootScrollWidth": 753,
+        "rootClientWidth": 753,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 753,
+        "bodyClientWidth": 753,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 359,
+          "height": 560,
+          "top": 80,
+          "left": 16,
+          "right": 375,
+          "bottom": 640,
+          "scrollWidth": 359,
+          "clientWidth": 359
+        },
+        "mainImage": {
+          "width": 269,
+          "height": 560,
+          "top": 80,
+          "left": 106,
+          "right": 375,
+          "bottom": 640,
+          "scrollWidth": 269,
+          "clientWidth": 269
+        },
+        "thumbStrip": {
+          "width": 74,
+          "height": 560,
+          "top": 80,
+          "left": 16,
+          "right": 90,
+          "bottom": 640,
+          "scrollWidth": 64,
+          "clientWidth": 64
+        },
+        "productTitle": {
+          "width": 326,
+          "height": 173,
+          "top": 110,
+          "left": 411,
+          "right": 737,
+          "bottom": 283,
+          "scrollWidth": 326,
+          "clientWidth": 326
+        },
+        "priceRow": {
+          "width": 326,
+          "height": 36,
+          "top": 299,
+          "left": 411,
+          "right": 737,
+          "bottom": 335,
+          "scrollWidth": 326,
+          "clientWidth": 326
+        },
+        "actionsContainer": {
+          "width": 326,
+          "height": 126,
+          "top": 693,
+          "left": 411,
+          "right": 737,
+          "bottom": 819,
+          "scrollWidth": 326,
+          "clientWidth": 326
+        },
+        "qtyWrapper": {
+          "width": 326,
+          "height": 44,
+          "top": 693,
+          "left": 411,
+          "right": 737,
+          "bottom": 737,
+          "scrollWidth": 326,
+          "clientWidth": 326
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 693,
+          "left": 607,
+          "right": 737,
+          "bottom": 737,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 326,
+          "height": 68,
+          "top": 751,
+          "left": 411,
+          "right": 737,
+          "bottom": 819,
+          "scrollWidth": 326,
+          "clientWidth": 326
+        },
+        "addBtn": {
+          "width": 157,
+          "height": 68,
+          "top": 751,
+          "left": 411,
+          "right": 568,
+          "bottom": 819,
+          "scrollWidth": 155,
+          "clientWidth": 155
+        },
+        "whatsAppFloat": {
+          "width": 50,
+          "height": 50,
+          "top": 958,
+          "left": 687,
+          "right": 737,
+          "bottom": 1008,
+          "scrollWidth": 50,
+          "clientWidth": 50
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    },
+    {
+      "viewport": {
+        "w": 1024,
+        "h": 768,
+        "mobile": false,
+        "name": "1024px (Tablet Landscape / Small Laptop)"
+      },
+      "measurements": {
+        "rootScrollWidth": 1009,
+        "rootClientWidth": 1009,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 1009,
+        "bodyClientWidth": 1009,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 470,
+          "height": 560,
+          "top": 120,
+          "left": 24,
+          "right": 494,
+          "bottom": 680,
+          "scrollWidth": 470,
+          "clientWidth": 470
+        },
+        "mainImage": {
+          "width": 380,
+          "height": 560,
+          "top": 120,
+          "left": 114,
+          "right": 494,
+          "bottom": 680,
+          "scrollWidth": 380,
+          "clientWidth": 380
+        },
+        "thumbStrip": {
+          "width": 74,
+          "height": 560,
+          "top": 120,
+          "left": 24,
+          "right": 98,
+          "bottom": 680,
+          "scrollWidth": 64,
+          "clientWidth": 64
+        },
+        "productTitle": {
+          "width": 427,
+          "height": 200,
+          "top": 150,
+          "left": 558,
+          "right": 985,
+          "bottom": 350,
+          "scrollWidth": 427,
+          "clientWidth": 427
+        },
+        "priceRow": {
+          "width": 427,
+          "height": 36,
+          "top": 366,
+          "left": 558,
+          "right": 985,
+          "bottom": 402,
+          "scrollWidth": 427,
+          "clientWidth": 427
+        },
+        "actionsContainer": {
+          "width": 427,
+          "height": 52,
+          "top": 735,
+          "left": 558,
+          "right": 985,
+          "bottom": 787,
+          "scrollWidth": 427,
+          "clientWidth": 427
+        },
+        "qtyWrapper": {
+          "width": 130,
+          "height": 44,
+          "top": 739,
+          "left": 558,
+          "right": 688,
+          "bottom": 783,
+          "scrollWidth": 130,
+          "clientWidth": 130
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 739,
+          "left": 558,
+          "right": 688,
+          "bottom": 783,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 281,
+          "height": 52,
+          "top": 735,
+          "left": 704,
+          "right": 985,
+          "bottom": 787,
+          "scrollWidth": 281,
+          "clientWidth": 281
+        },
+        "addBtn": {
+          "width": 158,
+          "height": 52,
+          "top": 735,
+          "left": 704,
+          "right": 861,
+          "bottom": 787,
+          "scrollWidth": 156,
+          "clientWidth": 156
+        },
+        "whatsAppFloat": {
+          "width": 60,
+          "height": 60,
+          "top": 684,
+          "left": 925,
+          "right": 985,
+          "bottom": 744,
+          "scrollWidth": 60,
+          "clientWidth": 60
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    },
+    {
+      "viewport": {
+        "w": 1440,
+        "h": 900,
+        "mobile": false,
+        "name": "1440px (Desktop Full HD)"
+      },
+      "measurements": {
+        "rootScrollWidth": 1425,
+        "rootClientWidth": 1425,
+        "hasHorizontalOverflow": false,
+        "overflowDelta": 0,
+        "bodyScrollWidth": 1425,
+        "bodyClientWidth": 1425,
+        "bodyOverflowDelta": 0,
+        "galleryContainer": {
+          "width": 612,
+          "height": 652,
+          "top": 120,
+          "left": 97,
+          "right": 708,
+          "bottom": 772,
+          "scrollWidth": 612,
+          "clientWidth": 612
+        },
+        "mainImage": {
+          "width": 522,
+          "height": 652,
+          "top": 120,
+          "left": 187,
+          "right": 708,
+          "bottom": 772,
+          "scrollWidth": 522,
+          "clientWidth": 522
+        },
+        "thumbStrip": {
+          "width": 74,
+          "height": 560,
+          "top": 120,
+          "left": 97,
+          "right": 171,
+          "bottom": 680,
+          "scrollWidth": 64,
+          "clientWidth": 64
+        },
+        "productTitle": {
+          "width": 556,
+          "height": 150,
+          "top": 150,
+          "left": 772,
+          "right": 1329,
+          "bottom": 300,
+          "scrollWidth": 556,
+          "clientWidth": 556
+        },
+        "priceRow": {
+          "width": 556,
+          "height": 36,
+          "top": 316,
+          "left": 772,
+          "right": 1329,
+          "bottom": 352,
+          "scrollWidth": 556,
+          "clientWidth": 556
+        },
+        "actionsContainer": {
+          "width": 556,
+          "height": 52,
+          "top": 685,
+          "left": 772,
+          "right": 1329,
+          "bottom": 737,
+          "scrollWidth": 556,
+          "clientWidth": 556
+        },
+        "qtyWrapper": {
+          "width": 130,
+          "height": 44,
+          "top": 689,
+          "left": 772,
+          "right": 902,
+          "bottom": 733,
+          "scrollWidth": 130,
+          "clientWidth": 130
+        },
+        "qtySelector": {
+          "width": 130,
+          "height": 44,
+          "top": 689,
+          "left": 772,
+          "right": 902,
+          "bottom": 733,
+          "scrollWidth": 128,
+          "clientWidth": 128
+        },
+        "btnGroup": {
+          "width": 410,
+          "height": 52,
+          "top": 685,
+          "left": 918,
+          "right": 1329,
+          "bottom": 737,
+          "scrollWidth": 410,
+          "clientWidth": 410
+        },
+        "addBtn": {
+          "width": 158,
+          "height": 52,
+          "top": 685,
+          "left": 918,
+          "right": 1076,
+          "bottom": 737,
+          "scrollWidth": 156,
+          "clientWidth": 156
+        },
+        "whatsAppFloat": {
+          "width": 60,
+          "height": 60,
+          "top": 816,
+          "left": 1341,
+          "right": 1401,
+          "bottom": 876,
+          "scrollWidth": 60,
+          "clientWidth": 60
+        },
+        "benefitsHeight": null
+      },
+      "passed": true
+    }
+  ]
+}

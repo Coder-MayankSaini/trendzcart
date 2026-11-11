@@ -37,7 +37,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
             {/* Right: Product Info */}
             <div className="pdp-info-col" data-testid="pdp-info-col">
                 {/* Category tags */}
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', maxWidth: '100%' }}>
                     {(product.categories && product.categories.length > 0 ? product.categories : (product.category ? [product.category] : [])).map((cat: string) => (
                         <Link
                             key={cat}
@@ -61,7 +61,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
                     <span className="pdp-tax-note">Inclusive of all taxes</span>
                 </div>
 
-                <div style={{ marginTop: '4px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ marginTop: '4px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '100%' }}>
                     {isCustomizableProduct(product) ? (
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', fontWeight: 600, color: '#0369a1', background: 'rgba(14, 165, 233, 0.1)', padding: '4px 10px', borderRadius: '4px', width: 'fit-content' }}>
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
