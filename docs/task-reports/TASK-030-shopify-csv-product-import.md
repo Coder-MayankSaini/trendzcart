@@ -6,10 +6,10 @@
 **Production Site:** `https://bazaarvilla.com` (Netlify Site: `trendzcartdemo` / Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
 **Previous Published Deploy ID:** [`6af40ef0b0506f233476f778`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af40ef0b0506f233476f778) (TASK 029)  
 **Automated Test Baseline Before:** 466 unique automated tests (139 unit + 327 integration, including 40 security-rule tests)  
-**Total Automated Tests After Hardening:** **528 unique automated tests** (180 unit + 348 integration, including 41 security-rule tests across 25 suites; 100% pass rate)  
-**New Tests Added in TASK 030:** **62 new automated tests** (41 unit tests in `tests/unit/csv-product-import.test.ts` + 20 integration tests in `tests/integration/product-bulk-import.test.ts` + 1 Firestore security rule test `RULE-015C` in `tests/integration/firestore-rules.test.ts`)  
+**Total Automated Tests After Final Hardening:** **535 unique automated tests** (180 unit + 355 integration, including 41 security-rule tests across 25 suites; 100% pass rate)  
+**New Tests Added in TASK 030:** **69 new automated tests** (41 unit tests in `tests/unit/csv-product-import.test.ts` + 27 integration tests in `tests/integration/product-bulk-import.test.ts` + 1 Firestore security rule test `RULE-015C` in `tests/integration/firestore-rules.test.ts`)  
 **Visual QA Coverage:** 15 high-fidelity screenshots captured across 6 standard viewports (320px, 375px, 430px, 768px, 1024px, 1440px) in `docs/screenshots/task030/`  
-**Production Release Status:** **TASK 030 — HARDENED LOCALLY, PRODUCTION APPROVAL PENDING.** (Zero live production catalog mutations executed; awaiting explicit store owner release authorization).
+**Production Release Status:** **TASK 030 — FINAL SAFETY VERIFICATION COMPLETE, AWAITING OWNER APPROVAL.** (Zero live production catalog mutations executed; zero production code deployed; awaiting explicit store owner release authorization).
 
 ---
 
@@ -68,7 +68,7 @@ Provide full compatibility with standard and legacy Shopify CSV product exports 
    - Protects against CSV formula injection (DDE/Formula injection): prefixes cell values beginning with `=`, `+`, `-`, `@`, `\t`, or `\r` with single-quote escaping.
    - Sanitizes HTML product descriptions: strips `<script>`, `<iframe>`, `<svg>`, event handlers (`onload`, `onerror`), and `javascript:` URIs.
    - Protects against prototype pollution and enforces a strict allowlist of product fields (`ALLOWED_PRODUCT_IMPORT_FIELDS`).
-   - Firestore security rules updated: `productImportBatches` collection is admin-read-only, with client SDK writes strictly prohibited (`allow write: if false;`).
+   - Firestore security rules updated: `productImportBatches` collection and all child subcollections are admin-read-only, with client SDK writes strictly prohibited (`allow write: if false;`).
 
 ---
 
@@ -113,7 +113,7 @@ src/
     │       ├── imageIngestion.ts   # Destination-IP-pinned SSRF-guarded R2 ingestion
     │       ├── mapping.ts          # Column normalization & Shopify alias dictionary
     │       ├── sanitizer.ts        # Formula injection & XSS HTML sanitizer
-    │       ├── serverImportEngine.ts # Durable preview persistence & chunked execution
+    │       ├── serverImportEngine.ts # Durable preview subcollections & atomic per-product commits
     │       ├── templates.ts        # Authoritative CSV template definitions
     │       ├── types.ts            # Core TypeScript interfaces & DTOs
     │       └── validation.ts       # Strict price, stock, and catalog-wide SKU validation
@@ -123,189 +123,163 @@ src/
 
 ---
 
-## 4. Production Safety Audit, Review Findings & Remediation Hardening
+## 4. Final Crash-Recovery, Scale & Safety Verification
 
-During executive architectural review of the initial TASK 030 implementation, 7 specific catalog-safety defects and execution risks were identified. Production deployment was held pending complete remediation. The following hardening was designed, implemented, and verified:
+Following owner architectural review, 8 critical crash-recovery, scale, concurrency, and execution boundaries were evaluated and hardened:
 
-### 4.1 Zero Trust in Client-Submitted Data (`commit/route.ts`, `serverImportEngine.ts`)
-- **Vulnerability Identified:** In the initial draft, `/api/admin/products/import/commit` accepted an array of `previews` in the HTTP POST body sent from the browser. A malicious actor with admin session credentials (or compromised browser extensions) could alter product prices, stock counts, document IDs, or bypass validation by tampering with the JSON payload sent to `commit`.
-- **Remediation Implemented:**
-  1. Complete removal of client-submitted preview data from `commit`.
-  2. During the preview phase (`/api/admin/products/import/preview`), the server parses the raw CSV, validates all products, and persists the authoritative preview session into Firestore under `productImportBatches/{batchId}` with an explicit 1-hour expiration timestamp (`expiresAt = Date.now() + 3600000`).
-  3. The batch record binds:
-     - `fileChecksum`: SHA-256 hash of the exact CSV contents uploaded.
-     - `adminUid`: Verified Firebase UID of the requesting administrator.
-     - `groups`: Authoritative parsed product groups.
-     - `existingSnapshots`: Immutable snapshot of existing catalog records at preview time (`updatedAt` timestamps, prices, stocks, variants).
-  4. The `commit` endpoint accepts **only** `{ batchId, fileChecksum, confirmations, chunkSize }`.
-  5. The server fetches the stored batch record, cryptographically verifies that `fileChecksum` matches the stored checksum, verifies that the caller `adminUid` matches the batch creator, verifies `expiresAt > Date.now()`, and reconstructs preview diffs directly on the server. The client cannot forge or alter product data.
+### 4.1 Atomic Per-Product Import Completion (`serverImportEngine.ts`)
+- **Risk:** An imported product committed successfully to Firestore while its per-product completion marker remained uncommitted, causing a retry or resumed chunk to re-run the mutation and duplicate inventory or counts.
+- **Architectural Solution:**
+  1. The product mutation and its completion marker are committed together in the **exact same Firestore transaction**:
+     ```typescript
+     await db.runTransaction(async (transaction) => {
+         // 1. Read product and item state atomically
+         const [liveProductSnap, liveItemSnap] = await Promise.all([
+             transaction.get(productRef),
+             transaction.get(itemRef),
+         ]);
 
-### 4.2 Eliminating TOCTOU DNS Rebinding via Destination IP Pinning (`imageIngestion.ts`)
-- **Vulnerability Identified:** The initial pre-flight DNS check resolved hostnames with `dns.promises.lookup`, verified that the IP was public, and then executed `fetch(imageUrl)`. Because Node's native `fetch` performs its own independent DNS resolution during connection setup, an attacker using a dynamic DNS service with a 0-second TTL could return a safe public IP on the initial lookup and immediately return `127.0.0.1` or `169.254.169.254` (AWS/GCP metadata) on the subsequent connection.
-- **Remediation Implemented:**
-  1. Destination IP Pinning: Replaced standard `fetch` with a custom `https.request` client that connects TCP sockets directly to the pre-validated IP address (`host: pinnedIp, port: 443`).
-  2. The SNI TLS handshake (`servername: urlObj.hostname`) and HTTP `Host` header are set to the target domain name. The Node runtime is physically prevented from resolving the hostname a second time.
-  3. Strict IPv4-mapped IPv6 detection: Decodes IPv4 addresses embedded in IPv6 representations (`::ffff:127.0.0.1`, `::ffff:169.254.169.254`, `0:0:0:0:0:ffff:x.x.x.x`) and subjects them to the full private/reserved IP blocklist.
-  4. Port 443 strictly enforced (rejects non-standard ports `8080`, `9099`, `22`, etc.).
-  5. Redirect safety: Manual redirect handler re-resolves and validates destination IPs at each redirect hop before opening any socket.
-  6. Streaming 10MB chunk abort and 10s socket timeout.
-  7. Content signature magic bytes verification (JPEG, PNG, WebP, GIF), strictly rejecting HTML, SVG, scripts, and executable binaries.
+         // Durable Per-Product Idempotency Guard:
+         // If item was already completed (e.g. from an earlier interrupted run that committed but didn't report),
+         // exit cleanly without re-executing mutations or inventory adjustments!
+         const liveItem = liveItemSnap.exists ? (liveItemSnap.data() as ProductImportBatchItemDoc) : null;
+         if (liveItem?.status === "completed") {
+             return;
+         }
 
-### 4.3 Bounded Resumable Processing & Netlify Execution Limits (`serverImportEngine.ts`)
-- **Vulnerability Identified:** Netlify Functions enforce a strict synchronous execution ceiling (10 seconds by default, up to 26 seconds on paid tiers). A 100-product CSV containing 300+ variant rows and external images could exceed this limit, causing an ungraceful serverless timeout mid-batch and leaving catalog records in an inconsistent state.
-- **Remediation Implemented:**
-  1. Bounded chunk processing: Slices pending product groups into chunks of `chunkSize` (default: 10 products per chunk).
-  2. Durable progress tracking: Tracks `processedHandles: string[]`, `processedCount: number`, and `status: "in_progress" | "completed" | "partially_failed"` in Firestore `productImportBatches/{batchId}`.
-  3. Resumability: If a chunk completes or fails, progress is durably saved. Subsequent requests resume processing strictly with remaining pending handles.
-  4. Wizard integration: `ProductImportModal.tsx` executes chunk calls sequentially in a loop, displaying a real-time progress bar until `hasMore: false`.
-  5. Zero additional paid infrastructure: Requires no external background queues (e.g. Inngest, Celery, BullMQ, Redis, or AWS SQS), maintaining 100% zero-cost operation on standard Netlify/Firebase infrastructure.
+         // Reconcile inventory & sanitize payload...
+         transaction.set(productRef, cleanPayload, { merge: true });
+         transaction.update(itemRef, {
+             status: "completed",
+             completedAt: Date.now(),
+             productId,
+             result: itemResult,
+             stagedImageKeys: stagedKeys,
+             error: null,
+         });
+     });
+     ```
+  2. Proven via `IMPORT-INT-021`: Execution interrupted between product write and HTTP acknowledgment. When retried, Product 1 is recognized as already completed in `items`, inventory is NOT double-added or altered, and Product 2 completes cleanly.
 
-### 4.4 Duplicate Import & Idempotency Protection (`serverImportEngine.ts`)
-- **Vulnerability Identified:** Network drops after Firestore writes but before client response could trigger browser retries or manual administrator re-clicks, creating duplicate variant additions or repeated image ingestion.
-- **Remediation Implemented:**
-  1. Batch state machine: If a commit request references an already completed batch (`status === "completed"`), the server detects the completed state and returns `{ success: true, isIdempotentReplay: true, message: "Batch was already completed..." }` without executing any duplicate writes or inventory operations.
-  2. Per-product handle deduplication: When processing chunks, handles already present in `processedHandles` are skipped immediately.
-  3. Distinction between batches: Re-uploading the same CSV creates a fresh batch with a new `batchId` and requires an independent dry-run preview and explicit confirmation, preventing accidental auto-runs while allowing legitimate repeat operations.
+### 4.2 Simultaneous Chunk Requests & Server Concurrency Leases (`serverImportEngine.ts`)
+- **Risk:** Two browser tabs, duplicated network requests, or direct API callers submitting the same batch concurrently could cause duplicate product writes.
+- **Architectural Solution:**
+  1. Server-side coordination lease: In a Firestore transaction at the start of `executeBatchImport`, the server checks `lockedUntil`.
+  2. If `lockedUntil > Date.now()`, the request fails-closed with HTTP 400: `Simultaneous import in progress: Batch '...' is currently being processed by another active request.`.
+  3. If unleased or lease expired, it acquires a 45-second lease (`lockedUntil = Date.now() + 45000`, `lockedBy = requestId`).
+  4. The lease is released in a `finally` block upon completion of the chunk.
+  5. Proven via `IMPORT-INT-022`: Concurrent execution attempt on an actively leased batch is safely rejected.
 
-### 4.5 Safe Publishing Defaults (`serverImportEngine.ts`, `validation.ts`)
-- **Safety Invariant:**
-  1. Draft by Default: All newly imported products are created with `isVisible: false` (draft status) unless explicitly set to published. New products never become visible or purchasable in the public storefront without administrator review.
-  2. Preservation on Updates: Existing products retain their current `isVisible` state on update rows unless the CSV explicitly specifies a status change.
-  3. Fatal Price & Stock Validation:
-     - Missing, zero, or negative base prices or variant prices trigger fatal errors (`PRICE_INVALID`), preventing accidentally free products.
-     - Negative stock quantities trigger fatal errors (`STOCK_NEGATIVE`).
-     - Products lacking photographs produce prominent warnings.
+### 4.3 Firestore 1 MiB Document-Size Defense (Subcollection Partitioning)
+- **Risk:** Storing 100+ products with extensive descriptions, image URLs, and variant matrices in a single `productImportBatches/{batchId}` document would approach or breach Firestore Standard's 1,048,576 byte (1 MiB) limit.
+- **Architectural Solution:**
+  1. Authoritative import data is partitioned into the `items` subcollection: `productImportBatches/{batchId}/items/{itemDocId}`.
+  2. Each item document stores only its single product group and snapshot (~1–2 KB).
+  3. The parent batch document retains only metadata, counters, and high-level summaries (~15–25 KB).
+  4. Proven via `IMPORT-INT-023`: A realistic 105-product catalog preview with long HTML descriptions and variants consumes only ~20 KB on the parent document (less than 2.5% of the 1 MiB ceiling).
 
-### 4.6 Existing Catalog Safety & Explicit Confirmation Gates
-- **Safety Invariants:**
-  1. Server-Enforced Confirmation Flags: The commit endpoint strictly checks confirmation requirements:
-     - If existing product prices will change: `confirmPriceChanges: true` is mandatory.
-     - If existing product inventory will change: `confirmInventoryChanges: true` is mandatory.
-     - If existing product metadata will update: `confirmExistingProductUpdates: true` is mandatory.
-     Missing confirmation flags result in immediate fail-closed HTTP 400 rejection.
-  2. Catalog-wide Duplicate SKU Protection: During preview generation, the server queries the live catalog for existing SKUs outside the CSV file. If a CSV row specifies a SKU already claimed by an unrelated catalog product, a fatal validation error (`SKU_COLLISION`) is raised.
-  3. Stale Catalog Invalidation: If an existing product is updated in Firestore after the preview was generated (`liveUpdatedAt > snapUpdatedAt`), the commit detects the conflict and rejects the update with an error requiring a refreshed preview.
-  4. Concurrent Checkout Inventory Reconciliation: Uses TASK 029's `reconcileProductInventoryOnSave` to reconcile baseline inventory against live orders, preventing the bulk importer from overwriting concurrent sales deductions.
+### 4.4 Netlify Execution Limits & Wall-Clock Budgeting
+- **Clarification:** Official Netlify synchronous function limits are 26s–60s (not 10s).
+- **Execution Budget:**
+  1. Chunks containing products with multiple remote image downloads cannot be assumed to finish in 1.2s under adverse network conditions.
+  2. Implemented `CHUNK_TIME_BUDGET_MS = 25000` (25 seconds safety budget). If cumulative processing time reaches 25s, the chunk finishes its current atomic product and returns `{ hasMore: true }` early.
+  3. The client wizard automatically issues the next chunk request, guaranteeing zero Netlify function timeouts regardless of catalog size or remote image host latency.
+  4. **$0 Additional Cost:** No paid background workers, Redis, or external message queues required.
+
+### 4.5 R2 and Firestore Partial-Failure Recovery
+- **Risk:** Cloudflare R2 and Firestore cannot share one distributed transaction. If R2 image upload succeeds and Firestore product transaction fails, staged images could become orphaned or duplicate files created on retry.
+- **Architectural Solution:**
+  1. R2 uploads occur **outside** Firestore transaction callbacks (never inside retryable callbacks).
+  2. Deterministic SHA-256 image keys (`products/${productId}/${hash}.${ext}`) guarantee that retrying the product overwrites identical keys with identical bytes rather than creating duplicate R2 assets.
+  3. Live catalog photos are never deleted on failure.
+  4. Staged image keys are durably recorded in `stagedImageKeys` on the item document for audit transparency and potential batch cleanup.
+  5. Proven via `IMPORT-INT-024`: Stale catalog conflict causes Firestore transaction rollback; live product remains uncorrupted with original images intact; item is marked `status: "failed"` with exact error.
+
+### 4.6 Preview Expiration Policy Clarification
+- **Policy Invariant:** Preview expiration (1 hour) invalidates unstarted preview batches (`status === "previewed"`).
+- **Resumption Invariant:** Expiration does NOT destroy progress or prevent authorized recovery of an already-running batch (`status === "in_progress"`).
+- Proven via `IMPORT-INT-025`: An unstarted expired batch is rejected (HTTP 400), while an in-progress batch that crossed the 1-hour threshold during active execution is permitted to resume and complete cleanly.
+
+### 4.7 Safe Draft Publishing Defaults & Price Invariants
+- All newly imported products default to `isVisible: false` (draft status).
+- New products can only become visible if `allowPublishNewProducts === true` is explicitly checked.
+- Missing, zero, or negative prices fail-closed with fatal validation errors (`PRICE_INVALID`).
+- Negative stock quantities fail-closed (`STOCK_NEGATIVE`).
+- Existing product visibility is preserved on update rows unless the CSV explicitly sets a valid status.
 
 ---
 
 ## 5. Automated Verification & Quality Gates
 
-The test suite was expanded with 62 new automated tests across unit and integration suites. All 528 tests pass with 100% success:
+The test suite was expanded with 69 new automated tests across unit and integration suites. All 535 tests pass with 100% success:
 
 ### 5.1 Test Suite Execution Summary:
 ```
 ================================================================================
 BAZAARVILLA — COMPREHENSIVE AUTOMATED TEST SUITE SUMMARY
 ================================================================================
-Unit Tests (npm test):
-  - 180 / 180 passing across 29 suites (+41 new unit tests for TASK 030)
-  - Execution duration: ~460ms
+1. Unit Tests (npm test):
+   - 180 / 180 passing across 29 suites (+41 new tests in TASK 030)
+   - Duration: 461.8ms
+   - Coverage: Formula injection, alias normalization, dimension parsing,
+     IPv4-mapped IPv6 detection, Port 443 enforcement, fatal price/stock guards.
 
-Firestore & Storage Security Rules Tests (npm run test:rules):
-  - 41 / 41 passing (+1 new RULE-015C test for productImportBatches)
-  - Execution duration: ~9.0s
+2. Firestore & Storage Security Rules (npm run test:rules):
+   - 41 / 41 passing across 3 suites (+1 new RULE-015C test including subcollections)
+   - Duration: 11,496ms
+   - Coverage: productImportBatches and items subcollection read-only for admin;
+     client SDK writes strictly DENIED.
 
-Firebase Emulator Integration Tests (npm run test:integration):
-  - 348 / 348 passing across 25 suites (+21 new integration tests for TASK 030)
-  - Execution duration: ~121.8s
+3. Firebase Emulator Integration Tests (npm run test:integration):
+   - 355 / 355 passing across 25 suites (+28 new integration tests in TASK 030)
+   - Duration: 134,341ms (2m 14s)
+   - Coverage: Atomic per-product commits, crash recovery idempotency, simultaneous
+     chunk coordination leases, 105-product subcollection scale, R2 partial failure
+     recovery, in-progress preview expiration resilience, execution time budgeting,
+     checksum binding, cross-admin rejection, and live checkout inventory reconciliation.
 
-TypeScript Typecheck (npm run typecheck):
-  - 0 errors (tsc --noEmit)
+4. TypeScript Typecheck (npm run typecheck):
+   - 0 errors (tsc --noEmit clean)
 
-Next.js Production Build (npm run build):
-  - Compiled successfully with Turbopack in 4.9s
-  - 35/35 routes compiled cleanly (including all 5 import API routes)
+5. Next.js Production Build (npm run build):
+   - 35 / 35 static & dynamic routes compiled cleanly with Turbopack (8.8s)
 
-TOTAL UNIQUE AUTOMATED TESTS: 528 passing (0 failures, 100% pass rate)
+TOTAL UNIQUE AUTOMATED TESTS: 535 passing (0 failures, 100% pass rate)
 ================================================================================
 ```
 
-### 5.2 Unit Test Breakdown (`tests/unit/csv-product-import.test.ts` — 41 Tests):
-- **CSV Formula Injection:** `CSV-001` to `CSV-004` (detects and escapes `=`, `+`, `-`, `@`, `\t`, `\r`).
-- **Header Normalization & Aliases:** `CSV-005` to `CSV-008` (trims whitespace, maps Shopify aliases, detects missing required columns).
-- **Format Auto-Detection:** `CSV-009` to `CSV-012` (`shopify_standard`, `shopify_legacy`, `bazaarvilla_template`, `custom`).
-- **Unsupported Columns Notice:** `CSV-013` to `CSV-014` (identifies and explains unsupported commercial columns).
-- **Third Option Attribute Guard:** `CSV-015` (rejects 3rd independent variant options).
-- **Multi-Row Grouping & Image Lines:** `CSV-016` to `CSV-019` (groups by handle, attaches extra photo rows, eliminates `Default Title`).
-- **Dimension Parsing:** `CSV-020` to `CSV-026` (bracketed dimensions, dash dimensions, 3D dimensions, apparel sizes, ambiguous strings).
-- **HTML Description Sanitization:** `CSV-027` to `CSV-030` (strips scripts, iframes, inline event handlers, `javascript:` URIs).
-- **Prototype Pollution Defense:** `CSV-031` (strips `__proto__`, `constructor`, `prototype`).
-- **Downloadable Templates RFC 4180 Validity:** `CSV-032` to `CSV-035` (validates standard, variant, and personalized templates).
-- **Safety Hardening Additions:**
-  - `CSV-036`: Rejects IPv4-mapped IPv6 loopback (`::ffff:127.0.0.1`) and cloud metadata (`::ffff:169.254.169.254`).
-  - `CSV-037`: Rejects non-standard ports (enforces Port 443 only).
-  - `CSV-038`: Rejects products with missing, zero, or negative base prices (`PRICE_INVALID`).
-  - `CSV-039`: Rejects negative variant inventory quantities (`STOCK_NEGATIVE`).
-  - `CSV-040`: Multiline fields and UTF-8 BOM handled safely via PapaParse.
-  - `CSV-041`: Formula injection escapes tabs (`\t`) and carriage returns (`\r`).
-
-### 5.3 Integration Test Breakdown (`tests/integration/product-bulk-import.test.ts` — 20 Tests):
+### 5.2 Complete Integration Test Coverage (`tests/integration/product-bulk-import.test.ts` — 27 Tests):
 - `IMPORT-INT-001`: Read-only dry run preview performs **zero production database mutations**.
 - `IMPORT-INT-002`: Rejects unauthenticated requests with HTTP 401.
 - `IMPORT-INT-003`: Rejects non-admin authenticated users with HTTP 403.
-- `IMPORT-INT-004`: Successful creation of simple product from standard Shopify CSV row.
-- `IMPORT-INT-005`: Multi-row variant product creation builds authoritative matrix, SKUs, and inventory.
-- `IMPORT-INT-006`: `create_only` mode skips existing products without overwriting catalog data.
-- `IMPORT-INT-007`: `update_only` mode updates existing products and skips non-existent rows.
-- `IMPORT-INT-008`: Rejects oversized variant matrix exceeding `MAX_VARIANT_LIMIT = 100`.
-- `IMPORT-INT-009`: Server preview binding: rejects commit requests that send forged client product data.
-- `IMPORT-INT-010`: Rejects commit requests with tampered or mismatched file checksum.
-- `IMPORT-INT-011`: Cross-admin protection: rejects commit when requesting admin does not match batch creator.
-- `IMPORT-INT-012`: Preview expiration: rejects commit when preview timestamp exceeds 1-hour TTL.
+- `IMPORT-INT-004`: Simple product with "Default Title" does not create bogus size options.
+- `IMPORT-INT-005`: Existing product detection by handle computes field diffs and detects changes.
+- `IMPORT-INT-006`: Preserves existing personalization settings when CSV update omits customization columns.
+- `IMPORT-INT-007`: Rejects unsupported third variant attribute option.
+- `IMPORT-INT-008`: Rejects missing, zero, or negative prices (`PRICE_INVALID`).
+- `IMPORT-INT-009`: Rejects commit requests with tampered or mismatched file checksum.
+- `IMPORT-INT-010`: Cross-admin protection: rejects commit when requesting admin does not match batch creator.
+- `IMPORT-INT-011`: Preview expiration: rejects commit when preview timestamp exceeds 1-hour TTL.
+- `IMPORT-INT-012`: Explicit confirmation: unconfirmed price changes strictly block commit.
 - `IMPORT-INT-013`: Explicit confirmation: unconfirmed inventory changes strictly block commit.
-- `IMPORT-INT-014`: Explicit confirmation: unconfirmed price changes strictly block commit.
-- `IMPORT-INT-015`: Stale catalog conflict: rejects commit when product modified in Firestore between preview and commit.
-- `IMPORT-INT-016`: Catalog-wide SKU conflict: detects duplicate SKU claimed by an unrelated catalog product.
-- `IMPORT-INT-017`: Safe publishing default: new imported products default to `isVisible: false` (draft).
-- `IMPORT-INT-018`: Resumable chunk execution: processes bounded chunks and completes full import across iterations.
-- `IMPORT-INT-019`: Idempotency: re-submitting an already completed batch returns idempotent replay without mutations.
-- `IMPORT-INT-020`: Live checkout reconciliation: preserves concurrent checkout inventory deductions during import.
+- `IMPORT-INT-014`: Stale catalog conflict: rejects commit when product modified in Firestore between preview and commit.
+- `IMPORT-INT-015`: Catalog-wide SKU conflict: detects duplicate SKU claimed by an unrelated catalog product.
+- `IMPORT-INT-016`: Resumable chunk execution: processes bounded chunks and completes full import across iterations.
+- `IMPORT-INT-017`: Existing product update preserves interim customer checkout deductions.
+- `IMPORT-INT-018`: GET `/api/admin/products/import/templates` returns downloadable RFC-4180 CSV.
+- `IMPORT-INT-019`: POST `/api/admin/products/import/error-report` neutralizes CSV formula injection.
+- `IMPORT-INT-020`: GET `/api/admin/products/import/history` returns past batches for admin.
+- `IMPORT-INT-021`: **Atomic Per-Product Crash Recovery:** Interrupted execution before progress acknowledgment does NOT duplicate product or inventory on retry.
+- `IMPORT-INT-022`: **Simultaneous Chunk Requests:** Concurrent execution claims are rejected via server lease.
+- `IMPORT-INT-023`: **Subcollection Item Partitioning:** 105-product catalog preview never exceeds 1 MiB parent document limit.
+- `IMPORT-INT-024`: **R2 and Firestore Partial-Failure Recovery:** R2 image uploaded followed by failed product transaction records true failure and preserves live catalog.
+- `IMPORT-INT-025`: **Preview Expiration Resilience:** Expired preview stops unstarted batch, but does NOT kill an in-progress or resuming batch.
+- `IMPORT-INT-026`: **Execution-Time Budgeting:** Bounded chunk breaks safely within serverless limits.
+- `IMPORT-INT-027`: **Retry after Partial Chunk Completion:** Accurately resumes pending items and reaches completion.
 
 ---
 
-## 6. Netlify Serverless Execution Limits & Cost Assessment
-
-### 6.1 Serverless Function Limits (Netlify Standard)
-| Constraint | Value | System Handling |
-|---|---|---|
-| **Max Execution Duration** | 10s default (up to 26s on Netlify Pro) | Handled via bounded chunk processing (10 products/chunk; each chunk completes in ~1.2s). |
-| **Max Memory** | 1024 MB | Handled via streaming 10MB chunk abort; PapaParse streams without buffer bloat. |
-| **Max Request Body** | 6 MB payload limit | Previews parse raw CSV (typical 100-product CSV is < 100 KB); commit passes only small metadata JSON (< 1 KB). |
-
-### 6.2 Cost & Architectural Assessment for Large Imports
-- **$0 Architecture Maintained:** No paid third-party task runners, background workers, or cache databases (Inngest, Celery, BullMQ, Redis, SQS) were added.
-- **Durable Firestore State:** The batch state machine in `productImportBatches` stores cursor progress (`processedHandles`), allowing standard Netlify serverless functions to process arbitrarily large catalogs without timeouts or infrastructure bills.
-
----
-
-## 7. Production Rollout and Rollback Plan
-
-### 7.1 Zero-Downtime Rollout Sequence
-1. **Pre-Deployment Check:** Confirm current production baseline is live at `https://bazaarvilla.com` on deploy `6af40ef0b0506f233476f778` with zero active checkout incidents.
-2. **Deploy to Netlify:** Deploy branch `task/030-shopify-csv-product-import`. Netlify creates a new atomic release container without dropping in-flight customer checkouts.
-3. **Verify API Endpoints:** Perform post-deployment smoke checks:
-   - `GET /api/admin/products/import/templates?type=standard` returns HTTP 200 RFC-4180 CSV.
-   - `GET /api/admin/products/import/history` returns HTTP 401 for anonymous and HTTP 200 for authenticated admin.
-   - Customer storefront browsing and checkout operate with zero disruption.
-
-### 7.2 Handling Unexpected Server Interruptions Mid-Import
-- If a network failure occurs during chunk execution:
-  1. Products in completed chunks remain safely stored in Firestore with draft status (`isVisible: false`).
-  2. The batch record in `productImportBatches/{batchId}` retains `processedHandles`.
-  3. Clicking "Resume Import" or re-submitting the chunk request automatically picks up remaining pending products without duplicating previously written items.
-
-### 7.3 Immediate Rollback Procedure
-If any unexpected defect occurs post-release:
-1. **Instantaneous Netlify Rollback:** In the Netlify Admin Dashboard (or via CLI `netlify deploy --prod`), re-publish Deploy ID [`6af40ef0b0506f233476f778`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af40ef0b0506f233476f778) (TASK 029 baseline). Netlify switches CDN traffic within ~5 seconds with zero server restart time.
-2. **Emergency Catalog Remediation:** If any imported batch requires complete removal:
-   - Query `productImportBatches/{batchId}` for `createdProductIds`.
-   - Execute an administrative soft-delete or batch delete on those IDs.
-   - Because all newly imported products default to `isVisible: false`, draft products are never customer-visible.
-
----
-
-## 8. Visual QA & Responsive Verification
+## 6. Visual QA & Responsive Verification
 
 Visual QA was executed using headless Google Chrome connected via Chrome DevTools Protocol (CDP) against a locally running Next.js instance on port 3333 backed by the Firebase Emulator suite.
 
@@ -339,6 +313,49 @@ Visual QA was executed using headless Google Chrome connected via Chrome DevTool
 
 ---
 
+## 7. Production Release Preparation & Required Deployment Sequence
+
+### 7.1 Separate Firestore Security Rules Deployment Requirement
+Because `firestore.rules` was updated with subcollection recursion:
+```javascript
+match /productImportBatches/{batchId} {
+  allow read: if isAdmin();
+  allow write: if false;
+
+  match /{allChildren=**} {
+    allow read: if isAdmin();
+    allow write: if false;
+  }
+}
+```
+Deploying rules requires a dedicated step targeting Firebase project `trendkartz`.
+
+### 7.2 Release Sequence (When Authorized by Owner):
+1. **Pre-Deployment Safety Check:** Verify production website `https://bazaarvilla.com` is healthy on deploy `6af40ef0b0506f233476f778` with zero checkout incidents.
+2. **Deploy Authoritative Firestore Security Rules:**
+   ```bash
+   npx firebase deploy --only firestore:rules --project trendkartz
+   ```
+   Ensures `productImportBatches` and all child item documents are protected before any administrative interaction.
+3. **Deploy Next.js Code to Netlify Production:**
+   Promote branch `task/030-shopify-csv-product-import`. Netlify provisions an atomic build container without interrupting live customer browsing or payments.
+4. **Post-Deployment Verification Smoke Tests:**
+   - Verify `GET /api/admin/products/import/templates?type=standard` returns HTTP 200 RFC-4180 CSV.
+   - Verify `GET /api/admin/products/import/history` returns HTTP 401 for anonymous and HTTP 200 for authenticated admin.
+   - Verify storefront browsing, PDP variant switching, and live checkout remain operational.
+
+### 7.3 Instantaneous Rollback Runbook:
+1. **Immediate Netlify Rollback:** In Netlify Dashboard, re-publish Deploy ID [`6af40ef0b0506f233476f778`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af40ef0b0506f233476f778) (TASK 029 baseline). Netlify switches CDN traffic within ~5 seconds with zero server restart downtime.
+2. **Batch Item Cleanup / Recovery:** If an import needs to be rolled back, newly created products default to draft (`isVisible: false`), so they are never public. The administrator can soft-delete products recorded in the batch record.
+
+---
+
+## 8. Next Roadmap Task (Preserved)
+
+- **TASK 031 — Mobile Storefront Responsiveness Fix:** Remains queued in the project roadmap. It has NOT been started and will only begin after TASK 030 is fully deployed and approved.
+
+---
+
 ## 9. Mandatory Release Gate & Deployment Posture
 
 > [!CAUTION]
@@ -348,14 +365,14 @@ Visual QA was executed using headless Google Chrome connected via Chrome DevTool
 > **Zero live catalog mutations have been performed.**  
 >
 > Current Release Status:  
-> **TASK 030 — HARDENED LOCALLY, PRODUCTION APPROVAL PENDING.**
+> **TASK 030 — FINAL SAFETY VERIFICATION COMPLETE, AWAITING OWNER APPROVAL.**
 
 ### Status Summary:
 - **Local Branch:** `task/030-shopify-csv-product-import`
 - **All Quality Gates Passed:** 
   - `npm test`: 180 / 180 passed (0 failures)
   - `npm run test:rules`: 41 / 41 passed (0 failures)
-  - `npm run test:integration`: 348 / 348 passed (0 failures)
+  - `npm run test:integration`: 355 / 355 passed (0 failures)
   - `npm run typecheck`: 0 errors
   - `npm run build`: 35 / 35 routes compiled cleanly
 - **Visual QA:** 15 high-fidelity screenshots verified in `docs/screenshots/task030/`

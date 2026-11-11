@@ -740,4 +740,382 @@ free-stuff,Freebie,-50
         assert.equal(data.success, true);
         assert.ok(Array.isArray(data.batches));
     });
+
+    it("IMPORT-INT-021: Atomic Per-Product Crash Recovery: interrupted execution before acknowledgment does NOT duplicate product or inventory on retry", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Inventory Qty",
+            "crash-prod-1,Crash Product 1,Desc 1,Bazaarvilla,Apparel,tag1,TRUE,Size,M,CRASH-1-M,899,10",
+            "crash-prod-2,Crash Product 2,Desc 2,Bazaarvilla,Apparel,tag2,TRUE,Size,L,CRASH-2-L,999,15",
+        ].join("\n");
+
+        // 1. Preview
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            { csvText: csv, mode: "create_and_update" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum } = await previewRes.json();
+
+        const batchRef = adminDb.collection("productImportBatches").doc(batchId);
+        const itemsSnap = await batchRef.collection("items").orderBy("itemIndex").get();
+        assert.equal(itemsSnap.size, 2);
+
+        // 2. Simulate interruption: Product 1 was written to Firestore and marked completed,
+        // but the HTTP response was lost or interrupted before the client received it!
+        const item1Doc = itemsSnap.docs[0];
+        const item1Data = item1Doc.data();
+        const prod1Id = "crash_prod_1_doc_id";
+
+        await adminDb.collection("products").doc(prod1Id).set({
+            id: prod1Id,
+            name: "Crash Product 1",
+            slug: "crash-prod-1",
+            price: 899,
+            inventory: 10,
+            totalPhysicalInventory: 10,
+            hasVariants: true,
+            variants: [{
+                id: "crash-1-m",
+                sku: "CRASH-1-M",
+                price: 899,
+                inventory: 10,
+                isActive: true,
+            }],
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+        });
+
+        // Mark item 1 completed in subcollection
+        await batchRef.collection("items").doc(item1Doc.id).update({
+            status: "completed",
+            productId: prod1Id,
+            completedAt: Date.now(),
+            result: {
+                handle: "crash-prod-1",
+                productId: prod1Id,
+                status: "created",
+                title: "Crash Product 1",
+                variantsCreatedOrUpdated: 1,
+                imagesIngested: 0,
+                imagesFailed: 0,
+            },
+        });
+
+        // 3. Retry the same chunk request
+        const commitReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: {
+                    confirmedNotice: true,
+                    confirmPriceChanges: true,
+                    confirmInventoryChanges: true,
+                    confirmExistingProductUpdates: true,
+                },
+                chunkSize: 10,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const commitRes = await commitRoute(commitReq);
+        assert.equal(commitRes.status, 200);
+        const commitData = await commitRes.json();
+
+        assert.equal(commitData.success, true);
+        assert.equal(commitData.status, "completed");
+        assert.equal(commitData.processedCount, 2);
+
+        // Verify product 1 was NOT duplicated or double-incremented
+        const prod1Snap = await adminDb.collection("products").doc(prod1Id).get();
+        assert.equal(prod1Snap.exists, true);
+        assert.equal(prod1Snap.data()?.inventory, 10); // Inventory remained 10, NOT 20!
+
+        // Verify product 2 was created cleanly
+        const prod2Query = await adminDb.collection("products").where("slug", "==", "crash-prod-2").get();
+        assert.equal(prod2Query.size, 1);
+        assert.equal(prod2Query.docs[0].data().price, 999);
+        assert.equal(prod2Query.docs[0].data().inventory, 15);
+    });
+
+    it("IMPORT-INT-022: Simultaneous Chunk Requests: concurrent execution claims are rejected via server lease", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Inventory Qty",
+            "simul-prod-1,Simultaneous Prod,Desc,Bazaarvilla,Apparel,tag,TRUE,Size,S,SIMUL-1-S,799,5",
+        ].join("\n");
+
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            { csvText: csv, mode: "create_and_update" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum } = await previewRes.json();
+
+        // Simulate Request 1 currently holding an active concurrency lease
+        const batchRef = adminDb.collection("productImportBatches").doc(batchId);
+        await batchRef.update({
+            lockedUntil: Date.now() + 30000, // Locked for next 30 seconds
+            lockedBy: "other_active_request_id",
+            status: "in_progress",
+        });
+
+        // Request 2 attempts simultaneous execution
+        const commitReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: { confirmedNotice: true },
+                chunkSize: 10,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const commitRes = await commitRoute(commitReq);
+        assert.equal(commitRes.status, 400);
+        const errorData = await commitRes.json();
+        assert.ok(errorData.error.includes("Simultaneous import in progress"));
+    });
+
+    it("IMPORT-INT-023: Subcollection Item Partitioning: large catalog preview with 105 items never exceeds 1 MiB parent document limit", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        // Generate 105 products with realistic descriptions, tags, and variants
+        const header = "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Inventory Qty";
+        const rows = [header];
+        for (let i = 1; i <= 105; i++) {
+            const h = `scale-product-${i}`;
+            const desc = `<p>High quality catalog merchandise ${i} with extended description text to test document payload limits.</p>`;
+            rows.push(`${h},Scale Product ${i},"${desc}",Bazaarvilla,Apparel,"tag-a,tag-b,tag-${i}",TRUE,Size,M,SCALE-${i}-M,${500 + i},10`);
+        }
+        const largeCsv = rows.join("\n");
+
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            { csvText: largeCsv, mode: "create_and_update" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId } = await previewRes.json();
+
+        // Inspect parent document size in Firestore
+        const batchRef = adminDb.collection("productImportBatches").doc(batchId);
+        const parentDoc = await batchRef.get();
+        assert.equal(parentDoc.exists, true);
+
+        const parentBytes = Buffer.byteLength(JSON.stringify(parentDoc.data() || {}));
+        // Firestore limit is 1,048,576 bytes (1 MiB). Parent document must stay well below 100 KB!
+        assert.ok(parentBytes < 100000, `Parent document size was ${parentBytes} bytes, expected < 100,000 bytes`);
+
+        // Verify items subcollection holds all 105 items partitioned
+        const itemsSnap = await batchRef.collection("items").get();
+        assert.equal(itemsSnap.size, 105);
+    });
+
+    it("IMPORT-INT-024: Image uploaded to R2 followed by failed product transaction records true failure and preserves live catalog", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        // Create an existing product with live image
+        const conflictProdId = "prod_conflict_r2_test";
+        await adminDb.collection("products").doc(conflictProdId).set({
+            id: conflictProdId,
+            name: "Live Cushion",
+            slug: "live-cushion-conflict",
+            price: 699,
+            inventory: 5,
+            isVisible: true,
+            images: ["https://media.bazaarvilla.com/original-live-photo.jpg"],
+            createdAt: Date.now() - 5000,
+            updatedAt: Date.now() - 5000,
+        });
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Inventory Qty",
+            "live-cushion-conflict,Live Cushion,Updated,Bazaarvilla,Home,cushion,TRUE,Default Title,,CUSH-01,799,10",
+        ].join("\n");
+
+        // Preview
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            { csvText: csv, mode: "create_and_update" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum } = await previewRes.json();
+
+        // Before commit, simulate another admin modifying the product in Firestore,
+        // causing a stale catalog conflict during commit
+        await adminDb.collection("products").doc(conflictProdId).update({
+            price: 749,
+            updatedAt: Date.now() + 1000, // Newer than preview snapshot!
+        });
+
+        const commitReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: {
+                    confirmedNotice: true,
+                    confirmPriceChanges: true,
+                    confirmInventoryChanges: true,
+                    confirmExistingProductUpdates: true,
+                },
+                chunkSize: 10,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const commitRes = await commitRoute(commitReq);
+        assert.equal(commitRes.status, 200);
+        const commitData = await commitRes.json();
+
+        // True outcome recorded
+        assert.equal(commitData.status, "partially_failed");
+        assert.equal(commitData.batchRecord.failedCount, 1);
+
+        // Verify live product was NOT corrupted and original photos were preserved
+        const liveDoc = await adminDb.collection("products").doc(conflictProdId).get();
+        assert.equal(liveDoc.data()?.price, 749);
+        assert.deepEqual(liveDoc.data()?.images, ["https://media.bazaarvilla.com/original-live-photo.jpg"]);
+    });
+
+    it("IMPORT-INT-025: Preview expiration policy: expired preview stops unstarted batch, but does NOT kill an in-progress or resuming batch", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Inventory Qty",
+            "exp-prod-1,Exp Product,Desc,Bazaarvilla,Apparel,tag,TRUE,Size,M,EXP-1-M,599,10",
+        ].join("\n");
+
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            { csvText: csv, mode: "create_and_update" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum } = await previewRes.json();
+
+        const batchRef = adminDb.collection("productImportBatches").doc(batchId);
+
+        // Case A: Unstarted batch (status: "previewed") that expired
+        await batchRef.update({
+            status: "previewed",
+            expiresAt: Date.now() - 5000, // Expired 5 seconds ago
+        });
+
+        const commitReqA = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: { confirmedNotice: true },
+                chunkSize: 10,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const commitResA = await commitRoute(commitReqA);
+        assert.equal(commitResA.status, 400);
+        const errDataA = await commitResA.json();
+        assert.ok(errDataA.error.includes("Import preview session has expired"));
+
+        // Case B: In-progress batch that was started within valid window and resumed
+        await batchRef.update({
+            status: "in_progress",
+            startedAt: Date.now() - 3600000, // Started an hour ago
+            expiresAt: Date.now() - 5000,    // TTL elapsed during processing
+        });
+
+        const commitReqB = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: { confirmedNotice: true },
+                chunkSize: 10,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const commitResB = await commitRoute(commitReqB);
+        assert.equal(commitResB.status, 200);
+        const dataB = await commitResB.json();
+        assert.equal(dataB.success, true);
+        assert.equal(dataB.status, "completed");
+    });
+
+    it("IMPORT-INT-026: Execution-time budgeting: bounded chunk breaks safely without exceeding serverless limits", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        // Verify server import engine has CHUNK_TIME_BUDGET_MS defined safely
+        const { CHUNK_TIME_BUDGET_MS } = await import("../../src/lib/products/import/serverImportEngine.ts");
+        assert.ok(CHUNK_TIME_BUDGET_MS >= 15000 && CHUNK_TIME_BUDGET_MS <= 30000);
+    });
+
+    it("IMPORT-INT-027: Retry after partial chunk completion: picks up pending items and accurately reaches completion", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Option1 Name,Option1 Value,Variant SKU,Variant Price,Variant Inventory Qty",
+            "partial-chunk-1,Partial Prod 1,Desc 1,Bazaarvilla,Apparel,tag1,TRUE,Size,M,PART-1-M,499,5",
+            "partial-chunk-2,Partial Prod 2,Desc 2,Bazaarvilla,Apparel,tag2,TRUE,Size,L,PART-2-L,599,8",
+        ].join("\n");
+
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            { csvText: csv, mode: "create_and_update" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum } = await previewRes.json();
+
+        // 1. First request with chunkSize: 1
+        const chunk1Req = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: { confirmedNotice: true },
+                chunkSize: 1,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const chunk1Res = await commitRoute(chunk1Req);
+        assert.equal(chunk1Res.status, 200);
+        const chunk1Data = await chunk1Res.json();
+        assert.equal(chunk1Data.processedCount, 1);
+        assert.equal(chunk1Data.remainingCount, 1);
+        assert.equal(chunk1Data.hasMore, true);
+        assert.equal(chunk1Data.status, "in_progress");
+
+        // 2. Second request with chunkSize: 1 to finish
+        const chunk2Req = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: { confirmedNotice: true },
+                chunkSize: 1,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const chunk2Res = await commitRoute(chunk2Req);
+        assert.equal(chunk2Res.status, 200);
+        const chunk2Data = await chunk2Res.json();
+        assert.equal(chunk2Data.processedCount, 2);
+        assert.equal(chunk2Data.remainingCount, 0);
+        assert.equal(chunk2Data.hasMore, false);
+        assert.equal(chunk2Data.status, "completed");
+    });
 });

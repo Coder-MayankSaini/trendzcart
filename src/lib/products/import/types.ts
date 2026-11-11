@@ -212,6 +212,9 @@ export interface ProductImportBatchRecord {
     completedAt?: number;
     lastProcessedAt?: number;
     confirmations?: ImportConfirmationOptions;
+    lockedUntil?: number | null;
+    lockedBy?: string | null;
+    itemsSubcollection?: boolean;
     groups?: ParsedProductGroup[];
     existingSnapshots?: Array<{
         handle: string;
@@ -226,6 +229,29 @@ export interface ProductImportBatchRecord {
     previewSummary?: ImportPreviewSummary;
     errorSummary?: string[];
     results?: ProductImportResult[];
+}
+
+export interface ProductImportBatchItemDoc {
+    id: string; // Document ID: "item_00000"
+    itemIndex: number;
+    handle: string;
+    group: ParsedProductGroup;
+    existingSnapshot?: {
+        handle: string;
+        existingProductId?: string;
+        snapUpdatedAt: number;
+        existingPrice?: number;
+        existingInventory?: number;
+        isCustomized?: boolean;
+        customizationType?: string | null;
+        hasVariants?: boolean;
+    } | null;
+    status: "pending" | "processing" | "completed" | "failed" | "skipped";
+    completedAt?: number | null;
+    productId?: string | null;
+    result?: ProductImportResult | null;
+    error?: string | null;
+    stagedImageKeys?: string[];
 }
 
 export interface ImportChunkCommitResult {

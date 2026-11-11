@@ -591,13 +591,16 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
         await assertFails(getDoc(doc(custADb, "productImportBatches", testBatchId)));
         await assertFails(setDoc(doc(custADb, "productImportBatches", testBatchId), sampleBatchData));
 
-        // 3. Verified administrator can READ audit log
+        // 3. Verified administrator can READ audit log and child items
         await assertSucceeds(getDoc(doc(adminDb, "productImportBatches", testBatchId)));
+        await assertSucceeds(getDoc(doc(adminDb, "productImportBatches", testBatchId, "items", "item_001")));
 
         // 4. Direct client SDK writes/updates/deletions by admin FAIL to prevent audit record tampering
         await assertFails(setDoc(doc(adminDb, "productImportBatches", "batch_new_attempt"), sampleBatchData));
         await assertFails(updateDoc(doc(adminDb, "productImportBatches", testBatchId), { status: "tampered" }));
         await assertFails(deleteDoc(doc(adminDb, "productImportBatches", testBatchId)));
+        await assertFails(setDoc(doc(adminDb, "productImportBatches", testBatchId, "items", "item_forged"), { status: "completed" }));
+        await assertFails(setDoc(doc(custADb, "productImportBatches", testBatchId, "items", "item_001"), { status: "completed" }));
     });
 
     // RULE-016 — Payment Records
