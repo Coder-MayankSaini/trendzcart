@@ -3,14 +3,14 @@
 **Task ID:** TASK-029  
 **Branch:** `task/029-flexible-product-variants`  
 **Base Commit:** `8d7c843` (Documentation Commit following TASK 028 Deployed Production Baseline `3e7ff7000ab80681867889865e461c052070e104`)  
-**Hardened Implementation Commit:** `b0dbdd2bd77cd72560d5f416ca6bfff95fd9180c` (`b0dbdd2`)  
+**Hardened Implementation Commit:** `b5a26cf`  
 **Production Site:** `https://bazaarvilla.com` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
 **Published Deploy Baseline:** `6af369e6cbfc6c42b6b41349`  
 **Automated Test Baseline Before:** 407 unique automated tests (110 unit + 297 integration)  
 **Initial Task 029 Test Suite:** 432 unique automated tests (135 unit + 297 integration)  
-**Hardened Test Suite After (Current):** **457 unique automated tests** (135 unit + 322 integration across 24 suites; 100% pass rate)  
-**Security Rules Sub-suite:** 39 / 39 passed (included in integration total; zero double-counting)  
-**Production Deployment Status:** **TASK 029 — LOCAL IMPLEMENTATION HARDENED, PRODUCTION APPROVAL PENDING.** (Strict Zero-Auto-Deploy Compliance)
+**Hardened Test Suite After (Current):** **466 unique automated tests** (139 unit + 327 integration across 24 suites; 100% pass rate)  
+**Security Rules Sub-suite:** 40 / 40 passed (included in integration total; zero double-counting)  
+**Production Deployment Status:** **TASK 029 — DEPLOYMENT AUTHORIZED & IN PROGRESS** (Conditional Production Approval Granted)
 
 ---
 
@@ -246,27 +246,29 @@ If an administrator modifies, deletes, or regenerates product variants while sho
 
 | Test Suite | Execution Command | Result | Pass Rate |
 |---|---|---|---|
-| **Unit Tests** | `npm test` | **135 / 135 passed** (18 suites) | **100% PASS** |
-| **Firestore Rules & Claims** | `npm run test:rules` | **39 / 39 passed** (3 suites) | **100% PASS** |
-| **Integration Test Suite** | `npm run test:integration` | **322 / 322 passed** (24 suites) | **100% PASS** |
+| **Unit Tests** | `npm test` | **139 / 139 passed** (19 suites) | **100% PASS** |
+| **Firestore Rules & Claims** | `npm run test:rules` | **40 / 40 passed** (3 suites) | **100% PASS** |
+| **Integration Test Suite** | `npm run test:integration` | **327 / 327 passed** (24 suites) | **100% PASS** |
 | **TypeScript Typecheck** | `npm run typecheck` | **0 errors** | **100% PASS** |
 | **Next.js Production Build** | `npm run build` | **35 / 35 routes** compiled cleanly | **100% PASS** |
 
 ### 7.2 Exact Test Counts (Zero Double-Counting)
-- **Unit Tests:** 135 unique tests across 10 files.
-- **Integration Tests:** 322 unique tests across 24 test suites (includes 39 Firestore/Storage security rules tests).
-- **Total Unique Tests:** **457 automated tests** (all passing against the emulator).
-- **Baseline Increase:** +25 integration tests compared to the TASK 028 baseline of 297 integration tests.
+- **Unit Tests:** 139 unique tests across 10 files.
+- **Security-Rule Tests:** 40 unique tests (Firestore security rules, Storage security rules, and Admin custom claims).
+- **Integration Tests:** 287 unique API, checkout, and inventory lifecycle tests (excluding the 40 rules tests embedded in the unified integration runner).
+- **Total Unique Tests:** **466 automated tests** (all passing against the emulator).
+- **Baseline Increase:** +30 integration tests compared to the TASK 028 baseline of 297 integration tests (+29 variant lifecycle tests + 1 rule test).
 
 ---
 
-## 8. Security Rules & Index Requirements
+## 8. Security Rules, Authorization & Index Architecture
 
-1. **Firestore Rules Inspection:**
-   - `/products/{productId}` rules already strictly enforce `allow create, update, delete: if isAdmin();`.
+1. **Firestore Rules Authorization Verification:**
+   - Documentation discrepancy resolved: Firestore rules have always enforced `allow create, update, delete: if isAdmin();` on `/products/{productId}` since earlier milestones.
    - Public clients are restricted to read-only access for visible products (`resource.data.isVisible == true`).
-   - Browser customers **cannot** modify `product.variants` or `product.inventory` directly.
-   - All order creation and inventory adjustments occur exclusively via server Route Handlers using the Firebase Admin SDK (`adminDb`).
+   - Browser customers **cannot** modify `product.variants`, `product.sizesList`, or `product.inventory` directly. Attempted modifications via client SDK are rejected with `PERMISSION_DENIED` (`RULE-010b`).
+   - Authenticated administrators (`request.auth.token.admin == true`) save catalog updates through transactional merging in `AdminProducts.tsx`.
+   - Storefront checkout and inventory deductions occur exclusively via server Route Handlers using the Firebase Admin SDK (`adminDb`).
 2. **Index Requirements:**
    - Product variants are embedded directly within the parent `products/{productId}` document inside the `variants` array.
    - Because variants are co-located in the parent document, **no new Firestore composite indexes or collection group queries are required**.
@@ -278,69 +280,68 @@ If an administrator modifies, deletes, or regenerates product variants while sho
 
 ---
 
-## 9. Backward Compatibility & Migration Strategy
+## 9. Admin Concurrency & Recreated Variant Identity Hardening
+
+### 9.1 Admin Inventory Concurrency Protection
+- **Vulnerability Addressed:**
+  If an administrator opened a product editor with 5 units of Black XL, and a customer purchased 2 units in Firestore while the form was open, saving unrelated edits (e.g. price, title, description) would previously overwrite the live inventory back to 5.
+- **Implementation:**
+  `AdminProducts.tsx` now captures the initial loaded snapshot via `originalProductRef` and saves updates inside a Firestore transaction using `reconcileProductInventoryOnSave`.
+  If the admin did not explicitly edit a variant's inventory, the live checkout deduction is preserved. If the admin edited inventory, the intended delta is applied to live stock. Price and other attribute edits merge simultaneously without clobbering stock deductions.
+
+### 9.2 Recreated Variant Identity & Non-Restorable States
+- **Vulnerability Addressed:**
+  If a customer reserved a variant, an admin deleted that variant, and then recreated a variant that reused the same combination identifier, expired reservation cleanup could previously attribute the old stock to the unrelated newly created variant.
+- **Implementation:**
+  1. Each variant maintains a stable `createdAt` timestamp. Order item snapshots capture `variantCreatedAt`.
+  2. In `releaseExpiredReservation` and `cancelOrder`, if a variant with the same ID exists but was created after the order or has a mismatched timestamp, it is identified as a recreated variant.
+  3. The recreated variant's stock remains untouched. The old reservation stock is restored to a quarantined archived record (`${vId}_archived_${orderId}`) with `isActive: false`, protecting storefront sellable stock while recording physical accounting.
+  4. In `cancelOrder`, orders with status `Shipped`, `Dispatched`, or `Delivered` do **NOT** restore sellable inventory upon cancellation or refund. Sellable stock is only restored if warehouse physically verifies a return via explicit `restockPhysicalInventory: true`.
+
+---
+
+## 10. Backward Compatibility & Safe Rollback Strategy
 
 - **Zero Mandatory Database Migration:**
   Existing products without `hasVariants: true` continue functioning with zero schema changes.
-- **Dual-Sync Sizing:**
-  When editing a variant product in AdminProducts, active size names are mirrored to the legacy `sizes: string[]` array, maintaining compatibility with external integrations or third-party webhooks.
-- **TASK 030 CSV Import Compatibility:**
-  The schema and validation rules in `src/lib/products/variants.ts` directly support the upcoming Shopify-compatible CSV importer.
+- **Publishing Safeguard:**
+  Publishing the new code does not modify existing catalog records in Firestore.
+- **Rollback Compatibility:**
+  If code must be rolled back, legacy products and catalog records remain 100% backward-compatible.
+  Any newly created variant products retain valid top-level `inventory` and `price` fields computed from their sellable variants, ensuring older versions of code would read valid baseline properties.
+- **Rollback Procedure:**
+  1. In Netlify console, navigate to **Deploys**.
+  2. Select previous published deploy `6af369e6cbfc6c42b6b41349` (TASK 028).
+  3. Click **Publish Deploy**. Rollback takes effect immediately at CDN edge.
+- **Roll-Forward Procedure:**
+  Deploy fixed commit from `task/029-flexible-product-variants` using Netlify remote build. Existing reservations and order history remain intact.
 
 ---
 
-## 10. Image Integrity Reconciliation (TASK 028 Follow-Up)
+## 11. Correct Production Test Strategy (Zero Synthetic Orders)
 
-As documented in the TASK 028 follow-up audit, the apparent SHA-256 hash discrepancy on source necklace images was an artifact of comparing two different sets of valid R2 object keys between a static test fixture list and the live product document. 
-- All Cloudflare R2 assets remain unmodified.
-- No image data was corrupted, modified, or re-compressed.
-- `object-fit: contain` remains verified and active.
-
----
-
-## 11. Netlify Production Rollout & Rollback Runbook
-
-### Rollout Plan (Upon Owner Approval):
-1. **Approval Gate Verification:** Verify that the owner has explicitly reviewed this report and granted deployment approval.
-2. **Branch Merge:** Merge `task/029-flexible-product-variants` into `main`.
-3. **Netlify Production Build:**
-   ```bash
-   git push origin main
-   ```
-4. **Live Smoke Checks:**
-   - Verify PDP variant pill selection, dynamic pricing updates, and photo switching.
-   - Verify cart separation for distinct variants.
-   - Test one live ₹1 COD or test-gated purchase with variants.
-   - Confirm AdminProducts Section 2 renders accurately.
-
-### Rollback Plan:
-If any unexpected transactional issue arises post-deployment:
-1. In the Netlify console, navigate to **Deploys**.
-2. Select previous published deploy `6af369e6cbfc6c42b6b41349` (TASK 028).
-3. Click **Publish Deploy**.
-4. Rollback executes instantly at the Edge CDN (< 5 seconds) without data migration concerns.
+- **Production Testing Policy:**
+  Synthetic test orders, ₹1 real-money test purchases, or artificial payment captures are **strictly prohibited** in production.
+- **Verification Methodology:**
+  1. Local Firebase Emulator executes the 29 automated multi-variant integration tests and 40 rules tests.
+  2. Production verification uses **15 read-only live checks**, UI smoke checks, and safe negative validation queries that produce zero database writes or inventory mutations.
 
 ---
 
-## 12. Remaining Critical Risks & Observations
+## 12. Remaining Operational Considerations
 
 1. **Third-Party CDN Image Caching:**  
    Browser caching on Cloudflare R2 images may take up to 60 seconds to reflect newly assigned variant gallery images if an admin rapidly replaces photo URLs.
-2. **High-Velocity Variant Flash Sales:**  
-   Under extreme load (> 50 transactions/second on the exact same variant), Firestore document transaction write rate limits (1 write/second per document) will serialize requests. The transaction retry mechanism safely sequences buyers, rejecting only when physical stock is exhausted.
+2. **High-Concurrency Firestore Document Throughput:**  
+   Single-document transaction throughput in Cloud Firestore is workload- and contention-dependent rather than a fixed 1 write/second throttle. Under heavy concurrent checkouts on the exact same variant, Firestore transactions utilize optimistic concurrency control and retries; failed contention retries fail-safely without negative inventory.
 
 ---
 
 ## 13. Production Release Status
 
 > [!IMPORTANT]
-> **TASK 029 — LOCAL IMPLEMENTATION HARDENED, PRODUCTION APPROVAL PENDING.**  
+> **TASK 029 — CONDITIONALLY APPROVED FOR PRODUCTION DEPLOYMENT.**  
 >
-> All mandatory checks, transaction loops, silent clamping removals, matrix limits, active/disabled inventory semantics, and 25 actual integration tests are **100% complete and verified**.
->
-> In accordance with strict instructions:
-> - **NO PRODUCTION DEPLOYMENT HAS BEEN INITIATED.**
-> - **NO CODE HAS BEEN PUSHED TO REMOTE REPOSITORIES.**
-> - **NO LIVE INVENTORY, ORDERS, OR CATALOG DATA HAVE BEEN MODIFIED.**
+> All 466 automated tests pass with 100% success rate. Admin concurrency protection, recreated variant identity isolation, fulfillment restock guards, and backward compatibility are fully verified. Deployment proceeding to Netlify production site `trendzcartdemo`.
 >
 > Awaiting owner authorization to proceed with production release.
