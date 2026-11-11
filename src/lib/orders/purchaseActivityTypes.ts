@@ -7,29 +7,44 @@
  */
 
 export type PurchaseActivityPeriod = 7 | 30 | 90;
+export type PurchaseActivityDisplayMode = "auto" | "custom";
 
 export const DEFAULT_ACTIVITY_PERIOD: PurchaseActivityPeriod = 30;
 export const DEFAULT_DISPLAY_THRESHOLD = 5;
+export const MAX_CONFIGURED_UNITS = 99999;
 export const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour freshness target
 
 export interface ProductPurchaseActivityConfig {
     enabled: boolean;
     periodDays: PurchaseActivityPeriod;
     displayThreshold: number;
+    displayMode?: PurchaseActivityDisplayMode;
+    customUnitsSold?: number;
+    // Backwards-compatible aliases
+    unitsSold?: number;
+    isCustomCount?: boolean;
+    forceLiveRecalculate?: boolean;
 }
 
 export interface ProductPurchaseActivityStats {
     productId: string;
-    unitsSold: number;
+    // Authoritative genuine order metrics (preserved and never corrupted by custom counts)
+    orderUnitsSold?: number;
     countsByPeriod: Record<PurchaseActivityPeriod, number>;
     qualifyingOrdersCount: number;
     uniquePurchasersCount: number;
+    lastOrderSyncAt?: number;
     lastCalculatedAt: number;
+    isCustomCount?: boolean;
 }
 
 export interface ProductPurchaseActivityData extends ProductPurchaseActivityConfig, ProductPurchaseActivityStats {
+    // The effective units sold to display (derived according to displayMode)
+    unitsSold: number;
+    displayMode: PurchaseActivityDisplayMode;
     displayLabel: string;
     isVisibleOnStorefront: boolean;
+    isCustomCount: boolean;
 }
 
 export interface PublicPurchaseActivityDTO {
@@ -38,9 +53,11 @@ export interface PublicPurchaseActivityDTO {
     periodDays: PurchaseActivityPeriod;
     count: number;
     displayThreshold: number;
+    displayMode: PurchaseActivityDisplayMode;
     label: string;
     visible: boolean;
     lastCalculatedAt: number;
+    isCustomCount: boolean;
 }
 
 /**
@@ -313,19 +330,23 @@ export function calculateUnitsSoldForProduct(
 export function buildPublicPurchaseActivityDTO(
     activity: ProductPurchaseActivityData | (ProductPurchaseActivityConfig & ProductPurchaseActivityStats)
 ): PublicPurchaseActivityDTO {
+    const unitsSold = typeof activity.unitsSold === "number" ? activity.unitsSold : 0;
     const isVisible = evaluateStorefrontVisibility(
         { enabled: activity.enabled, displayThreshold: activity.displayThreshold },
-        activity.unitsSold
+        unitsSold
     );
+    const displayMode: PurchaseActivityDisplayMode = activity.displayMode ?? ((activity as any).isCustomCount ? "custom" : "auto");
 
     return {
         productId: activity.productId,
         metric: "units_sold",
         periodDays: activity.periodDays,
-        count: activity.unitsSold,
+        count: unitsSold,
         displayThreshold: activity.displayThreshold,
-        label: formatPurchaseActivityBadge(activity.unitsSold, activity.periodDays),
+        displayMode,
+        label: formatPurchaseActivityBadge(unitsSold, activity.periodDays),
         visible: isVisible,
         lastCalculatedAt: activity.lastCalculatedAt,
+        isCustomCount: displayMode === "custom",
     };
 }

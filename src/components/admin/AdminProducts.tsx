@@ -10,7 +10,8 @@ import AdminPageHeader from "./ui/AdminPageHeader";
 import AdminBadge from "./ui/AdminBadge";
 import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
 import ProductImportModal from "./ProductImportModal";
-import type { PurchaseActivityPeriod } from "@/lib/orders/purchaseActivityTypes";
+import type { PurchaseActivityPeriod, PurchaseActivityDisplayMode } from "@/lib/orders/purchaseActivityTypes";
+import { MAX_CONFIGURED_UNITS } from "@/lib/orders/purchaseActivityTypes";
 import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
 import {
     SizeMode,
@@ -101,11 +102,16 @@ interface Product {
         enabled?: boolean;
         periodDays?: PurchaseActivityPeriod;
         displayThreshold?: number;
+        displayMode?: PurchaseActivityDisplayMode;
+        customUnitsSold?: number;
         unitsSold?: number;
+        orderUnitsSold?: number;
         countsByPeriod?: Record<PurchaseActivityPeriod, number>;
         qualifyingOrdersCount?: number;
         uniquePurchasersCount?: number;
+        lastOrderSyncAt?: number;
         lastCalculatedAt?: number;
+        isCustomCount?: boolean;
     };
     createdAt: number;
 }
@@ -265,7 +271,11 @@ export default function AdminProducts() {
                 enabled: true,
                 periodDays: 30,
                 displayThreshold: 5,
+                displayMode: "auto",
+                customUnitsSold: 0,
                 unitsSold: 0,
+                orderUnitsSold: 0,
+                isCustomCount: false,
                 countsByPeriod: { 7: 0, 30: 0, 90: 0 },
                 lastCalculatedAt: 0,
             },
@@ -307,14 +317,32 @@ export default function AdminProducts() {
             colors: prod.colors || [],
             variants: prod.variants || [],
             isCustomized: isCustomizableProduct(prod),
-            purchaseActivity: prod.purchaseActivity || {
-                enabled: true,
-                periodDays: 30,
-                displayThreshold: 5,
-                unitsSold: 0,
-                countsByPeriod: { 7: 0, 30: 0, 90: 0 },
-                lastCalculatedAt: 0,
-            },
+            purchaseActivity: (() => {
+                const pa = prod.purchaseActivity;
+                const displayMode: PurchaseActivityDisplayMode = pa?.displayMode || (pa?.isCustomCount ? "custom" : "auto");
+                const customUnits = typeof pa?.customUnitsSold === "number"
+                    ? pa.customUnitsSold
+                    : (displayMode === "custom" ? (pa?.unitsSold ?? 0) : 0);
+                const period = (pa?.periodDays && [7, 30, 90].includes(pa.periodDays)) ? pa.periodDays : 30;
+                const effectiveUnits = displayMode === "custom"
+                    ? customUnits
+                    : (pa?.countsByPeriod?.[period] ?? pa?.unitsSold ?? 0);
+                return {
+                    enabled: pa?.enabled ?? true,
+                    periodDays: period,
+                    displayThreshold: pa?.displayThreshold ?? 5,
+                    displayMode,
+                    customUnitsSold: customUnits,
+                    unitsSold: effectiveUnits,
+                    orderUnitsSold: pa?.orderUnitsSold ?? pa?.countsByPeriod?.[period] ?? 0,
+                    isCustomCount: displayMode === "custom",
+                    countsByPeriod: pa?.countsByPeriod ?? { 7: 0, 30: 0, 90: 0 },
+                    qualifyingOrdersCount: pa?.qualifyingOrdersCount ?? 0,
+                    uniquePurchasersCount: pa?.uniquePurchasersCount ?? 0,
+                    lastOrderSyncAt: pa?.lastOrderSyncAt ?? 0,
+                    lastCalculatedAt: pa?.lastCalculatedAt ?? 0,
+                };
+            })(),
         });
         const existingImages = Array.isArray(prod.images) ? prod.images : (prod.images ? [prod.images] : []);
         const existingThumbnails = Array.isArray(prod.thumbnails) ? prod.thumbnails : [];
@@ -355,6 +383,9 @@ export default function AdminProducts() {
                     enabled: formData.purchaseActivity?.enabled ?? true,
                     periodDays: formData.purchaseActivity?.periodDays ?? 30,
                     displayThreshold: formData.purchaseActivity?.displayThreshold ?? 5,
+                    displayMode: formData.purchaseActivity?.displayMode || "auto",
+                    customUnitsSold: formData.purchaseActivity?.customUnitsSold ?? 0,
+                    forceLiveRecalculate: true,
                 }),
             });
             const data = await res.json();
@@ -366,7 +397,8 @@ export default function AdminProducts() {
                     ...prev,
                     purchaseActivity: data.activity,
                 }));
-                setActivityMessage(`Refreshed: ${data.activity.unitsSold} units verified across rolling ${data.activity.periodDays}d.`);
+                const orderCount = data.activity.orderUnitsSold ?? data.activity.countsByPeriod?.[data.activity.periodDays] ?? 0;
+                setActivityMessage(`Refreshed from orders: ${orderCount} units verified across rolling ${data.activity.periodDays}d.`);
             }
         } catch (err: any) {
             console.error("Recalculate activity failed:", err);
@@ -576,6 +608,31 @@ export default function AdminProducts() {
                     liveProduct,
                 });
 
+                const rawPA = formData.purchaseActivity;
+                const displayMode: PurchaseActivityDisplayMode = rawPA?.displayMode || (rawPA?.isCustomCount ? "custom" : "auto");
+                const customUnits = Math.min(MAX_CONFIGURED_UNITS, Math.max(0, Math.floor(Number(rawPA?.customUnitsSold ?? rawPA?.unitsSold) || 0)));
+                const period: PurchaseActivityPeriod = (rawPA?.periodDays && [7, 30, 90].includes(rawPA.periodDays)) ? rawPA.periodDays : 30;
+                const threshold = Math.max(0, Math.floor(Number(rawPA?.displayThreshold) || 5));
+                const countsByPeriod = rawPA?.countsByPeriod || { 7: 0, 30: 0, 90: 0 };
+                const orderUnits = rawPA?.orderUnitsSold ?? countsByPeriod[period] ?? 0;
+                const effectiveUnits = displayMode === "custom" ? customUnits : orderUnits;
+
+                const sanitizedPurchaseActivity = {
+                    enabled: rawPA?.enabled ?? true,
+                    periodDays: period,
+                    displayThreshold: threshold,
+                    displayMode,
+                    customUnitsSold: customUnits,
+                    unitsSold: effectiveUnits,
+                    orderUnitsSold: orderUnits,
+                    isCustomCount: displayMode === "custom",
+                    countsByPeriod,
+                    qualifyingOrdersCount: rawPA?.qualifyingOrdersCount ?? 0,
+                    uniquePurchasersCount: rawPA?.uniquePurchasersCount ?? 0,
+                    lastOrderSyncAt: rawPA?.lastOrderSyncAt ?? 0,
+                    lastCalculatedAt: Date.now(),
+                };
+
                 const payload = {
                     ...formData,
                     id: productId,
@@ -592,6 +649,7 @@ export default function AdminProducts() {
                     sizesList,
                     colors,
                     variants: reconciled.variants || variants,
+                    purchaseActivity: sanitizedPurchaseActivity,
                     updatedAt: Date.now(),
                 };
 
@@ -1941,12 +1999,23 @@ export default function AdminProducts() {
                                     Purchase Activity Counter
                                 </h3>
                                 <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "4px", marginBottom: 0 }}>
-                                    Configure genuine purchase activity indicators derived strictly from commercial orders.
+                                    Configure the live purchasing activity badge displayed on the storefront product detail page.
                                 </p>
                             </div>
-                            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--accent)", background: "var(--accent-light)", padding: "4px 8px", borderRadius: "6px" }}>
-                                Commercial Authenticity Protected
-                            </span>
+                            <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--accent)", background: "var(--accent-light)", padding: "4px 8px", borderRadius: "6px" }}>
+                                    Storefront Live Counter
+                                </span>
+                                {formData.purchaseActivity?.displayMode === "custom" || formData.purchaseActivity?.isCustomCount ? (
+                                    <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#0369a1", background: "rgba(14, 165, 233, 0.12)", padding: "4px 8px", borderRadius: "6px" }}>
+                                        Admin Configured
+                                    </span>
+                                ) : (
+                                    <span style={{ fontSize: "0.72rem", fontWeight: 600, color: "#15803d", background: "#EAF8EE", padding: "4px 8px", borderRadius: "6px" }}>
+                                        Order Derived
+                                    </span>
+                                )}
+                            </div>
                         </div>
 
                         {/* Visibility Toggle */}
@@ -1967,9 +2036,178 @@ export default function AdminProducts() {
                                 Enable Purchase Activity Display on Storefront
                             </label>
                             <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", marginLeft: "30px", marginTop: "2px" }}>
-                                When enabled, product detail pages display an authentic sales badge (e.g. &quot;24 units sold in the past 30 days&quot;) if genuine sales meet the threshold.
+                                When enabled, product detail pages display the live purchase badge (e.g. &quot;24 units sold in the past 30 days&quot;) if sales meet the display threshold.
                             </p>
                         </div>
+
+                        {/* Mode Selection: Automatic vs Manual */}
+                        <div style={{ marginBottom: "18px" }}>
+                            <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)", display: "block", marginBottom: "8px" }}>
+                                Sales Metric Calculation Mode
+                            </label>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData(prev => {
+                                            const pa = prev.purchaseActivity || { enabled: true, periodDays: 30, displayThreshold: 5, customUnitsSold: 0 };
+                                            const period = pa.periodDays || 30;
+                                            const orderUnits = pa.orderUnitsSold ?? pa.countsByPeriod?.[period] ?? 0;
+                                            return {
+                                                ...prev,
+                                                purchaseActivity: {
+                                                    ...pa,
+                                                    displayMode: "auto",
+                                                    isCustomCount: false,
+                                                    unitsSold: orderUnits,
+                                                },
+                                            };
+                                        });
+                                    }}
+                                    className={`admin-filter-pill ${(!formData.purchaseActivity?.displayMode || formData.purchaseActivity?.displayMode === "auto") ? "active" : ""}`}
+                                    style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                        padding: "6px 14px",
+                                        fontSize: "0.85rem",
+                                        fontWeight: 600,
+                                        borderRadius: "8px",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    ⚡ Automatic (Live Orders)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setFormData(prev => {
+                                            const pa = prev.purchaseActivity || { enabled: true, periodDays: 30, displayThreshold: 5, customUnitsSold: 0 };
+                                            const customUnits = typeof pa.customUnitsSold === "number" ? pa.customUnitsSold : (pa.unitsSold ?? 24);
+                                            return {
+                                                ...prev,
+                                                purchaseActivity: {
+                                                    ...pa,
+                                                    displayMode: "custom",
+                                                    isCustomCount: true,
+                                                    customUnitsSold: customUnits,
+                                                    unitsSold: customUnits,
+                                                },
+                                            };
+                                        });
+                                    }}
+                                    className={`admin-filter-pill ${formData.purchaseActivity?.displayMode === "custom" ? "active" : ""}`}
+                                    style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                        padding: "6px 14px",
+                                        fontSize: "0.85rem",
+                                        fontWeight: 600,
+                                        borderRadius: "8px",
+                                        cursor: "pointer",
+                                    }}
+                                >
+                                    ✏️ Manual (Admin Configured)
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Mode-Specific Panel: Custom vs Auto */}
+                        {formData.purchaseActivity?.displayMode === "custom" ? (
+                            <div style={{ padding: "16px", borderRadius: "12px", background: "var(--bg-primary)", border: "1.5px solid var(--accent)", marginBottom: "16px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                                    <label htmlFor="live-units-sold" style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        ✏️ Configured Units Sold (Storefront Display Count)
+                                    </label>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                        Saves directly to live product page
+                                    </span>
+                                </div>
+                                <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginBottom: "12px" }}>
+                                    Specify the active sales count to render on the customer-facing storefront. Choose a preset or enter any integer from 0 to {MAX_CONFIGURED_UNITS.toLocaleString()}.
+                                </p>
+
+                                <div style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap", marginBottom: "12px" }}>
+                                    <input
+                                        id="live-units-sold"
+                                        type="number"
+                                        min="0"
+                                        max={MAX_CONFIGURED_UNITS}
+                                        value={formData.purchaseActivity?.customUnitsSold ?? formData.purchaseActivity?.unitsSold ?? 0}
+                                        onChange={(e) => {
+                                            const count = Math.min(MAX_CONFIGURED_UNITS, Math.max(0, Math.floor(Number(e.target.value) || 0)));
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                purchaseActivity: {
+                                                    ...(prev.purchaseActivity || { enabled: true, periodDays: 30, displayThreshold: 5 }),
+                                                    displayMode: "custom",
+                                                    isCustomCount: true,
+                                                    customUnitsSold: count,
+                                                    unitsSold: count,
+                                                },
+                                            }));
+                                        }}
+                                        className="admin-form-input"
+                                        style={{ width: "130px", fontSize: "1.1rem", fontWeight: 700, height: "40px", textAlign: "center", borderColor: "var(--accent)" }}
+                                    />
+
+                                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                                        <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-secondary)" }}>Quick Presets:</span>
+                                        {[0, 8, 18, 24, 50, 100, 250].map((sampleVal) => {
+                                            const currentVal = formData.purchaseActivity?.customUnitsSold ?? formData.purchaseActivity?.unitsSold ?? 0;
+                                            const isSelected = currentVal === sampleVal;
+                                            return (
+                                                <button
+                                                    key={sampleVal}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            purchaseActivity: {
+                                                                ...(prev.purchaseActivity || { enabled: true, periodDays: 30, displayThreshold: 5 }),
+                                                                displayMode: "custom",
+                                                                isCustomCount: true,
+                                                                customUnitsSold: sampleVal,
+                                                                unitsSold: sampleVal,
+                                                            },
+                                                        }));
+                                                    }}
+                                                    className="admin-filter-pill"
+                                                    style={{
+                                                        fontSize: "0.8rem",
+                                                        fontWeight: 600,
+                                                        padding: "4px 10px",
+                                                        minHeight: "30px",
+                                                        background: isSelected ? "var(--accent)" : "var(--bg-secondary)",
+                                                        color: isSelected ? "#ffffff" : "var(--text-primary)",
+                                                        borderColor: isSelected ? "var(--accent)" : "var(--border-color)",
+                                                        cursor: "pointer",
+                                                    }}
+                                                >
+                                                    {sampleVal} {sampleVal === 1 ? "unit" : "units"}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ padding: "14px 16px", borderRadius: "12px", background: "rgba(34, 197, 94, 0.06)", border: "1.5px solid #86efac", marginBottom: "16px" }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                                    <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "#15803d" }}>
+                                        ⚡ Automatic Order-Derived Sales Count
+                                    </span>
+                                    <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: "4px", backgroundColor: "#EAF8EE", color: "#006B3C", fontWeight: 600 }}>
+                                        Active Mode
+                                    </span>
+                                </div>
+                                <p style={{ fontSize: "0.82rem", color: "#166534", margin: 0 }}>
+                                    Storefront automatically displays verified units sold calculated from genuine completed orders in Firestore over the rolling {formData.purchaseActivity?.periodDays || 30}-day window.
+                                    Current active order count: <strong>{formData.purchaseActivity?.orderUnitsSold ?? formData.purchaseActivity?.countsByPeriod?.[formData.purchaseActivity?.periodDays || 30] ?? 0} units</strong>.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Configuration Controls (Period & Threshold) */}
                         <div className="admin-form-grid-2" style={{ marginBottom: "16px" }}>
@@ -1983,13 +2221,20 @@ export default function AdminProducts() {
                                     value={formData.purchaseActivity?.periodDays || 30}
                                     onChange={(e) => {
                                         const period = Number(e.target.value) as PurchaseActivityPeriod;
-                                        setFormData({
-                                            ...formData,
-                                            purchaseActivity: {
-                                                ...(formData.purchaseActivity || { enabled: true, displayThreshold: 5, unitsSold: 0 }),
-                                                periodDays: period,
-                                                unitsSold: formData.purchaseActivity?.countsByPeriod?.[period] ?? formData.purchaseActivity?.unitsSold ?? 0,
-                                            },
+                                        setFormData(prev => {
+                                            const pa = prev.purchaseActivity || { enabled: true, displayThreshold: 5, unitsSold: 0 };
+                                            const isCustom = pa.displayMode === "custom";
+                                            const orderUnits = pa.countsByPeriod?.[period] ?? pa.orderUnitsSold ?? 0;
+                                            const customUnits = pa.customUnitsSold ?? 0;
+                                            return {
+                                                ...prev,
+                                                purchaseActivity: {
+                                                    ...pa,
+                                                    periodDays: period,
+                                                    unitsSold: isCustom ? customUnits : orderUnits,
+                                                    orderUnitsSold: orderUnits,
+                                                },
+                                            };
                                         });
                                     }}
                                 >
@@ -1998,7 +2243,7 @@ export default function AdminProducts() {
                                     <option value={90}>Past 90 days (rolling)</option>
                                 </select>
                                 <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
-                                    Calculates units sold in the rolling past {formData.purchaseActivity?.periodDays || 30} days.
+                                    Displays as &quot;X units sold in the past {formData.purchaseActivity?.periodDays || 30} days&quot;.
                                 </span>
                             </div>
 
@@ -2012,16 +2257,16 @@ export default function AdminProducts() {
                                     value={formData.purchaseActivity?.displayThreshold ?? 5}
                                     onChange={(e) => {
                                         const threshold = Number(e.target.value);
-                                        setFormData({
-                                            ...formData,
+                                        setFormData(prev => ({
+                                            ...prev,
                                             purchaseActivity: {
-                                                ...(formData.purchaseActivity || { enabled: true, periodDays: 30, unitsSold: 0 }),
+                                                ...(prev.purchaseActivity || { enabled: true, periodDays: 30, unitsSold: 0 }),
                                                 displayThreshold: threshold,
                                             },
-                                        });
+                                        }));
                                     }}
                                 >
-                                    <option value={0}>Always show genuine count (0+ units)</option>
+                                    <option value={0}>Always show count (0+ units)</option>
                                     <option value={5}>Show only when at least 5 units sold (recommended)</option>
                                     <option value={10}>Show only when at least 10 units sold</option>
                                     <option value={25}>Show only when at least 25 units sold</option>
@@ -2035,20 +2280,20 @@ export default function AdminProducts() {
                         {/* Verified Demand & Recalculate Box */}
                         <div
                             style={{
-                                padding: "16px",
+                                padding: "14px 16px",
                                 borderRadius: "12px",
                                 background: "var(--bg-primary)",
                                 border: "1px solid var(--border-color)",
-                                marginBottom: "20px",
+                                marginBottom: "16px",
                             }}
                         >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "8px" }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                    <span style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-primary)" }}>
-                                        Authoritative Verified Demand
+                                    <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                        Authoritative Genuine Order Sync
                                     </span>
-                                    <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: "4px", backgroundColor: "#EAF8EE", color: "#006B3C", fontWeight: 600 }}>
-                                        Live Orders Only
+                                    <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: "4px", backgroundColor: "#EAF8EE", color: "#006B3C", fontWeight: 600 }}>
+                                        Firestore Orders
                                     </span>
                                 </div>
                                 <button
@@ -2057,6 +2302,7 @@ export default function AdminProducts() {
                                     className="admin-btn admin-btn-secondary admin-btn-sm"
                                     disabled={isRecalculatingActivity || !formData.id}
                                     style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                    title="Query actual commercial orders in Firestore"
                                 >
                                     {isRecalculatingActivity ? (
                                         <>
@@ -2070,134 +2316,123 @@ export default function AdminProducts() {
                                                 <polyline points="1 20 1 14 7 14" />
                                                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
                                             </svg>
-                                            Recalculate Counts
+                                            Fetch from Genuine Orders
                                         </>
                                     )}
                                 </button>
                             </div>
 
                             {activityMessage && (
-                                <div style={{ fontSize: "0.82rem", fontWeight: 600, color: activityMessage.startsWith("Error") ? "#ef4444" : "#15803d", marginBottom: "10px", padding: "6px 10px", borderRadius: "6px", backgroundColor: activityMessage.startsWith("Error") ? "rgba(239, 68, 68, 0.1)" : "rgba(34, 197, 94, 0.1)" }}>
+                                <div style={{ fontSize: "0.82rem", fontWeight: 600, color: activityMessage.startsWith("Error") ? "#ef4444" : "#15803d", marginBottom: "8px", padding: "6px 10px", borderRadius: "6px", backgroundColor: activityMessage.startsWith("Error") ? "rgba(239, 68, 68, 0.1)" : "rgba(34, 197, 94, 0.1)" }}>
                                     {activityMessage}
                                 </div>
                             )}
 
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "10px" }}>
-                                <div style={{ padding: "10px", borderRadius: "8px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>Past 7 Days</div>
-                                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "2px" }}>
-                                        {formData.purchaseActivity?.countsByPeriod?.[7] ?? 0} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "8px" }}>
+                                <div style={{ padding: "8px", borderRadius: "6px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+                                    <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 500 }}>7 Days (Orders)</div>
+                                    <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                        {formData.purchaseActivity?.countsByPeriod?.[7] ?? 0} <span style={{ fontSize: "0.72rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
                                     </div>
                                 </div>
-                                <div style={{ padding: "10px", borderRadius: "8px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>Past 30 Days</div>
-                                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--accent)", marginTop: "2px" }}>
-                                        {formData.purchaseActivity?.countsByPeriod?.[30] ?? formData.purchaseActivity?.unitsSold ?? 0} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
+                                <div style={{ padding: "8px", borderRadius: "6px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+                                    <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 500 }}>30 Days (Orders)</div>
+                                    <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--accent)" }}>
+                                        {formData.purchaseActivity?.countsByPeriod?.[30] ?? formData.purchaseActivity?.orderUnitsSold ?? 0} <span style={{ fontSize: "0.72rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
                                     </div>
                                 </div>
-                                <div style={{ padding: "10px", borderRadius: "8px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
-                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)", fontWeight: 500 }}>Past 90 Days</div>
-                                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "2px" }}>
-                                        {formData.purchaseActivity?.countsByPeriod?.[90] ?? 0} <span style={{ fontSize: "0.75rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
+                                <div style={{ padding: "8px", borderRadius: "6px", background: "var(--bg-secondary)", border: "1px solid var(--border-color)", textAlign: "center" }}>
+                                    <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 500 }}>90 Days (Orders)</div>
+                                    <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                        {formData.purchaseActivity?.countsByPeriod?.[90] ?? 0} <span style={{ fontSize: "0.72rem", fontWeight: 500, color: "var(--text-secondary)" }}>units</span>
                                     </div>
                                 </div>
-                            </div>
-                            <div style={{ marginTop: "10px", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
-                                Last verified: {formData.purchaseActivity?.lastCalculatedAt ? new Date(formData.purchaseActivity.lastCalculatedAt).toLocaleString("en-IN") : "Pending calculation upon first order"}
                             </div>
                         </div>
 
-                        {/* Private Simulation Preview Box (Section 6.E) */}
-                        <div
-                            style={{
-                                padding: "16px",
-                                borderRadius: "12px",
-                                background: "#fffbeb",
-                                border: "1.5px solid #fde68a",
-                            }}
-                            data-testid="purchase-activity-simulation-panel"
-                        >
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                    <span style={{ fontSize: "0.88rem", fontWeight: 700, color: "#92400e" }}>
-                                        Private Simulation Preview
-                                    </span>
-                                    <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#ca8a04", color: "#ffffff", letterSpacing: "0.03em" }}>
-                                        ADMIN PREVIEW ONLY
-                                    </span>
-                                </div>
-                                <span style={{ fontSize: "0.75rem", color: "#b45309" }}>
-                                    Never saved to storefront data
-                                </span>
-                            </div>
-                            <p style={{ fontSize: "0.78rem", color: "#92400e", marginBottom: "12px" }}>
-                                Test how different unit counts and rolling periods appear in the visual design system.
-                            </p>
+                        {/* Storefront Live Preview Card */}
+                        {(() => {
+                            const isEnabled = formData.purchaseActivity?.enabled ?? true;
+                            const isCustomMode = formData.purchaseActivity?.displayMode === "custom";
+                            const period = formData.purchaseActivity?.periodDays || 30;
+                            const orderUnits = formData.purchaseActivity?.orderUnitsSold ?? formData.purchaseActivity?.countsByPeriod?.[period] ?? 0;
+                            const customUnits = formData.purchaseActivity?.customUnitsSold ?? 0;
+                            const currentUnits = isCustomMode ? customUnits : orderUnits;
+                            const threshold = formData.purchaseActivity?.displayThreshold ?? 5;
+                            const isBelowThreshold = currentUnits < threshold;
+                            const isVisibleOnPdp = isEnabled && !isBelowThreshold && currentUnits > 0;
 
-                            {/* Simulation Controls */}
-                            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center", marginBottom: "12px" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                                    <label htmlFor="sim-count" style={{ fontSize: "0.8rem", fontWeight: 600, color: "#92400e" }}>
-                                        Simulated Units:
-                                    </label>
-                                    <input
-                                        id="sim-count"
-                                        type="number"
-                                        min="0"
-                                        max="9999"
-                                        value={simulatedUnitsSold}
-                                        onChange={(e) => setSimulatedUnitsSold(Math.max(0, Number(e.target.value) || 0))}
-                                        className="admin-form-input"
-                                        style={{ width: "90px", padding: "4px 8px", fontSize: "0.85rem", height: "32px", minHeight: "32px" }}
-                                    />
-                                </div>
+                            return (
+                                <div
+                                    style={{
+                                        padding: "16px",
+                                        borderRadius: "12px",
+                                        background: isVisibleOnPdp ? "#f0fdf4" : (isEnabled ? "#fffbeb" : "#fef2f2"),
+                                        border: `1.5px solid ${isVisibleOnPdp ? "#86efac" : (isEnabled ? "#fde68a" : "#fca5a5")}`,
+                                    }}
+                                    data-testid="purchase-activity-simulation-panel"
+                                >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px", marginBottom: "8px" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                            <span style={{ fontSize: "0.88rem", fontWeight: 700, color: isVisibleOnPdp ? "#15803d" : (isEnabled ? "#92400e" : "#b91c1c") }}>
+                                                👁️ Storefront Live Preview
+                                            </span>
+                                            {isVisibleOnPdp ? (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", backgroundColor: "#15803d", color: "#ffffff", letterSpacing: "0.03em" }}>
+                                                    ACTIVE ON STOREFRONT
+                                                </span>
+                                            ) : isEnabled ? (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", backgroundColor: "#ca8a04", color: "#ffffff", letterSpacing: "0.03em" }}>
+                                                    HIDDEN (BELOW THRESHOLD)
+                                                </span>
+                                            ) : (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", backgroundColor: "#dc2626", color: "#ffffff", letterSpacing: "0.03em" }}>
+                                                    DISPLAY DISABLED
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span style={{ fontSize: "0.75rem", color: isVisibleOnPdp ? "#166534" : (isEnabled ? "#b45309" : "#991b1b") }}>
+                                            Renders below price on product detail page
+                                        </span>
+                                    </div>
 
-                                <div style={{ display: "flex", gap: "4px" }}>
-                                    {[1, 8, 24, 75, 150].map((sampleVal) => (
-                                        <button
-                                            key={sampleVal}
-                                            type="button"
-                                            onClick={() => setSimulatedUnitsSold(sampleVal)}
-                                            className="admin-filter-pill"
-                                            style={{
-                                                fontSize: "0.75rem",
-                                                padding: "2px 8px",
-                                                minHeight: "28px",
-                                                background: simulatedUnitsSold === sampleVal ? "#ca8a04" : "#ffffff",
-                                                color: simulatedUnitsSold === sampleVal ? "#ffffff" : "#92400e",
-                                                borderColor: "#fde68a",
-                                            }}
-                                        >
-                                            {sampleVal}
-                                        </button>
-                                    ))}
-                                </div>
+                                    <p style={{ fontSize: "0.78rem", color: isVisibleOnPdp ? "#166534" : (isEnabled ? "#92400e" : "#7f1d1d"), marginBottom: "12px" }}>
+                                        {isVisibleOnPdp
+                                            ? `This active badge (${currentUnits} units sold in past ${period} days) will appear for all customers on https://bazaarvilla.com/products/[slug] once saved.`
+                                            : isEnabled
+                                                ? `The badge is currently hidden because sales (${currentUnits}) is less than display threshold (${threshold}). Select "Always show count (0+ units)" above to make it visible now.`
+                                                : "The purchase activity badge is turned off. Check \"Enable Purchase Activity Display\" above to make it visible."
+                                        }
+                                    </p>
 
-                                <div style={{ display: "flex", alignItems: "center", gap: "6px", marginLeft: "auto" }}>
-                                    <label htmlFor="sim-period" style={{ fontSize: "0.8rem", fontWeight: 600, color: "#92400e" }}>
-                                        Period:
-                                    </label>
-                                    <select
-                                        id="sim-period"
-                                        value={simulatedPeriod}
-                                        onChange={(e) => setSimulatedPeriod(Number(e.target.value) as PurchaseActivityPeriod)}
-                                        className="admin-form-input"
-                                        style={{ width: "110px", padding: "4px 8px", fontSize: "0.85rem", height: "32px", minHeight: "32px" }}
-                                    >
-                                        <option value={7}>7 Days</option>
-                                        <option value={30}>30 Days</option>
-                                        <option value={90}>90 Days</option>
-                                    </select>
+                                    {/* Render the actual badge */}
+                                    <div style={{ padding: "8px 0" }}>
+                                        {isVisibleOnPdp ? (
+                                            <ProductPurchaseActivity
+                                                activity={{
+                                                    enabled: isEnabled,
+                                                    periodDays: period,
+                                                    displayThreshold: threshold,
+                                                    unitsSold: currentUnits,
+                                                    lastCalculatedAt: formData.purchaseActivity?.lastCalculatedAt,
+                                                }}
+                                            />
+                                        ) : (
+                                            <div style={{ display: "inline-flex", flexDirection: "column", gap: "4px" }}>
+                                                <ProductPurchaseActivity
+                                                    isSimulated={true}
+                                                    simulatedCount={currentUnits || 24}
+                                                    simulatedPeriod={period}
+                                                />
+                                                <span style={{ fontSize: "0.72rem", color: isEnabled ? "#b45309" : "#dc2626", fontStyle: "italic" }}>
+                                                    (Preview only — this badge will be hidden on live storefront with current settings)
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-
-                            {/* Rendered Live Preview Component */}
-                            <ProductPurchaseActivity
-                                isSimulated={true}
-                                simulatedCount={simulatedUnitsSold}
-                                simulatedPeriod={simulatedPeriod}
-                            />
-                        </div>
+                            );
+                        })()}
                     </div>
 
                     {/* Desktop Actions */}

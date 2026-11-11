@@ -91,6 +91,8 @@ export async function GET(req: NextRequest, context: RouteContext) {
                 qualifyingOrdersCount: existingActivity.qualifyingOrdersCount ?? 0,
                 uniquePurchasersCount: existingActivity.uniquePurchasersCount ?? 0,
                 lastCalculatedAt: existingActivity.lastCalculatedAt,
+                displayMode: existingActivity.displayMode ?? (existingActivity.isCustomCount ? "custom" : "auto"),
+                isCustomCount: (existingActivity.displayMode === "custom" || existingActivity.isCustomCount === true),
             });
 
             return NextResponse.json(dto, {

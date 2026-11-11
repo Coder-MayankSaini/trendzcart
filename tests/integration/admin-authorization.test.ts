@@ -126,7 +126,7 @@ describe("Admin Authorization & Custom Claims Verification (Firebase Auth)", () 
 
         // 1. Dry run grant: verify nothing committed
         const dryRunOutput = execSync(
-            `node scripts/manage-admin-claims.mjs --uid ${testTargetUid} --action grant --dry-run`,
+            `"${process.execPath}" scripts/manage-admin-claims.mjs --uid ${testTargetUid} --action grant --dry-run`,
             { env: process.env }
         ).toString();
         assert.match(dryRunOutput, /DRY-RUN COMPLETE/i);
@@ -137,7 +137,7 @@ describe("Admin Authorization & Custom Claims Verification (Firebase Auth)", () 
 
         // 2. Real grant
         const grantOutput = execSync(
-            `node scripts/manage-admin-claims.mjs --uid ${testTargetUid} --action grant`,
+            `"${process.execPath}" scripts/manage-admin-claims.mjs --uid ${testTargetUid} --action grant`,
             { env: process.env }
         ).toString();
         assert.match(grantOutput, /Successfully set custom claim/i);
@@ -152,7 +152,7 @@ describe("Admin Authorization & Custom Claims Verification (Firebase Auth)", () 
 
         // 3. Real revoke
         const revokeOutput = execSync(
-            `node scripts/manage-admin-claims.mjs --uid ${testTargetUid} --action revoke`,
+            `"${process.execPath}" scripts/manage-admin-claims.mjs --uid ${testTargetUid} --action revoke`,
             { env: process.env }
         ).toString();
         assert.match(revokeOutput, /Successfully revoked admin claim/i);

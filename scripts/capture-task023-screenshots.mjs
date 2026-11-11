@@ -143,10 +143,11 @@ async function main() {
                 enabled: true,
                 periodDays: 30,
                 displayThreshold: 5,
-                unitsSold: 18,
-                countsByPeriod: { 7: 6, 30: 18, 90: 42 },
-                qualifyingOrdersCount: 14,
-                uniquePurchasersCount: 12,
+                unitsSold: 24,
+                countsByPeriod: { 7: 8, 30: 24, 90: 56 },
+                qualifyingOrdersCount: 18,
+                uniquePurchasersCount: 16,
+                isCustomCount: true,
                 lastCalculatedAt: now,
             },
             createdAt: now,
@@ -392,6 +393,17 @@ async function main() {
             openEditScript
         );
 
+        // 4b. Admin Settings Mobile 390px (iPhone 12/13/14)
+        await capture(
+            "http://localhost:3333/admin/products",
+            "04b-admin-settings-mobile-390px.png",
+            390,
+            844,
+            true,
+            3000,
+            openEditScript
+        );
+
         // 5. Admin Settings Mobile 375px (iPhone SE)
         await capture(
             "http://localhost:3333/admin/products",
@@ -454,6 +466,16 @@ async function main() {
             3000
         );
 
+        // 10b. Storefront PDP Nonzero Counter Mobile 390px
+        await capture(
+            "http://localhost:3333/products/bazaarvilla-signature-green-hoodie",
+            "10b-storefront-pdp-nonzero-counter-mobile-390px.png",
+            390,
+            844,
+            true,
+            3000
+        );
+
         // 11. Storefront PDP Nonzero Counter Mobile 375px
         await capture(
             "http://localhost:3333/products/bazaarvilla-signature-green-hoodie",
@@ -504,7 +526,20 @@ async function main() {
             3000
         );
 
-        console.log(`[TASK-023 Visual QA] Successfully captured all 15 authentic screenshots in ${outDir}!`);
+        console.log(`[TASK-023 Visual QA] Successfully captured all authentic screenshots in ${outDir}!`);
+
+        const task033Dir = path.join(process.cwd(), "docs", "screenshots", "task033");
+        fs.mkdirSync(task033Dir, { recursive: true });
+        const brainDir = path.join(process.env.USERPROFILE || "", ".gemini", "antigravity-cli", "brain", "fe4d68de-76ed-4a01-8478-19c28b2bcdfa");
+        fs.mkdirSync(brainDir, { recursive: true });
+
+        for (const file of fs.readdirSync(outDir)) {
+            if (file.endsWith(".png")) {
+                fs.copyFileSync(path.join(outDir, file), path.join(task033Dir, file));
+                fs.copyFileSync(path.join(outDir, file), path.join(brainDir, file));
+            }
+        }
+        console.log(`[TASK-023 Visual QA] Successfully mirrored screenshots to ${task033Dir} and artifact directory!`);
     } catch (err) {
         console.error("[TASK-023 Visual QA] Fatal capture error:", err);
     } finally {

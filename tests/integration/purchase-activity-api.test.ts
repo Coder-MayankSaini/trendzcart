@@ -215,6 +215,38 @@ describe("Product Purchase Activity API & Security Integration Tests (TASK 023)"
         assert.equal(savedActivity.displayThreshold, 5);
     });
 
+    it("ACT-API-005B: should allow admin to configure custom unitsSold and persist isCustomCount: true", async () => {
+        const req = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            {
+                enabled: true,
+                periodDays: 30,
+                displayThreshold: 5,
+                unitsSold: 24,
+                isCustomCount: true,
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const res = await adminPurchaseActivityRoute(req, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+
+        assert.equal(res.status, 200);
+        const data = await res.json();
+        assert.equal(data.success, true);
+        assert.equal(data.activity.unitsSold, 24);
+        assert.equal(data.activity.isCustomCount, true);
+        assert.equal(data.activity.displayLabel, "24 units sold in the past 30 days");
+        assert.equal(data.activity.isVisibleOnStorefront, true);
+
+        // Verify product in Firestore was updated
+        const productSnap = await adminDb!.collection("products").doc(commercialProductId).get();
+        const savedActivity = productSnap.data()?.purchaseActivity;
+        assert.equal(savedActivity.unitsSold, 24);
+        assert.equal(savedActivity.isCustomCount, true);
+    });
+
     // 3. Public API & Privacy Protection
     it("ACT-API-006: public API should return public DTO without customer PII or raw orders", async () => {
         // Pre-populate product purchaseActivity
@@ -348,5 +380,92 @@ describe("Product Purchase Activity API & Security Integration Tests (TASK 023)"
         assert.equal(res.status, 200);
         const data = await res.json();
         assert.equal(data.activity.unitsSold, 2); // 50 quarantined units strictly excluded!
+    });
+
+    // 4. TASK 033 Hardening Tests
+    it("ACT-API-011: should reject decimal numbers for customUnitsSold with HTTP 400", async () => {
+        const req = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "custom", customUnitsSold: 24.5 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const res = await adminPurchaseActivityRoute(req, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+
+        assert.equal(res.status, 400);
+        const data = await res.json();
+        assert.ok(data.error.includes("integer"));
+    });
+
+    it("ACT-API-012: should reject customUnitsSold exceeding 99,999 with HTTP 400", async () => {
+        const req = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "custom", customUnitsSold: 100000 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const res = await adminPurchaseActivityRoute(req, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+
+        assert.equal(res.status, 400);
+        const data = await res.json();
+        assert.ok(data.error.includes("99,999") || data.error.includes("99999"));
+    });
+
+    it("ACT-API-013: should reject invalid displayMode with HTTP 400", async () => {
+        const req = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "invalid_mode" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+
+        const res = await adminPurchaseActivityRoute(req, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+
+        assert.equal(res.status, 400);
+        const data = await res.json();
+        assert.ok(data.error.includes("displayMode"));
+    });
+
+    it("ACT-API-014: should guarantee complete product isolation (Product A changes do not impact Product B)", async () => {
+        // Set Product A to custom 45 units
+        const reqA = createJsonPostRequest(
+            `http://localhost:3000/api/admin/products/${commercialProductId}/purchase-activity`,
+            { displayMode: "custom", customUnitsSold: 45, periodDays: 30, displayThreshold: 5 },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const resA = await adminPurchaseActivityRoute(reqA, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+        assert.equal(resA.status, 200);
+
+        // Verify Product B (emptyProductId) remains completely untouched
+        const snapB = await adminDb!.collection("products").doc(emptyProductId).get();
+        assert.equal(snapB.data()?.purchaseActivity, undefined);
+
+        // Fetch public API for Product B - still 0, invisible
+        const reqPubB = new NextRequest(`http://localhost:3000/api/products/${emptyProductId}/purchase-activity`);
+        const resPubB = await publicPurchaseActivityRoute(reqPubB, {
+            params: Promise.resolve({ id: emptyProductId }),
+        });
+        assert.equal(resPubB.status, 200);
+        const dataPubB = await resPubB.json();
+        assert.equal(dataPubB.count, 0);
+        assert.equal(dataPubB.visible, false);
+
+        // Fetch public API for Product A - 45, visible
+        const reqPubA = new NextRequest(`http://localhost:3000/api/products/${commercialProductId}/purchase-activity`);
+        const resPubA = await publicPurchaseActivityRoute(reqPubA, {
+            params: Promise.resolve({ id: commercialProductId }),
+        });
+        assert.equal(resPubA.status, 200);
+        const dataPubA = await resPubA.json();
+        assert.equal(dataPubA.count, 45);
+        assert.equal(dataPubA.visible, true);
+        assert.equal(dataPubA.displayMode, "custom");
     });
 });

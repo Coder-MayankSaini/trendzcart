@@ -555,4 +555,139 @@ describe("Product Purchase Activity Engine Unit Tests (TASK 023)", () => {
         assert.equal(realAggregatedUnits, 0);
         assert.equal(evaluateStorefrontVisibility({ enabled: true, displayThreshold: 5 }, realAggregatedUnits), false);
     });
+
+    // 26. Admin-configured custom units sold displays on storefront when enabled and meets threshold
+    it("ACT-026: should evaluate storefront visibility to true for admin-configured custom units sold meeting threshold", () => {
+        const config = { enabled: true, displayThreshold: 5, isCustomCount: true };
+        const customUnits = 24;
+
+        assert.equal(evaluateStorefrontVisibility(config, customUnits), true);
+        assert.equal(formatPurchaseActivityBadge(customUnits, 30), "24 units sold in the past 30 days");
+    });
+
+    // 27. Admin-configured custom count preserves isCustomCount flag in DTO
+    it("ACT-027: should preserve isCustomCount flag and accurate count in PublicPurchaseActivityDTO", () => {
+        const dto = buildPublicPurchaseActivityDTO({
+            productId: targetProductId,
+            enabled: true,
+            periodDays: 30,
+            displayThreshold: 5,
+            unitsSold: 18,
+            countsByPeriod: { 7: 6, 30: 18, 90: 36 },
+            qualifyingOrdersCount: 12,
+            uniquePurchasersCount: 10,
+            lastCalculatedAt: fixedNow.getTime(),
+            isCustomCount: true,
+        });
+
+        assert.equal(dto.productId, targetProductId);
+        assert.equal(dto.count, 18);
+        assert.equal(dto.visible, true);
+        assert.equal(dto.label, "18 units sold in the past 30 days");
+        assert.equal(dto.isCustomCount, true);
+    });
+
+    // 28. Admin-configured custom count respects displayThreshold
+    it("ACT-028: should keep badge hidden when admin-set custom count is below display threshold", () => {
+        const config = { enabled: true, displayThreshold: 10, isCustomCount: true };
+        const lowCustomUnits = 4;
+
+        assert.equal(evaluateStorefrontVisibility(config, lowCustomUnits), false);
+
+        // When threshold is set to 0 (always show), it becomes visible
+        const alwaysShowConfig = { enabled: true, displayThreshold: 0, isCustomCount: true };
+        assert.equal(evaluateStorefrontVisibility(alwaysShowConfig, lowCustomUnits), true);
+    });
+
+    // 29. Admin-configured custom count respects enabled=false toggle
+    it("ACT-029: should keep badge hidden when enabled is false even if custom count is high", () => {
+        const config = { enabled: false, displayThreshold: 5, isCustomCount: true };
+        const highCustomUnits = 150;
+
+        assert.equal(evaluateStorefrontVisibility(config, highCustomUnits), false);
+    });
+
+    // 30. TASK 033 Hardening: displayMode="custom" prioritizes customUnitsSold and preserves order counts
+    it("ACT-030: should use customUnitsSold when displayMode is custom and preserve genuine order metrics", () => {
+        const dto = buildPublicPurchaseActivityDTO({
+            productId: targetProductId,
+            enabled: true,
+            periodDays: 30,
+            displayThreshold: 5,
+            displayMode: "custom",
+            customUnitsSold: 50,
+            unitsSold: 50,
+            orderUnitsSold: 12,
+            countsByPeriod: { 7: 3, 30: 12, 90: 25 },
+            qualifyingOrdersCount: 10,
+            uniquePurchasersCount: 8,
+            lastCalculatedAt: fixedNow.getTime(),
+            isCustomCount: true,
+        });
+
+        assert.equal(dto.displayMode, "custom");
+        assert.equal(dto.count, 50);
+        assert.equal(dto.visible, true);
+        assert.equal(dto.label, "50 units sold in the past 30 days");
+    });
+
+    // 31. TASK 033 Hardening: displayMode="auto" strictly uses orderUnitsSold
+    it("ACT-031: should use orderUnitsSold when displayMode is auto regardless of customUnitsSold", () => {
+        const dto = buildPublicPurchaseActivityDTO({
+            productId: targetProductId,
+            enabled: true,
+            periodDays: 30,
+            displayThreshold: 5,
+            displayMode: "auto",
+            customUnitsSold: 250,
+            unitsSold: 12,
+            orderUnitsSold: 12,
+            countsByPeriod: { 7: 3, 30: 12, 90: 25 },
+            qualifyingOrdersCount: 10,
+            uniquePurchasersCount: 8,
+            lastCalculatedAt: fixedNow.getTime(),
+            isCustomCount: false,
+        });
+
+        assert.equal(dto.displayMode, "auto");
+        assert.equal(dto.count, 12);
+        assert.equal(dto.visible, true);
+        assert.equal(dto.label, "12 units sold in the past 30 days");
+        assert.equal(dto.isCustomCount, false);
+    });
+
+    // 32. TASK 033 Hardening: DTO exposes zero PII or order IDs
+    it("ACT-032: public DTO should sanitize internal order IDs and user identifiers", () => {
+        const rawActivity = {
+            productId: targetProductId,
+            enabled: true,
+            periodDays: 30 as const,
+            displayThreshold: 5,
+            displayMode: "auto" as const,
+            unitsSold: 20,
+            orderUnitsSold: 20,
+            countsByPeriod: { 7: 5, 30: 20, 90: 40 },
+            qualifyingOrdersCount: 15,
+            uniquePurchasersCount: 12,
+            lastCalculatedAt: fixedNow.getTime(),
+            // Unsanitized internals
+            customerEmails: ["user@secret.com"],
+            internalNotes: "VIP order",
+            orderIds: ["ord_123", "ord_456"],
+        };
+
+        const dto = buildPublicPurchaseActivityDTO(rawActivity as any);
+        assert.equal((dto as any).customerEmails, undefined);
+        assert.equal((dto as any).internalNotes, undefined);
+        assert.equal((dto as any).orderIds, undefined);
+        assert.equal(dto.productId, targetProductId);
+        assert.equal(dto.count, 20);
+    });
+
+    // 33. TASK 033 Hardening: Visibility logic cleanly handles boundary 0 units and threshold 0
+    it("ACT-033: should never display count if count is 0 even when threshold is 0", () => {
+        const config = { enabled: true, displayThreshold: 0 };
+        assert.equal(evaluateStorefrontVisibility(config, 0), false, "0 units sold should never render storefront badge");
+        assert.equal(evaluateStorefrontVisibility(config, 1), true, "1 unit sold is visible when threshold is 0");
+    });
 });
