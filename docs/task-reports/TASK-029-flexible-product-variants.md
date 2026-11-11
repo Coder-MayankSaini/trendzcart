@@ -3,6 +3,7 @@
 **Task ID:** TASK-029  
 **Branch:** `task/029-flexible-product-variants`  
 **Base Commit:** `8d7c843` (Documentation Commit following TASK 028 Deployed Production Baseline `3e7ff7000ab80681867889865e461c052070e104`)  
+**Hardened Implementation Commit:** `b0dbdd2bd77cd72560d5f416ca6bfff95fd9180c` (`b0dbdd2`)  
 **Production Site:** `https://bazaarvilla.com` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`)  
 **Published Deploy Baseline:** `6af369e6cbfc6c42b6b41349`  
 **Automated Test Baseline Before:** 407 unique automated tests (110 unit + 297 integration)  
