@@ -2164,6 +2164,36 @@ button {
     color: var(--text-secondary);
   }
 
+  @media (max-width: 360px) {
+    .hp-features {
+      padding: 14px 0;
+    }
+    .hp-features-grid {
+      gap: 8px;
+    }
+    .hp-feature {
+      padding: 8px 6px;
+      min-height: 98px;
+    }
+    .hp-feature-icon {
+      width: 34px;
+      height: 34px;
+      margin: 0 auto 6px auto;
+    }
+    .hp-feature-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+    .hp-feature-title {
+      font-size: 0.78rem;
+      margin: 0 0 2px 0;
+    }
+    .hp-feature-desc {
+      font-size: 0.68rem;
+      line-height: 1.25;
+    }
+  }
+
   .hp-newsletter-form {
     flex-direction: column;
   }
