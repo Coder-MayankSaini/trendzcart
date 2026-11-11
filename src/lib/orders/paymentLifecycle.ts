@@ -981,29 +981,57 @@ export async function releaseExpiredReservation(
                         }
                     }
 
+                    const orderCreatedMs = data?.createdAt?.toDate
+                        ? data.createdAt.toDate().getTime()
+                        : (data?.createdAt ? new Date(data.createdAt).getTime() : 0);
+
+                    // Identify recreated variants that reused the same identifier after deletion
+                    const recreatedVariantIds = new Set<string>();
+                    for (const [vId] of variantIncrements.entries()) {
+                        const matchedV = prodData.variants.find((v: any) => v.id === vId);
+                        const itemSnap = productItems.find((i: any) => i.variantId === vId);
+                        const itemVariantCreated = itemSnap?.variantCreatedAt || 0;
+
+                        if (matchedV) {
+                            const isRecreated = Boolean(
+                                (itemVariantCreated > 0 && matchedV.createdAt && matchedV.createdAt !== itemVariantCreated) ||
+                                (matchedV.createdAt && orderCreatedMs > 0 && matchedV.createdAt > orderCreatedMs)
+                            );
+                            if (isRecreated) {
+                                recreatedVariantIds.add(vId);
+                            }
+                        }
+                    }
+
+                    // Increment only authentic original variants (do not touch unrelated recreated variants)
                     const updatedVariants = prodData.variants.map((v: any) => {
                         const inc = variantIncrements.get(v.id) || 0;
-                        if (inc > 0) {
+                        if (inc > 0 && !recreatedVariantIds.has(v.id)) {
                             return { ...v, inventory: (Number(v.inventory) || 0) + inc };
                         }
                         return v;
                     });
 
                     // TASK 029 Hardening: Prevent active-reservation data loss if an admin deleted
-                    // or rebuilt the matrix while a reservation was pending.
+                    // or rebuilt the matrix while a reservation was pending, or recreated the same combo ID.
                     const existingVariantIds = new Set(prodData.variants.map((v: any) => v.id));
                     for (const [vId, incQty] of variantIncrements.entries()) {
-                        if (!existingVariantIds.has(vId)) {
-                            const itemSnapshot = productItems.find((i: any) => i.variantId === vId);
+                        const itemSnapshot = productItems.find((i: any) => i.variantId === vId);
+                        const isRecreated = recreatedVariantIds.has(vId);
+
+                        if (!existingVariantIds.has(vId) || isRecreated) {
                             updatedVariants.push({
-                                id: vId,
+                                id: isRecreated ? `${vId}_archived_${orderId}` : vId,
                                 sizeName: itemSnapshot?.size || "",
                                 colorName: itemSnapshot?.color || "",
                                 sku: itemSnapshot?.sku || "",
                                 price: itemSnapshot?.price ?? null,
                                 inventory: incQty,
-                                isActive: false,
+                                isActive: false, // Quarantined / disabled so it cannot be sold on storefront
                                 dimensions: itemSnapshot?.dimensions,
+                                restoredFromReservation: true,
+                                orphanedReservationId: orderId,
+                                createdAt: itemSnapshot?.variantCreatedAt || orderCreatedMs,
                             });
                         }
                     }
@@ -1063,19 +1091,22 @@ export async function releaseExpiredReservation(
 export interface CancelOrderOptions {
     reason?: string;
     callerUid?: string;
+    restockPhysicalInventory?: boolean; // Explicit authorization if goods have been physically received and inspected
 }
 
 export interface CancelOrderResult {
     status: number;
     success: boolean;
     duplicate?: boolean;
+    stockRestored?: boolean;
     error?: string;
     message?: string;
 }
 
 /**
  * Idempotently cancels an order and restores reserved or committed inventory
- * to the exact variant or product record.
+ * to the exact variant or product record, ensuring shipped/delivered orders
+ * do not falsely restore sellable inventory.
  */
 export async function cancelOrder(
     db: adminModule.firestore.Firestore,
@@ -1092,13 +1123,25 @@ export async function cancelOrder(
 
         const data = orderSnap.data();
 
-        // Idempotency: If order was already cancelled and stock restored
-        if (data?.orderStatus === "Cancelled" && (data?.stockRestored === true || data?.reservationReleased === true)) {
+        // Idempotency: If order was already cancelled and stock was already restored
+        if (data?.orderStatus === "Cancelled" && data?.stockRestored === true) {
             return {
                 status: 200,
                 success: true,
                 duplicate: true,
+                stockRestored: true,
                 message: "Order already cancelled and stock restored",
+            };
+        }
+
+        // If already cancelled without stock restoration, and caller is not requesting physical restock
+        if (data?.orderStatus === "Cancelled" && !options?.restockPhysicalInventory) {
+            return {
+                status: 200,
+                success: true,
+                duplicate: true,
+                stockRestored: false,
+                message: "Order already cancelled; physical stock restoration skipped due to fulfillment status",
             };
         }
 
@@ -1121,11 +1164,15 @@ export async function cancelOrder(
             couponSnap = await transaction.get(db.collection("coupons").doc(data.couponCode));
         }
 
-        // WRITE PHASE: Restore stock if stock was reserved or finalized
+        // Physical inventory check: Dispatched/Delivered goods must NOT become sellable automatically upon refund
+        const NON_RESTOCKABLE_STATUSES = ["Shipped", "Dispatched", "Delivered"];
+        const isPhysicalStockDeparted = NON_RESTOCKABLE_STATUSES.includes(data?.orderStatus);
+        const isAlreadyCancelledWithoutRestock = data?.orderStatus === "Cancelled" && data?.stockRestored !== true;
+
         const shouldRestoreStock =
-            (data?.inventoryReserved === true || data?.inventoryFinalized === true) &&
-            data?.stockRestored !== true &&
-            data?.reservationReleased !== true;
+            (!isPhysicalStockDeparted || options?.restockPhysicalInventory === true) &&
+            ((data?.inventoryReserved === true || data?.inventoryFinalized === true) || isAlreadyCancelledWithoutRestock) &&
+            data?.stockRestored !== true;
 
         if (shouldRestoreStock) {
             for (const productId of uniqueProductIds) {
@@ -1146,9 +1193,31 @@ export async function cancelOrder(
                         }
                     }
 
+                    const orderCreatedMs = data?.createdAt?.toDate
+                        ? data.createdAt.toDate().getTime()
+                        : (data?.createdAt ? new Date(data.createdAt).getTime() : 0);
+
+                    // Recreated variant identity check
+                    const recreatedVariantIds = new Set<string>();
+                    for (const [vId] of variantIncrements.entries()) {
+                        const matchedV = prodData.variants.find((v: any) => v.id === vId);
+                        const itemSnap = productItems.find((i: any) => i.variantId === vId);
+                        const itemVariantCreated = itemSnap?.variantCreatedAt || 0;
+
+                        if (matchedV) {
+                            const isRecreated = Boolean(
+                                (itemVariantCreated > 0 && matchedV.createdAt && matchedV.createdAt !== itemVariantCreated) ||
+                                (matchedV.createdAt && orderCreatedMs > 0 && matchedV.createdAt > orderCreatedMs)
+                            );
+                            if (isRecreated) {
+                                recreatedVariantIds.add(vId);
+                            }
+                        }
+                    }
+
                     const updatedVariants = prodData.variants.map((v: any) => {
                         const inc = variantIncrements.get(v.id) || 0;
-                        if (inc > 0) {
+                        if (inc > 0 && !recreatedVariantIds.has(v.id)) {
                             return { ...v, inventory: (Number(v.inventory) || 0) + inc };
                         }
                         return v;
@@ -1157,10 +1226,12 @@ export async function cancelOrder(
                     // Restore any deleted/orphaned variants as inactive
                     const existingVariantIds = new Set(prodData.variants.map((v: any) => v.id));
                     for (const [vId, incQty] of variantIncrements.entries()) {
-                        if (!existingVariantIds.has(vId)) {
-                            const itemSnapshot = productItems.find((i: any) => i.variantId === vId);
+                        const itemSnapshot = productItems.find((i: any) => i.variantId === vId);
+                        const isRecreated = recreatedVariantIds.has(vId);
+
+                        if (!existingVariantIds.has(vId) || isRecreated) {
                             updatedVariants.push({
-                                id: vId,
+                                id: isRecreated ? `${vId}_archived_${orderId}` : vId,
                                 sizeName: itemSnapshot?.size || "",
                                 colorName: itemSnapshot?.color || "",
                                 sku: itemSnapshot?.sku || "",
@@ -1168,6 +1239,9 @@ export async function cancelOrder(
                                 inventory: incQty,
                                 isActive: false,
                                 dimensions: itemSnapshot?.dimensions,
+                                restoredFromReservation: true,
+                                orphanedReservationId: orderId,
+                                createdAt: itemSnapshot?.variantCreatedAt || orderCreatedMs,
                             });
                         }
                     }
@@ -1208,10 +1282,18 @@ export async function cancelOrder(
 
         transaction.update(orderRef, {
             orderStatus: "Cancelled",
-            paymentStatus: data?.paymentStatus === "PAID" ? "REFUNDED" : "CANCELLED",
+            paymentStatus: (data?.paymentStatus === "PAID" || data?.paymentStatus === "REFUNDED") ? "REFUNDED" : "CANCELLED",
             inventoryReserved: false,
             reservationReleased: true,
-            stockRestored: true,
+            stockRestored: shouldRestoreStock,
+            restockEligibility: isPhysicalStockDeparted && !options?.restockPhysicalInventory
+                ? "DENIED_GOODS_DEPARTED"
+                : (options?.restockPhysicalInventory ? "RESTOCKED_PHYSICAL_RETURN_VERIFIED" : "STANDARD_RESTOCK"),
+            ...(isPhysicalStockDeparted && !options?.restockPhysicalInventory
+                ? {
+                      restockRestrictedReason: `Inventory restoration skipped: order status '${data?.orderStatus}' indicates items have already been dispatched or delivered. Restock requires physical return inspection.`,
+                  }
+                : {}),
             cancellationReason: options?.reason || "Cancelled by admin or customer",
             cancelledAt: new Date(),
             updatedAt: new Date(),
@@ -1220,7 +1302,10 @@ export async function cancelOrder(
         return {
             status: 200,
             success: true,
-            message: "Order cancelled and stock restored successfully",
+            stockRestored: shouldRestoreStock,
+            message: shouldRestoreStock
+                ? "Order cancelled and stock restored successfully"
+                : "Order cancelled; physical stock restoration skipped due to fulfillment status",
         };
     });
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, setDoc, deleteDoc, runTransaction } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/config";
 import imageCompression from "browser-image-compression";
 import AdminPageHeader from "./ui/AdminPageHeader";
@@ -26,6 +26,7 @@ import {
     generateVariantSku,
     calculateVariantStockBreakdown,
     validateVariantConfiguration,
+    reconcileProductInventoryOnSave,
 } from "@/lib/products/variants";
 
 async function uploadFileToR2(file: File, folder: string, subId?: string): Promise<string> {
@@ -166,6 +167,9 @@ export default function AdminProducts() {
     const [newColorName, setNewColorName] = useState("");
     const [newColorHex, setNewColorHex] = useState("#000000");
 
+    // Concurrency protection: preserves loaded product snapshot to prevent stale form overwrites (TASK 029)
+    const originalProductRef = useRef<Product | null>(null);
+
     useEffect(() => {
         try {
             const unsub = onSnapshot(collection(db, "products"), (snapshot) => {
@@ -222,6 +226,7 @@ export default function AdminProducts() {
 
     const handleCloseEdit = () => {
         cleanupGalleryBlobUrls(galleryItems);
+        originalProductRef.current = null;
         setGalleryItems([]);
         setFeaturedImageId("");
         setUploadProgress(null);
@@ -231,6 +236,7 @@ export default function AdminProducts() {
 
     const handleAddNew = () => {
         cleanupGalleryBlobUrls(galleryItems);
+        originalProductRef.current = null;
         setFormData({
             id: crypto.randomUUID(),
             name: "",
@@ -279,6 +285,7 @@ export default function AdminProducts() {
 
     const handleEdit = (prod: Product) => {
         cleanupGalleryBlobUrls(galleryItems);
+        originalProductRef.current = JSON.parse(JSON.stringify(prod));
         const existingSizes = Array.isArray(prod.sizes) ? prod.sizes : [];
         const initialSizeMode: SizeMode = prod.sizeMode || (existingSizes.length > 0 ? "apparel" : "none");
         const initialSizesList: SizeOption[] = (Array.isArray(prod.sizesList) && prod.sizesList.length > 0)
@@ -551,33 +558,45 @@ export default function AdminProducts() {
                 ? sizesList.filter(s => s.isActive !== false).map(s => s.name)
                 : (formData.sizes || []);
 
-            const breakdown = (hasVariants && variants.length > 0)
-                ? calculateVariantStockBreakdown(variants)
-                : null;
-            const totalInventory = breakdown ? breakdown.sellableStock : (Number(formData.inventory) || 0);
-            const totalPhysicalInventory = breakdown ? breakdown.totalPhysicalStock : totalInventory;
+            // Concurrency Protection & Inventory Reconciliation (TASK 029 Hardening)
+            // Use an atomic transaction to ensure admin saves do NOT clobber concurrent
+            // customer checkouts or reservations that occurred while the editor was open.
+            await runTransaction(db, async (transaction) => {
+                const productRef = doc(db, "products", productId);
+                const liveSnap = await transaction.get(productRef);
+                const liveProduct = liveSnap.exists() ? (liveSnap.data() as Product) : null;
 
-            const payload = {
-                ...formData,
-                id: productId,
-                images: allImages,
-                thumbnails: allThumbnails,
-                category: finalCategory,
-                categories: finalCategories,
-                slug: formData.slug || formData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
-                inventory: totalInventory,
-                totalPhysicalInventory,
-                sizes: legacySizes,
-                hasVariants,
-                sizeMode,
-                sizesList,
-                colors,
-                variants,
-                updatedAt: Date.now(),
-            };
+                const reconciled = reconcileProductInventoryOnSave({
+                    formHasVariants: hasVariants,
+                    formVariants: variants,
+                    formInventory: Number(formData.inventory) || 0,
+                    loadedProduct: originalProductRef.current,
+                    liveProduct,
+                });
 
-            await setDoc(doc(db, "products", productId), payload, { merge: true });
+                const payload = {
+                    ...formData,
+                    id: productId,
+                    images: allImages,
+                    thumbnails: allThumbnails,
+                    category: finalCategory,
+                    categories: finalCategories,
+                    slug: formData.slug || formData.name?.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''),
+                    inventory: reconciled.inventory,
+                    totalPhysicalInventory: reconciled.totalPhysicalInventory,
+                    sizes: legacySizes,
+                    hasVariants,
+                    sizeMode,
+                    sizesList,
+                    colors,
+                    variants: reconciled.variants || variants,
+                    updatedAt: Date.now(),
+                };
 
+                transaction.set(productRef, payload, { merge: true });
+            });
+
+            originalProductRef.current = null;
             cleanupGalleryBlobUrls(galleryItems);
             setIsEditing(false);
             setGalleryItems([]);

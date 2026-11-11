@@ -10,6 +10,7 @@ import {
     resolveMatchingVariant,
     getEffectivePrice,
     validateVariantConfiguration,
+    reconcileProductInventoryOnSave,
     MAX_VARIANT_LIMIT,
 } from "../../src/lib/products/variants.ts";
 import type {
@@ -540,6 +541,138 @@ describe("Flexible Product Variants & Inventory Integrity Unit Tests (TASK 029)"
             assert.equal(result.subtotal, 698);
             assert.equal(result.validatedItems[0].variantId, undefined);
             assert.equal(result.validatedItems[0].size, "Standard");
+        });
+    });
+
+    // =========================================================================
+    // SECTION 7: CONCURRENCY RECONCILIATION & VARIANT IDENTITY
+    // =========================================================================
+    describe("7. Admin Concurrency & Variant Identity Hardening", () => {
+        it("VAR-026: Admin save with stale form data preserves interim checkout deductions", () => {
+            const loadedProduct = {
+                hasVariants: true,
+                variants: [
+                    { id: "var_black_xl", sizeName: "XL", colorName: "Black", inventory: 5, isActive: true },
+                    { id: "var_white_m", sizeName: "M", colorName: "White", inventory: 3, isActive: true },
+                ],
+            };
+
+            // Customer purchased 2 units of Black XL in Firestore while admin form was open
+            const liveProduct = {
+                hasVariants: true,
+                variants: [
+                    { id: "var_black_xl", sizeName: "XL", colorName: "Black", inventory: 3, isActive: true },
+                    { id: "var_white_m", sizeName: "M", colorName: "White", inventory: 3, isActive: true },
+                ],
+            };
+
+            // Admin saves unrelated edit (e.g. description changed, stock unchanged in form)
+            const formVariants = [
+                { id: "var_black_xl", sizeName: "XL", colorName: "Black", inventory: 5, isActive: true },
+                { id: "var_white_m", sizeName: "M", colorName: "White", inventory: 3, isActive: true },
+            ];
+
+            const result = reconcileProductInventoryOnSave({
+                formHasVariants: true,
+                formVariants,
+                loadedProduct,
+                liveProduct,
+            });
+
+            // Black XL stock must remain 3 (the live stock), not reset to 5
+            const reconciledBlack = result.variants?.find(v => v.id === "var_black_xl");
+            assert.equal(reconciledBlack?.inventory, 3);
+            assert.equal(result.inventory, 6); // 3 (Black XL) + 3 (White M)
+        });
+
+        it("VAR-027: Simultaneous admin editing of variant prices and inventory merges correctly", () => {
+            const loadedProduct = {
+                hasVariants: true,
+                variants: [
+                    { id: "var_black_xl", sizeName: "XL", colorName: "Black", price: 500, inventory: 5, isActive: true },
+                    { id: "var_white_m", sizeName: "M", colorName: "White", price: 400, inventory: 3, isActive: true },
+                ],
+            };
+
+            // Customer bought 2 Black XL in interim -> live stock is 3
+            const liveProduct = {
+                hasVariants: true,
+                variants: [
+                    { id: "var_black_xl", sizeName: "XL", colorName: "Black", price: 500, inventory: 3, isActive: true },
+                    { id: "var_white_m", sizeName: "M", colorName: "White", price: 400, inventory: 3, isActive: true },
+                ],
+            };
+
+            // Admin edited Black XL price (500 -> 600) and White M inventory (3 -> 10)
+            const formVariants = [
+                { id: "var_black_xl", sizeName: "XL", colorName: "Black", price: 600, inventory: 5, isActive: true }, // unedited stock
+                { id: "var_white_m", sizeName: "M", colorName: "White", price: 400, inventory: 10, isActive: true }, // edited stock (+7)
+            ];
+
+            const result = reconcileProductInventoryOnSave({
+                formHasVariants: true,
+                formVariants,
+                loadedProduct,
+                liveProduct,
+            });
+
+            const reconciledBlack = result.variants?.find(v => v.id === "var_black_xl");
+            const reconciledWhite = result.variants?.find(v => v.id === "var_white_m");
+
+            assert.equal(reconciledBlack?.price, 600);
+            assert.equal(reconciledBlack?.inventory, 3); // Preserved live checkout deduction
+            assert.equal(reconciledWhite?.price, 400);
+            assert.equal(reconciledWhite?.inventory, 10); // Restocked to 10
+            assert.equal(result.inventory, 13);
+        });
+
+        it("VAR-028: Admin legacy product save preserves checkout deductions when root inventory was unedited", () => {
+            const loadedProduct = {
+                inventory: 20,
+            };
+
+            // Customer purchased 4 items while admin form was open
+            const liveProduct = {
+                inventory: 16,
+            };
+
+            // Admin form still has 20 because admin only edited product description
+            const result = reconcileProductInventoryOnSave({
+                formHasVariants: false,
+                formInventory: 20,
+                loadedProduct,
+                liveProduct,
+            });
+
+            // Root inventory must remain 16, not reset to 20
+            assert.equal(result.inventory, 16);
+            assert.equal(result.totalPhysicalInventory, 16);
+        });
+
+        it("VAR-029: Brand new variant addition with live product creation preserves timestamps", () => {
+            const liveProduct = {
+                hasVariants: true,
+                variants: [
+                    { id: "var_black_xl", sizeName: "XL", colorName: "Black", inventory: 5, isActive: true, createdAt: 1000 },
+                ],
+            };
+
+            const formVariants = [
+                { id: "var_black_xl", sizeName: "XL", colorName: "Black", inventory: 5, isActive: true, createdAt: 1000 },
+                { id: "var_white_s", sizeName: "S", colorName: "White", inventory: 8, isActive: true },
+            ];
+
+            const result = reconcileProductInventoryOnSave({
+                formHasVariants: true,
+                formVariants,
+                loadedProduct: liveProduct,
+                liveProduct,
+            });
+
+            assert.equal(result.variants?.length, 2);
+            const whiteS = result.variants?.find(v => v.id === "var_white_s");
+            assert.equal(whiteS?.inventory, 8);
+            assert.ok(typeof whiteS?.createdAt === "number");
         });
     });
 });

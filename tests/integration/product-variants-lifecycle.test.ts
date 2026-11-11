@@ -11,6 +11,7 @@ import {
     finalizeOrderPayment,
     cancelOrder,
 } from "../../src/lib/orders/paymentLifecycle.ts";
+import { reconcileProductInventoryOnSave } from "../../src/lib/products/variants.ts";
 import { runReservationCleanup } from "../../src/lib/orders/reservationCleanup.ts";
 import { seedEmulatorDatabase, clearCollection, createJsonPostRequest } from "./testHelper.ts";
 import { SYNTHETIC_SHIPPING_ADDRESS } from "../fixtures/orders.ts";
@@ -912,5 +913,237 @@ describe("Product Variants & Multi-Attribute Inventory Integrity Integration Tes
         const prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
         const whiteM = prodSnap.data()?.variants.find((v: any) => v.id === "var_white_m");
         assert.equal(whiteM.inventory, 0, "Inventory must be exactly 0, never negative");
+    });
+
+    // -------------------------------------------------------------------------
+    // TEST 26: Admin Inventory Concurrency — Stale Form Save Protection
+    // -------------------------------------------------------------------------
+    it("VAR-INT-026: Admin save with stale form data does NOT reset stock from 3 to 5", async () => {
+        // 1. Initial stock of Black XL is 5
+        let prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        const initialBlackXL = prodSnap.data()?.variants.find((v: any) => v.id === "var_black_xl");
+        assert.equal(initialBlackXL.inventory, 5);
+
+        // 2. Admin opens editor (form loaded with initial product state)
+        const loadedProduct = JSON.parse(JSON.stringify(prodSnap.data()));
+
+        // 3. Customer purchases 2 units of Black XL
+        const customerOrderReq = createJsonPostRequest("http://localhost:3000/api/orders/create", {
+            userId: "cust_concurrency_test",
+            items: [{ productId: MULTI_VARIANT_PRODUCT_ID, variantId: "var_black_xl", quantity: 2, price: 1199 }],
+            total: 2398,
+            paymentMethod: "COD",
+            paymentStatus: "PENDING",
+            shippingAddress: SYNTHETIC_SHIPPING_ADDRESS,
+        });
+        const orderRes = await createOrderRoute(customerOrderReq);
+        assert.equal(orderRes.status, 200);
+
+        // Live stock is now 3
+        prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        assert.equal(prodSnap.data()?.variants.find((v: any) => v.id === "var_black_xl").inventory, 3);
+
+        // 4. Admin saves unrelated edit (e.g. description updated) using stale loaded form data (which still had stock: 5)
+        const staleFormVariants = loadedProduct.variants; // Still has inventory: 5 for Black XL
+
+        await adminDb!.runTransaction(async (transaction) => {
+            const productRef = adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID);
+            const liveSnap = await transaction.get(productRef);
+            const liveData = liveSnap.data() as any;
+
+            const reconciled = reconcileProductInventoryOnSave({
+                formHasVariants: true,
+                formVariants: staleFormVariants,
+                loadedProduct,
+                liveProduct: liveData,
+            });
+
+            transaction.update(productRef, {
+                description: "Updated product description without touching inventory",
+                variants: reconciled.variants,
+                inventory: reconciled.inventory,
+                totalPhysicalInventory: reconciled.totalPhysicalInventory,
+            });
+        });
+
+        // 5. Verify actual stock remains 3 (NOT reset to 5!)
+        prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        const postSaveBlackXL = prodSnap.data()?.variants.find((v: any) => v.id === "var_black_xl");
+        assert.equal(postSaveBlackXL.inventory, 3, "Stale admin save must preserve live checkout stock (3)");
+        assert.equal(prodSnap.data()?.description, "Updated product description without touching inventory");
+    });
+
+    // -------------------------------------------------------------------------
+    // TEST 27: Simultaneous Editing of Variant Price and Variant Inventory
+    // -------------------------------------------------------------------------
+    it("VAR-INT-027: Simultaneous admin editing of variant prices and inventory merges correctly", async () => {
+        let prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        const loadedProduct = JSON.parse(JSON.stringify(prodSnap.data()));
+
+        // Customer buys 2 Black XL (live stock becomes 3)
+        const orderRes = await createOrderRoute(
+            createJsonPostRequest("http://localhost:3000/api/orders/create", {
+                userId: "cust_price_edit_test",
+                items: [{ productId: MULTI_VARIANT_PRODUCT_ID, variantId: "var_black_xl", quantity: 2, price: 1199 }],
+                total: 2398,
+                paymentMethod: "COD",
+                paymentStatus: "PENDING",
+                shippingAddress: SYNTHETIC_SHIPPING_ADDRESS,
+            })
+        );
+        assert.equal(orderRes.status, 200);
+
+        // Admin edits:
+        // - Black XL price: ₹1199 -> ₹1499 (inventory left untouched at loaded value 5)
+        // - White M inventory: 3 -> 10 (restocked +7, price left at ₹999)
+        const formVariants = loadedProduct.variants.map((v: any) => {
+            if (v.id === "var_black_xl") {
+                return { ...v, price: 1499 };
+            }
+            if (v.id === "var_white_m") {
+                return { ...v, inventory: 10 };
+            }
+            return v;
+        });
+
+        await adminDb!.runTransaction(async (transaction) => {
+            const productRef = adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID);
+            const liveSnap = await transaction.get(productRef);
+            const liveData = liveSnap.data() as any;
+
+            const reconciled = reconcileProductInventoryOnSave({
+                formHasVariants: true,
+                formVariants,
+                loadedProduct,
+                liveProduct: liveData,
+            });
+
+            transaction.update(productRef, {
+                variants: reconciled.variants,
+                inventory: reconciled.inventory,
+                totalPhysicalInventory: reconciled.totalPhysicalInventory,
+            });
+        });
+
+        prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        const variants = prodSnap.data()?.variants;
+        const blackXL = variants.find((v: any) => v.id === "var_black_xl");
+        const whiteM = variants.find((v: any) => v.id === "var_white_m");
+
+        assert.equal(blackXL.price, 1499, "Price update must be applied");
+        assert.equal(blackXL.inventory, 3, "Customer checkout deduction must be preserved (3 units)");
+        assert.equal(whiteM.price, 999, "White M price unchanged");
+        assert.equal(whiteM.inventory, 10, "White M inventory restocked to 10");
+        assert.equal(prodSnap.data()?.inventory, 13, "Sellable aggregate is 3 + 10 = 13");
+    });
+
+    // -------------------------------------------------------------------------
+    // TEST 28: Deleted/Recreated Variant Identity in Expired Reservation
+    // -------------------------------------------------------------------------
+    it("VAR-INT-028: Expired reservation does NOT attribute stock to newly recreated variant with same ID", async () => {
+        // Customer reserves 2 units of Black XL
+        const rzpReq = createJsonPostRequest("http://localhost:3000/api/razorpay/create-order", {
+            userId: "cust_recreated_test",
+            items: [{ productId: MULTI_VARIANT_PRODUCT_ID, variantId: "var_black_xl", quantity: 2 }],
+            receipt: "order_recreated_variant_flow",
+            shippingAddress: SYNTHETIC_SHIPPING_ADDRESS,
+        });
+        const rzpRes = await createRazorpayOrderRoute(rzpReq);
+        assert.equal(rzpRes.status, 200);
+
+        // Black XL now has 3 units left
+        let prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        assert.equal(prodSnap.data()?.variants.find((v: any) => v.id === "var_black_xl").inventory, 3);
+
+        // Admin deletes Black XL variant
+        const remainingVariants = prodSnap.data()?.variants.filter((v: any) => v.id !== "var_black_xl");
+        await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).update({
+            variants: remainingVariants,
+        });
+
+        // Admin recreates Black XL with same ID and stock 10, but timestamp in the future
+        const recreatedVariant = {
+            id: "var_black_xl",
+            sizeName: "XL",
+            colorName: "Black",
+            sku: "TEE-BLACK-XL-NEW",
+            price: 1299,
+            inventory: 10,
+            isActive: true,
+            createdAt: Date.now() + 100000, // Recreated AFTER order
+        };
+        await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).update({
+            variants: [...remainingVariants, recreatedVariant],
+        });
+
+        // Reservation expires and releases
+        const releaseRes = await releaseExpiredReservation("order_recreated_variant_flow", adminDb!);
+        assert.equal(releaseRes.success, true);
+        assert.equal(releaseRes.released, true);
+
+        // Inspect product variants:
+        prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        const updatedVariants = prodSnap.data()?.variants;
+
+        const currentRecreatedVariant = updatedVariants.find((v: any) => v.id === "var_black_xl");
+        assert.equal(currentRecreatedVariant.inventory, 10, "Recreated variant stock MUST NOT be inflated to 12");
+
+        // The old reservation stock (+2) must be restored to a quarantined archived record
+        const archivedVariant = updatedVariants.find((v: any) => v.id.includes("archived"));
+        assert.ok(archivedVariant, "Historical snapshot must be quarantined as archived variant");
+        assert.equal(archivedVariant.inventory, 2, "Archived record receives the exact 2 released units");
+        assert.equal(archivedVariant.isActive, false, "Archived record must be inactive (not sellable)");
+
+        // Sellable stock reflects active variants only (10 + 3 = 13)
+        assert.equal(prodSnap.data()?.inventory, 13, "Sellable stock remains active variants sum");
+    });
+
+    // -------------------------------------------------------------------------
+    // TEST 29: Fulfillment State Prevents Sellable Inventory Restoration on Refund
+    // -------------------------------------------------------------------------
+    it("VAR-INT-029: Dispatched or Delivered orders do NOT restore sellable inventory on refund", async () => {
+        // Customer orders 2 White M units via COD (stock decrements from 3 to 1)
+        const orderReq = createJsonPostRequest("http://localhost:3000/api/orders/create", {
+            userId: "cust_fulfillment_test",
+            items: [{ productId: MULTI_VARIANT_PRODUCT_ID, variantId: "var_white_m", quantity: 2, price: 999 }],
+            total: 1998,
+            paymentMethod: "COD",
+            paymentStatus: "PENDING",
+            shippingAddress: SYNTHETIC_SHIPPING_ADDRESS,
+        });
+        const orderRes = await createOrderRoute(orderReq);
+        assert.equal(orderRes.status, 200);
+        const orderJson = await orderRes.json();
+        const orderId = orderJson.id || orderJson.orderId;
+        assert.ok(orderId, "Order ID must be returned");
+
+        let prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        assert.equal(prodSnap.data()?.variants.find((v: any) => v.id === "var_white_m").inventory, 1);
+
+        // Admin marks order Delivered
+        await adminDb!.collection("orders").doc(orderId).update({
+            orderStatus: "Delivered",
+            paymentStatus: "PAID",
+        });
+
+        // Customer requests return/refund -> cancelOrder is invoked without physical warehouse restock
+        const cancelRes = await cancelOrder(adminDb!, orderId, { reason: "Customer requested return" });
+        assert.equal(cancelRes.success, true);
+        assert.equal(cancelRes.stockRestored, false, "Stock restoration must be skipped for delivered goods");
+
+        // Sellable stock must NOT be restored (remains 1, not 3)
+        prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        assert.equal(prodSnap.data()?.variants.find((v: any) => v.id === "var_white_m").inventory, 1);
+
+        // Later, physical parcel arrives at warehouse, inspected and authorized
+        const authorizedCancel = await cancelOrder(adminDb!, orderId, {
+            restockPhysicalInventory: true,
+            reason: "Warehouse verified physical return",
+        });
+        assert.equal(authorizedCancel.success, true);
+        assert.equal(authorizedCancel.stockRestored, true);
+
+        prodSnap = await adminDb!.collection("products").doc(MULTI_VARIANT_PRODUCT_ID).get();
+        assert.equal(prodSnap.data()?.variants.find((v: any) => v.id === "var_white_m").inventory, 3);
     });
 });

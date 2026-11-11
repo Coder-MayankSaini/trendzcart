@@ -354,6 +354,34 @@ describe("Firestore Security Rules Integration Tests (rules_version = '2')", () 
         );
     });
 
+    // RULE-010b — Product Variant & Inventory Tampering
+    it("RULE-010b: Variant & Inventory Tampering — normal customer cannot modify variants, SKUs, or inventory; admin can", async () => {
+        const custADb = testEnv.authenticatedContext("cust_a").firestore();
+        const adminDb = testEnv.authenticatedContext("admin_uid", { admin: true }).firestore();
+
+        // Customer cannot modify variants array
+        await assertFails(
+            updateDoc(doc(custADb, "products", "prod_visible"), {
+                variants: [{ id: "var_hacked", inventory: 999, price: 1 }],
+            })
+        );
+
+        // Customer cannot modify inventory directly
+        await assertFails(
+            updateDoc(doc(custADb, "products", "prod_visible"), {
+                inventory: 9999,
+            })
+        );
+
+        // Admin can update variants and inventory
+        await assertSucceeds(
+            updateDoc(doc(adminDb, "products", "prod_visible"), {
+                variants: [{ id: "var_admin_test", inventory: 20, price: 599, isActive: true }],
+                inventory: 20,
+            })
+        );
+    });
+
     // RULE-011 — Public Catalog Read
     it("RULE-011: Public Catalog Read — unauthenticated customer can read publicly visible product", async () => {
         const unauthDb = testEnv.unauthenticatedContext().firestore();

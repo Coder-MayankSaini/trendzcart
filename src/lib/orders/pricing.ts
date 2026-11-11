@@ -45,6 +45,7 @@ export interface ValidatedOrderItem {
     id: string;
     productId: string;
     variantId?: string;
+    variantCreatedAt?: number;
     sku?: string;
     name: string;
     price: number;
@@ -346,6 +347,7 @@ export async function calculateOrderPricing(
 
         if (matchedVariant) {
             validatedItem.variantId = matchedVariant.id;
+            if (matchedVariant.createdAt) validatedItem.variantCreatedAt = matchedVariant.createdAt;
             if (matchedVariant.sku) validatedItem.sku = matchedVariant.sku;
             if (matchedVariant.sizeName || item.size) validatedItem.size = matchedVariant.sizeName || item.size;
             if (matchedVariant.sizeId || item.sizeId) validatedItem.sizeId = matchedVariant.sizeId || item.sizeId;

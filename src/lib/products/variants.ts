@@ -45,6 +45,9 @@ export interface ProductVariant {
     isActive: boolean; // Enabled/disabled state
     image?: string; // Variant-specific photo URL or R2 key
     dimensions?: SizeDimension;
+    createdAt?: number; // Stable creation timestamp to detect recreated variants
+    restoredFromReservation?: boolean;
+    orphanedReservationId?: string;
 }
 
 export interface ProductVariantConfig {
@@ -263,6 +266,7 @@ export function generateVariantMatrix(
                     isActive: existing?.isActive !== undefined ? existing.isActive : true,
                     image: existing?.image || c.image || undefined,
                     dimensions: s.dimensions,
+                    createdAt: existing?.createdAt || Date.now(),
                 });
             }
         }
@@ -283,6 +287,7 @@ export function generateVariantMatrix(
                 isActive: existing?.isActive !== undefined ? existing.isActive : true,
                 image: existing?.image || undefined,
                 dimensions: s.dimensions,
+                createdAt: existing?.createdAt || Date.now(),
             });
         }
     }
@@ -301,6 +306,7 @@ export function generateVariantMatrix(
                 inventory: typeof existing?.inventory === "number" ? existing.inventory : defaultStock,
                 isActive: existing?.isActive !== undefined ? existing.isActive : true,
                 image: existing?.image || c.image || undefined,
+                createdAt: existing?.createdAt || Date.now(),
             });
         }
     }
@@ -452,5 +458,126 @@ export function validateVariantConfiguration(config: ProductVariantConfig): {
     return {
         isValid: errors.length === 0,
         errors,
+    };
+}
+
+export interface ReconcileInventoryParams {
+    formHasVariants: boolean;
+    formVariants?: ProductVariant[];
+    formInventory?: number;
+    loadedProduct: {
+        hasVariants?: boolean;
+        variants?: ProductVariant[];
+        inventory?: number;
+    } | null;
+    liveProduct: {
+        hasVariants?: boolean;
+        variants?: ProductVariant[];
+        inventory?: number;
+    } | null;
+}
+
+export interface ReconciledInventoryResult {
+    inventory: number;
+    totalPhysicalInventory: number;
+    variants?: ProductVariant[];
+}
+
+/**
+ * Reconciles inventory between admin form submission, original loaded product snapshot,
+ * and live Firestore document state to prevent stale form data from clobbering
+ * concurrent customer checkouts, reservations, or inventory updates.
+ */
+export function reconcileProductInventoryOnSave(params: ReconcileInventoryParams): ReconciledInventoryResult {
+    const { formHasVariants, formVariants = [], formInventory = 0, loadedProduct, liveProduct } = params;
+
+    // If no live product exists (new product creation), trust submitted form values
+    if (!liveProduct) {
+        if (formHasVariants && formVariants.length > 0) {
+            const breakdown = calculateVariantStockBreakdown(formVariants);
+            return {
+                inventory: breakdown.sellableStock,
+                totalPhysicalInventory: breakdown.totalPhysicalStock,
+                variants: formVariants,
+            };
+        }
+        const rootInv = Math.max(0, Number(formInventory) || 0);
+        return {
+            inventory: rootInv,
+            totalPhysicalInventory: rootInv,
+        };
+    }
+
+    // Product with variants
+    if (formHasVariants && formVariants.length > 0) {
+        const loadedVariants = loadedProduct?.variants || [];
+        const liveVariants = liveProduct?.variants || [];
+
+        const reconciledVariants = formVariants.map((fv) => {
+            const origV = loadedVariants.find((ov) => ov.id === fv.id);
+            const liveV = liveVariants.find((lv) => lv.id === fv.id);
+
+            if (liveV) {
+                // If loaded snapshot is available, check whether admin explicitly edited this variant's stock
+                const adminEditedStock = origV ? (fv.inventory !== origV.inventory) : false;
+                let finalInventory = liveV.inventory;
+
+                if (adminEditedStock && origV) {
+                    // Admin intended a change: apply delta to live stock so interim customer purchases are preserved
+                    const delta = fv.inventory - origV.inventory;
+                    finalInventory = Math.max(0, (liveV.inventory || 0) + delta);
+                } else if (!adminEditedStock && origV) {
+                    // Admin did NOT touch inventory: preserve live inventory (e.g. customer purchased interim units)
+                    finalInventory = liveV.inventory;
+                } else {
+                    // No original snapshot: if form matches live, keep live; otherwise trust form
+                    finalInventory = fv.inventory;
+                }
+
+                return {
+                    ...fv,
+                    inventory: finalInventory,
+                    createdAt: liveV.createdAt || origV?.createdAt || fv.createdAt || Date.now(),
+                };
+            }
+
+            // Brand new variant added by admin
+            return {
+                ...fv,
+                createdAt: fv.createdAt || Date.now(),
+            };
+        });
+
+        const breakdown = calculateVariantStockBreakdown(reconciledVariants);
+        return {
+            inventory: breakdown.sellableStock,
+            totalPhysicalInventory: breakdown.totalPhysicalStock,
+            variants: reconciledVariants,
+        };
+    }
+
+    // Legacy product without variants
+    const loadedInv = loadedProduct?.inventory;
+    const liveInv = typeof liveProduct.inventory === "number" ? liveProduct.inventory : 0;
+    let finalRootInv = Number(formInventory) || 0;
+
+    if (typeof loadedInv === "number") {
+        const adminEditedStock = formInventory !== loadedInv;
+        if (!adminEditedStock) {
+            // Admin made unrelated edit (e.g. price/name); preserve live customer deductions
+            finalRootInv = liveInv;
+        } else {
+            // Admin adjusted stock; apply delta to live stock
+            const delta = (Number(formInventory) || 0) - loadedInv;
+            finalRootInv = Math.max(0, liveInv + delta);
+        }
+    } else {
+        // No loaded inventory baseline; trust form
+        finalRootInv = Math.max(0, Number(formInventory) || 0);
+    }
+
+    return {
+        inventory: finalRootInv,
+        totalPhysicalInventory: finalRootInv,
     };
 }
