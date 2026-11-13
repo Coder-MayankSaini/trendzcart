@@ -55,9 +55,90 @@ const ALLOWED_HTML_TAGS = new Set([
 ]);
 
 /**
+ * Safely decodes common and numeric HTML entities.
+ * Avoids double-decoding and preserves intentional plain characters.
+ */
+export function decodeHtmlEntities(str: string): string {
+    if (!str || typeof str !== "string") return "";
+    return str
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&hellip;/g, "…")
+        .replace(/&mdash;/g, "—")
+        .replace(/&ndash;/g, "–")
+        .replace(/&copy;/g, "©")
+        .replace(/&reg;/g, "®")
+        .replace(/&trade;/g, "™")
+        .replace(/&#(\d+);/g, (_, n) => {
+            try {
+                return String.fromCodePoint(parseInt(n, 10));
+            } catch {
+                return "";
+            }
+        })
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+            try {
+                return String.fromCodePoint(parseInt(h, 16));
+            } catch {
+                return "";
+            }
+        });
+}
+
+/**
+ * Normalizes product descriptions from CSV Body (HTML).
+ * 1. Strips dangerous executable tags (<script>, <iframe>, <object>, <embed>, <svg>, <form>, <style>).
+ * 2. Converts structural tags (<br>, </p>, </div>, </li>, </tr>) to natural readable linebreaks.
+ * 3. Strips remaining disallowed HTML tags while preserving text content.
+ * 4. Decodes HTML entities (&amp;, &quot;, &#39;, &lt;, &gt;, &nbsp;, etc.) into clean readable text.
+ * 5. Normalizes paragraph breaks and excessive whitespace without collapsing intentional structure.
+ */
+export function normalizeProductDescription(html: string): string {
+    if (!html || typeof html !== "string") return "";
+
+    // 1. Remove dangerous blocks completely (including content)
+    let cleaned = html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+        .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
+        .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, "")
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+        .replace(/<form\b[^<]*(?:(?!<\/form>)<[^<]*)*<\/form>/gi, "")
+        .replace(/<svg\b[^<]*(?:(?!<\/svg>)<[^<]*)*<\/svg>/gi, "");
+
+    // 2. Convert breaks and block endings to clean newlines
+    cleaned = cleaned
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>|<\/div>|<\/tr>|<\/h[1-6]>/gi, "\n\n")
+        .replace(/<\/li>/gi, "\n")
+        .replace(/<[^>]+>/g, ""); // Strip any remaining tags
+
+    // 3. Normalize carriage returns and linefeeds
+    cleaned = cleaned.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+    // 4. Safely decode entities
+    cleaned = decodeHtmlEntities(cleaned);
+
+    // 5. Clean up indentation and collapse 3+ consecutive newlines to 2
+    cleaned = cleaned
+        .split("\n")
+        .map(line => line.trim())
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+    return cleaned;
+}
+
+/**
  * Sanitizes HTML descriptions imported from CSVs.
  * Strips dangerous executable tags (<script>, <iframe>, <object>, <embed>, <svg>, <form>, <style>),
  * dangerous attributes (all on* event handlers like onload, onerror, onclick), and pseudo-protocols (javascript:, vbscript:).
+ * Preserves safe structural and formatting tags (<p>, <br>, <strong>, <b>, <em>, <a>, <ul>, <ol>, <li>).
  */
 export function sanitizeHtmlDescription(html: string): string {
     if (!html || typeof html !== "string") return "";
@@ -124,6 +205,8 @@ export const ALLOWED_PRODUCT_IMPORT_FIELDS = new Set([
     "variants",
     "images",
     "thumbnails",
+    "attributes",
+    "hasIncompleteMedia",
     "createdAt",
     "updatedAt",
 ]);

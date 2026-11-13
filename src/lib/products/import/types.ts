@@ -88,6 +88,24 @@ export interface ImportValidationWarning {
     message: string;
 }
 
+export interface ProductAttributeItem {
+    name: string;
+    value: string;
+}
+
+export interface CategoryAssignmentOptions {
+    mode?: "assign_existing" | "create_new" | "preserve_csv";
+    policy?: "all" | "csv";
+    selectedCategory?: string;
+    selectedCategoryName?: string;
+    selectedCategoryId?: string;
+    isNewCategory?: boolean;
+    newCategoryName?: string;
+    newCategoryDescription?: string;
+    preserveExistingOnUpdatedProducts?: boolean;
+    preserveExistingProductCategories?: boolean;
+}
+
 export interface ParsedProductGroup {
     handle: string;
     title: string;
@@ -105,10 +123,12 @@ export interface ParsedProductGroup {
     isSimpleProduct: boolean; // "Default Title" or 0 variant attributes
     hasExplicitInventory: boolean;
     hasExplicitPrice: boolean;
+    hasExplicitCategory: boolean;
     hasVariantColumns: boolean;
     sizeMode: SizeMode;
     sizesList: SizeOption[];
     colors: ColorOption[];
+    attributes?: ProductAttributeItem[];
     firstRowNumber: number;
     allRowNumbers: number[];
     errors: ImportValidationError[];
@@ -131,6 +151,10 @@ export interface ProductImportPreview {
     status: "new" | "existing_update" | "conflict" | "invalid" | "skipped";
     existingProductId?: string;
     existingProductSnapshot?: any;
+    category: string;
+    isCategoryNew?: boolean;
+    categoryDiff?: { from: string; to: string };
+    specificationsSummary?: string;
     diffs: ProductFieldDiff[];
     priceChange?: { from: number; to: number };
     inventoryChange?: { from: number; to: number; sellableDelta: number };
@@ -160,7 +184,10 @@ export interface ImportPreviewSummary {
     warningCount: number;
     priceChangeCount: number;
     inventoryChangeCount: number;
+    categoryChangeCount: number;
     personalizationChangeCount: number;
+    categoryAssignment?: CategoryAssignmentOptions;
+    newCategoryName?: string;
     draftCount: number;
     publishedCount: number;
     productPreviews: ProductImportPreview[];
@@ -174,9 +201,12 @@ export interface ProductImportResult {
     productId: string;
     status: "created" | "updated" | "failed" | "skipped";
     title: string;
+    category?: string;
     variantsCreatedOrUpdated: number;
     imagesIngested: number;
     imagesFailed: number;
+    imagesSkipped?: number;
+    hasIncompleteMedia?: boolean;
     error?: string;
 }
 
@@ -185,6 +215,7 @@ export interface ImportConfirmationOptions {
     confirmPriceChanges?: boolean;
     confirmInventoryChanges?: boolean;
     confirmExistingProductUpdates?: boolean;
+    confirmCategoryChanges?: boolean;
     confirmPersonalizationChanges?: boolean;
     allowPublishNewProducts?: boolean;
 }
@@ -199,6 +230,11 @@ export interface ProductImportBatchRecord {
     formatDetected: CsvFormatType;
     totalRows: number;
     totalProducts: number;
+    totalImages?: number;
+    imagesUploadedCount?: number;
+    imagesFailedCount?: number;
+    imagesSkippedCount?: number;
+    categoryAssignment?: CategoryAssignmentOptions;
     createdCount: number;
     updatedCount: number;
     failedCount: number;

@@ -9,6 +9,7 @@ import type {
     ProductImportBatchRecord,
     ImportValidationError,
     ImportValidationWarning,
+    CategoryAssignmentOptions,
 } from "@/lib/products/import/types";
 import { BAZAARVILLA_TEMPLATES } from "@/lib/products/import/templates";
 
@@ -18,7 +19,7 @@ interface ProductImportModalProps {
     onImportSuccess?: () => void;
 }
 
-type WizardStep = "upload" | "mapping" | "preview" | "confirm" | "importing" | "complete" | "history";
+type WizardStep = "upload" | "mapping" | "category" | "preview" | "confirm" | "importing" | "complete" | "history";
 
 export default function ProductImportModal({ isOpen, onClose, onImportSuccess }: ProductImportModalProps) {
     const [currentStep, setCurrentStep] = useState<WizardStep>("upload");
@@ -27,6 +28,17 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
     const [csvContent, setCsvContent] = useState<string>("");
     const [sourceFileName, setSourceFileName] = useState<string>("");
     const [fileChecksum, setFileChecksum] = useState<string>("");
+
+    // Category Assignment State (TASK 035)
+    const [existingCategories, setExistingCategories] = useState<Array<{ id: string; name: string }>>([]);
+    const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+    const [categoryMode, setCategoryMode] = useState<"assign_existing" | "create_new" | "preserve_csv">("assign_existing");
+    const [selectedCategoryName, setSelectedCategoryName] = useState<string>("");
+    const [newCategoryName, setNewCategoryName] = useState<string>("");
+    const [preserveExistingCategories, setPreserveExistingCategories] = useState<boolean>(true);
+    const [confirmCategoryChanges, setConfirmCategoryChanges] = useState(false);
+    const [categorySearchQuery, setCategorySearchQuery] = useState<string>("");
+    const [expandedDescriptions, setExpandedDescriptions] = useState<Record<string, boolean>>({});
 
     // Preview and Mapping State
     const [mappingResult, setMappingResult] = useState<ColumnMappingResult | null>(null);
@@ -140,6 +152,9 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
             setFileWarnings(data.fileWarnings || []);
             setBatchId(data.batchId || crypto.randomUUID());
 
+            // Fetch categories in background for the category step
+            fetchExistingCategories();
+
             // Advance to mapping inspection
             setCurrentStep("mapping");
         } catch (err: any) {
@@ -149,7 +164,81 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
         }
     };
 
-    // Step 4: Execute Batch Commit (Bounded Resumable Execution)
+    // Category fetch handler
+    const fetchExistingCategories = async () => {
+        setIsLoadingCategories(true);
+        try {
+            const token = await getIdToken();
+            const res = await fetch("/api/admin/categories", {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.categories && Array.isArray(data.categories)) {
+                    setExistingCategories(data.categories);
+                    if (data.categories.length > 0 && !selectedCategoryName) {
+                        setSelectedCategoryName(data.categories[0].name);
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch categories:", err);
+        } finally {
+            setIsLoadingCategories(false);
+        }
+    };
+
+    // Run Dry-Run Preview with Category Selection
+    const handleRunPreview = async (overrideAssignment?: CategoryAssignmentOptions) => {
+        setIsProcessing(true);
+        setErrorMessage(null);
+
+        const assignment: CategoryAssignmentOptions = overrideAssignment || {
+            mode: categoryMode,
+            policy: categoryMode === "preserve_csv" ? "csv" : "all",
+            selectedCategory: selectedCategoryName,
+            selectedCategoryName: selectedCategoryName,
+            newCategoryName: newCategoryName.trim(),
+            preserveExistingOnUpdatedProducts: preserveExistingCategories,
+            preserveExistingProductCategories: preserveExistingCategories,
+        };
+
+        try {
+            const token = await getIdToken();
+            const res = await fetch("/api/admin/products/import/preview", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    csvText: csvContent,
+                    mode: importMode,
+                    categoryAssignment: assignment,
+                }),
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to generate preview.");
+            }
+
+            setMappingResult(data.mappingResult);
+            setPreviewSummary(data.previewSummary);
+            setFileChecksum(data.fileChecksum);
+            setFileErrors(data.fileErrors || []);
+            setFileWarnings(data.fileWarnings || []);
+            setBatchId(data.batchId || crypto.randomUUID());
+
+            setCurrentStep("preview");
+        } catch (err: any) {
+            setErrorMessage(err.message || "Failed to generate dry-run preview.");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Step 5: Execute Batch Commit (Bounded Resumable Execution)
     const handleExecuteCommit = async () => {
         if (!previewSummary || !batchId) return;
 
@@ -170,6 +259,11 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
 
         if (previewSummary.existingProducts > 0 && importMode !== "create_only" && !confirmExistingProductUpdates) {
             setErrorMessage(`Confirmation Required: The CSV updates ${previewSummary.existingProducts} existing products. You must explicitly check 'Confirm Existing Product Updates'.`);
+            return;
+        }
+
+        if (previewSummary.categoryChangeCount > 0 && !confirmCategoryChanges) {
+            setErrorMessage(`Confirmation Required: The CSV updates categories on ${previewSummary.categoryChangeCount} existing products. You must explicitly verify and check 'Confirm Category Changes'.`);
             return;
         }
 
@@ -198,6 +292,7 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                             confirmPriceChanges,
                             confirmInventoryChanges,
                             confirmExistingProductUpdates,
+                            confirmCategoryChanges,
                             allowPublishNewProducts,
                         },
                         chunkSize: 10,
@@ -421,9 +516,10 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                         {[
                             { key: "upload", label: "1. Upload CSV" },
                             { key: "mapping", label: "2. Column Mapping" },
-                            { key: "preview", label: "3. Dry-Run Preview" },
-                            { key: "confirm", label: "4. Confirm Changes" },
-                            { key: "complete", label: "5. Results" },
+                            { key: "category", label: "3. Category" },
+                            { key: "preview", label: "4. Product Preview" },
+                            { key: "confirm", label: "5. Confirm Changes" },
+                            { key: "complete", label: "6. Results" },
                         ].map((step, idx) => {
                             const isCurrent = currentStep === step.key;
                             return (
@@ -796,7 +892,179 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                     )}
 
                     {/* ========================================================================= */}
-                    {/* STEP 3: DRY-RUN PREVIEW & CONFLICT INSPECTION */}
+                    {/* STEP 3: BULK CATEGORY ASSIGNMENT (TASK 035) */}
+                    {/* ========================================================================= */}
+                    {currentStep === "category" && (
+                        <div>
+                            <div style={{ marginBottom: "18px" }}>
+                                <h3 style={{ fontSize: "1.1rem", fontWeight: 800, margin: "0 0 6px 0", color: "var(--text-primary)" }}>
+                                    Step 3 — Bulk Category Assignment
+                                </h3>
+                                <p style={{ fontSize: "0.86rem", color: "var(--text-secondary)", margin: 0 }}>
+                                    Choose how categories should be assigned to the products imported from this CSV.
+                                </p>
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                                {/* Option A: Assign an Existing Category */}
+                                <div
+                                    onClick={() => setCategoryMode("assign_existing")}
+                                    style={{
+                                        padding: "16px",
+                                        borderRadius: "12px",
+                                        border: categoryMode === "assign_existing" ? "2px solid #006B3C" : "1px solid var(--border-color)",
+                                        backgroundColor: categoryMode === "assign_existing" ? "rgba(0, 107, 60, 0.03)" : "var(--bg-primary)",
+                                        cursor: "pointer",
+                                        transition: "all 0.2s ease",
+                                    }}
+                                >
+                                    <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontWeight: 700, fontSize: "0.92rem", color: "var(--text-primary)" }}>
+                                        <input
+                                            type="radio"
+                                            name="categoryMode"
+                                            value="assign_existing"
+                                            checked={categoryMode === "assign_existing"}
+                                            onChange={() => setCategoryMode("assign_existing")}
+                                            style={{ accentColor: "#006B3C", width: "18px", height: "18px" }}
+                                        />
+                                        <span>Option A — Assign an Existing Category</span>
+                                    </label>
+                                    <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: "4px 0 12px 28px" }}>
+                                        Assign all products imported from this CSV to an existing Bazaarvilla catalog category.
+                                    </p>
+
+                                    {categoryMode === "assign_existing" && (
+                                        <div style={{ marginLeft: "28px", display: "flex", flexDirection: "column", gap: "10px" }} onClick={(e) => e.stopPropagation()}>
+                                            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Filter categories (e.g. Home Decor)..."
+                                                    value={categorySearchQuery}
+                                                    onChange={(e) => setCategorySearchQuery(e.target.value)}
+                                                    className="admin-input"
+                                                    style={{ maxWidth: "300px", fontSize: "0.84rem", padding: "8px 12px" }}
+                                                />
+                                                {isLoadingCategories && <span style={{ fontSize: "0.8rem", color: "var(--text-secondary)" }}>Loading...</span>}
+                                            </div>
+
+                                            <select
+                                                value={selectedCategoryName}
+                                                onChange={(e) => setSelectedCategoryName(e.target.value)}
+                                                className="admin-input"
+                                                style={{ maxWidth: "400px", fontSize: "0.88rem", padding: "8px 12px", fontWeight: 600 }}
+                                            >
+                                                {existingCategories
+                                                    .filter((c) => !categorySearchQuery || c.name.toLowerCase().includes(categorySearchQuery.toLowerCase()))
+                                                    .map((c) => (
+                                                        <option key={c.id} value={c.name}>
+                                                            {c.name}
+                                                        </option>
+                                                    ))}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Option B: Create a New Category */}
+                                <div
+                                    onClick={() => setCategoryMode("create_new")}
+                                    style={{
+                                        padding: "16px",
+                                        borderRadius: "12px",
+                                        border: categoryMode === "create_new" ? "2px solid #006B3C" : "1px solid var(--border-color)",
+                                        backgroundColor: categoryMode === "create_new" ? "rgba(0, 107, 60, 0.03)" : "var(--bg-primary)",
+                                        cursor: "pointer",
+                                        transition: "all 0.2s ease",
+                                    }}
+                                >
+                                    <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontWeight: 700, fontSize: "0.92rem", color: "var(--text-primary)" }}>
+                                        <input
+                                            type="radio"
+                                            name="categoryMode"
+                                            value="create_new"
+                                            checked={categoryMode === "create_new"}
+                                            onChange={() => setCategoryMode("create_new")}
+                                            style={{ accentColor: "#006B3C", width: "18px", height: "18px" }}
+                                        />
+                                        <span>Option B — + Create New Category</span>
+                                    </label>
+                                    <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: "4px 0 12px 28px" }}>
+                                        Create a brand new category on the fly. The new category will only be created in Firestore upon import confirmation.
+                                    </p>
+
+                                    {categoryMode === "create_new" && (
+                                        <div style={{ marginLeft: "28px", display: "flex", flexDirection: "column", gap: "8px" }} onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                                type="text"
+                                                placeholder="Enter new category name (e.g. Home Decorations & Accessories)..."
+                                                value={newCategoryName}
+                                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                                className="admin-input"
+                                                style={{ maxWidth: "420px", fontSize: "0.88rem", padding: "8px 12px" }}
+                                            />
+                                            {newCategoryName.trim() && (
+                                                <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                                                    Generated slug: <code>/categories/{newCategoryName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}</code>
+                                                    {existingCategories.some((c) => c.name.toLowerCase() === newCategoryName.trim().toLowerCase()) && (
+                                                        <span style={{ color: "#d97706", marginLeft: "10px", fontWeight: 600 }}>
+                                                            ⚠️ A category with this name already exists; products will link to it safely.
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Option C: Preserve Categories from CSV */}
+                                <div
+                                    onClick={() => setCategoryMode("preserve_csv")}
+                                    style={{
+                                        padding: "16px",
+                                        borderRadius: "12px",
+                                        border: categoryMode === "preserve_csv" ? "2px solid #006B3C" : "1px solid var(--border-color)",
+                                        backgroundColor: categoryMode === "preserve_csv" ? "rgba(0, 107, 60, 0.03)" : "var(--bg-primary)",
+                                        cursor: "pointer",
+                                        transition: "all 0.2s ease",
+                                    }}
+                                >
+                                    <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontWeight: 700, fontSize: "0.92rem", color: "var(--text-primary)" }}>
+                                        <input
+                                            type="radio"
+                                            name="categoryMode"
+                                            value="preserve_csv"
+                                            checked={categoryMode === "preserve_csv"}
+                                            onChange={() => setCategoryMode("preserve_csv")}
+                                            style={{ accentColor: "#006B3C", width: "18px", height: "18px" }}
+                                        />
+                                        <span>Option C — Preserve Categories From CSV</span>
+                                    </label>
+                                    <p style={{ fontSize: "0.82rem", color: "var(--text-secondary)", margin: "4px 0 0 28px" }}>
+                                        Use individual category values defined per row in the CSV (e.g. <code>Type = Home Decor</code>). Unspecified rows default to &quot;General&quot;.
+                                    </p>
+                                </div>
+
+                                {/* Policy Checkbox */}
+                                <div style={{ marginTop: "10px", padding: "14px 16px", borderRadius: "10px", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)" }}>
+                                    <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", fontSize: "0.86rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={preserveExistingCategories}
+                                            onChange={(e) => setPreserveExistingCategories(e.target.checked)}
+                                            style={{ accentColor: "#006B3C", width: "16px", height: "16px" }}
+                                        />
+                                        <span>Preserve existing categories on updated catalog products</span>
+                                    </label>
+                                    <p style={{ fontSize: "0.78rem", color: "var(--text-secondary)", margin: "4px 0 0 26px" }}>
+                                        When checked, existing products already in your catalog will keep their current category. When unchecked, the batch category will be applied to all products.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ========================================================================= */}
+                    {/* STEP 4: DRY-RUN PREVIEW & CONFLICT INSPECTION */}
                     {/* ========================================================================= */}
                     {(currentStep === "preview" || currentStep === "confirm") && previewSummary && (
                         <div>
@@ -817,6 +1085,10 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                 <div style={{ padding: "12px", borderRadius: "10px", border: "1px solid #bae6fd", backgroundColor: "#f0f9ff" }}>
                                     <div style={{ fontSize: "0.72rem", color: "#0369a1", textTransform: "uppercase" }}>Existing Updates</div>
                                     <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#0369a1" }}>{previewSummary.existingProducts}</div>
+                                </div>
+                                <div style={{ padding: "12px", borderRadius: "10px", border: "1px solid #e9d5ff", backgroundColor: "#faf5ff" }}>
+                                    <div style={{ fontSize: "0.72rem", color: "#7e22ce", textTransform: "uppercase" }}>Category Diffs</div>
+                                    <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#7e22ce" }}>{previewSummary.categoryChangeCount || 0}</div>
                                 </div>
                                 <div style={{ padding: "12px", borderRadius: "10px", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-secondary)" }}>
                                     <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>Variants</div>
@@ -898,8 +1170,8 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                 </button>
                             </div>
 
-                            {/* Product Previews List */}
-                            <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "380px", overflowY: "auto" }}>
+                            {/* Product Previews List (Comprehensive Cards - TASK 035) */}
+                            <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "420px", overflowY: "auto" }}>
                                 {previewSummary.productPreviews
                                     .filter((p) => {
                                         if (previewTab === "new") return p.status === "new";
@@ -907,90 +1179,233 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                         if (previewTab === "issues") return p.errors.length > 0 || p.warnings.length > 0;
                                         return true;
                                     })
-                                    .map((p, idx) => (
-                                        <div
-                                            key={idx}
-                                            style={{
-                                                padding: "12px 16px",
-                                                borderRadius: "10px",
-                                                border: "1px solid var(--border-color)",
-                                                backgroundColor: p.errors.length > 0 ? "rgba(239, 68, 68, 0.02)" : "var(--bg-primary)",
-                                            }}
-                                        >
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
-                                                <div>
-                                                    <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)" }}>
-                                                        {p.title || p.handle}
+                                    .map((p, idx) => {
+                                        const isExpanded = Boolean(expandedDescriptions[p.handle]);
+                                        const compareAt = typeof p.parsedGroup.compareAtPrice === "number" && p.parsedGroup.compareAtPrice > p.parsedGroup.basePrice ? p.parsedGroup.compareAtPrice : null;
+                                        const discountPercent = compareAt ? Math.round(((compareAt - p.parsedGroup.basePrice) / compareAt) * 100) : null;
+                                        const savingsAmount = compareAt ? compareAt - p.parsedGroup.basePrice : 0;
+                                        const mainImageUrl = p.parsedGroup.images[0]?.url || "";
+                                        const totalStock = p.parsedGroup.variants.reduce((sum, v) => sum + (v.inventory || 0), 0);
+                                        const firstSku = p.parsedGroup.variants[0]?.sku || "—";
+
+                                        return (
+                                            <div
+                                                key={idx}
+                                                style={{
+                                                    padding: "16px",
+                                                    borderRadius: "12px",
+                                                    border: "1px solid var(--border-color)",
+                                                    backgroundColor: p.errors.length > 0 ? "rgba(239, 68, 68, 0.02)" : "var(--bg-primary)",
+                                                    display: "flex",
+                                                    flexDirection: "column",
+                                                    gap: "12px",
+                                                }}
+                                            >
+                                                {/* Header Row: Thumbnail + Title + Badges */}
+                                                <div style={{ display: "flex", gap: "14px", alignItems: "flex-start" }}>
+                                                    {/* Main Image Thumbnail */}
+                                                    <div style={{ width: "72px", height: "72px", minWidth: "72px", borderRadius: "8px", overflow: "hidden", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)", position: "relative" }}>
+                                                        {mainImageUrl ? (
+                                                            <img
+                                                                src={mainImageUrl}
+                                                                alt={p.title}
+                                                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                                                onError={(e) => {
+                                                                    (e.currentTarget as HTMLImageElement).style.display = "none";
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", color: "var(--text-secondary)" }}>
+                                                                No Image
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <div style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }}>
-                                                        Slug: <code>{p.handle}</code> · {p.variantCount} variants · {p.imagesCount} images · Base Price: ₹{p.parsedGroup.basePrice}{typeof p.parsedGroup.compareAtPrice === "number" && p.parsedGroup.compareAtPrice > 0 ? ` · Original: ₹${p.parsedGroup.compareAtPrice}` : ""}
+
+                                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", flexWrap: "wrap" }}>
+                                                            <div>
+                                                                <h4 style={{ margin: "0 0 4px 0", fontSize: "0.96rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                                                    {p.title || p.handle}
+                                                                </h4>
+                                                                <div style={{ fontSize: "0.76rem", color: "var(--text-secondary)", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
+                                                                    <span>Slug: <code>{p.handle}</code></span>
+                                                                    <span>·</span>
+                                                                    <span>SKU: <strong>{firstSku}</strong></span>
+                                                                    <span>·</span>
+                                                                    <span>Stock: <strong>{totalStock} in stock</strong></span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+                                                                {/* Category Badge */}
+                                                                <span
+                                                                    style={{
+                                                                        fontSize: "0.72rem",
+                                                                        fontWeight: 700,
+                                                                        padding: "3px 8px",
+                                                                        borderRadius: "4px",
+                                                                        backgroundColor: p.categoryDiff ? "#F3E8FF" : "#F1F5F9",
+                                                                        color: p.categoryDiff ? "#7C3AED" : "#475569",
+                                                                        border: p.categoryDiff ? "1px solid #D8B4FE" : "1px solid #CBD5E1",
+                                                                    }}
+                                                                    title={p.categoryDiff ? `Category updated from ${p.categoryDiff.from} to ${p.categoryDiff.to}` : `Assigned to category ${p.category}`}
+                                                                >
+                                                                    {p.categoryDiff ? `Category: ${p.categoryDiff.from} → ${p.categoryDiff.to}` : `Category: ${p.category}${p.isCategoryNew ? " (New)" : ""}`}
+                                                                </span>
+
+                                                                {/* Status Badge */}
+                                                                <span
+                                                                    style={{
+                                                                        fontSize: "0.72rem",
+                                                                        fontWeight: 700,
+                                                                        padding: "3px 8px",
+                                                                        borderRadius: "4px",
+                                                                        backgroundColor:
+                                                                            p.status === "new"
+                                                                                ? "#EAF8EE"
+                                                                                : p.status === "existing_update"
+                                                                                ? "#E0F2FE"
+                                                                                : p.status === "conflict"
+                                                                                ? "#FEF3C7"
+                                                                                : "#FEE2E2",
+                                                                        color:
+                                                                            p.status === "new"
+                                                                                ? "#006B3C"
+                                                                                : p.status === "existing_update"
+                                                                                ? "#0284C7"
+                                                                                : p.status === "conflict"
+                                                                                ? "#D97706"
+                                                                                : "#DC2626",
+                                                                    }}
+                                                                >
+                                                                    {p.status === "new"
+                                                                        ? "Create New (Draft)"
+                                                                        : p.status === "existing_update"
+                                                                        ? "Update Existing"
+                                                                        : p.status === "conflict"
+                                                                        ? "Skipped (Exists)"
+                                                                        : "Invalid"}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Price & Savings Row */}
+                                                        <div style={{ marginTop: "6px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", fontSize: "0.85rem" }}>
+                                                            <span style={{ fontWeight: 800, color: "var(--text-primary)", fontSize: "0.95rem" }}>
+                                                                ₹{p.parsedGroup.basePrice}
+                                                            </span>
+                                                            {compareAt && (
+                                                                <>
+                                                                    <span style={{ textDecoration: "line-through", color: "var(--text-secondary)", fontSize: "0.84rem" }}>
+                                                                        ₹{compareAt}
+                                                                    </span>
+                                                                    <span style={{ backgroundColor: "#EAF8EE", color: "#006B3C", fontSize: "0.74rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px" }}>
+                                                                        {discountPercent}% OFF
+                                                                    </span>
+                                                                    <span style={{ color: "#006B3C", fontSize: "0.78rem", fontWeight: 600 }}>
+                                                                        You save ₹{savingsAmount}
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                            {p.specificationsSummary && (
+                                                                <span style={{ color: "var(--text-secondary)", fontSize: "0.78rem", marginLeft: "auto" }}>
+                                                                    ⚙️ {p.specificationsSummary}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
 
-                                                <span
-                                                    style={{
-                                                        fontSize: "0.72rem",
-                                                        fontWeight: 700,
-                                                        padding: "3px 8px",
-                                                        borderRadius: "4px",
-                                                        backgroundColor:
-                                                            p.status === "new"
-                                                                ? "#EAF8EE"
-                                                                : p.status === "existing_update"
-                                                                ? "#E0F2FE"
-                                                                : p.status === "conflict"
-                                                                ? "#FEF3C7"
-                                                                : "#FEE2E2",
-                                                        color:
-                                                            p.status === "new"
-                                                                ? "#006B3C"
-                                                                : p.status === "existing_update"
-                                                                ? "#0284C7"
-                                                                : p.status === "conflict"
-                                                                ? "#D97706"
-                                                                : "#DC2626",
-                                                    }}
-                                                >
-                                                    {p.status === "new"
-                                                        ? "Create New (Draft)"
-                                                        : p.status === "existing_update"
-                                                        ? "Update Existing"
-                                                        : p.status === "conflict"
-                                                        ? "Skipped (Exists)"
-                                                        : "Invalid"}
-                                                </span>
+                                                {/* Gallery Strip with Image Count */}
+                                                {p.parsedGroup.images.length > 0 && (
+                                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", paddingTop: "8px", borderTop: "1px dashed var(--border-color)" }}>
+                                                        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-secondary)" }}>
+                                                            📷 {p.imagesCount} photo{p.imagesCount > 1 ? "s" : ""} ({p.expectedR2Uploads} to R2):
+                                                        </span>
+                                                        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                                                            {p.parsedGroup.images.slice(0, 6).map((img, imgIdx) => (
+                                                                <div key={imgIdx} style={{ width: "36px", height: "36px", borderRadius: "6px", overflow: "hidden", border: "1px solid var(--border-color)", backgroundColor: "var(--bg-secondary)" }}>
+                                                                    <img
+                                                                        src={img.url}
+                                                                        alt={`Thumb ${imgIdx + 1}`}
+                                                                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                            {p.parsedGroup.images.length > 6 && (
+                                                                <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                                                                    +{p.parsedGroup.images.length - 6} more
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Formatted Description Preview */}
+                                                {p.parsedGroup.description && (
+                                                    <div style={{ padding: "8px 12px", borderRadius: "8px", backgroundColor: "var(--bg-secondary)", fontSize: "0.78rem" }}>
+                                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                                                            <strong style={{ color: "var(--text-secondary)", fontSize: "0.72rem", textTransform: "uppercase" }}>Description Preview</strong>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setExpandedDescriptions(prev => ({ ...prev, [p.handle]: !prev[p.handle] }))}
+                                                                style={{ background: "none", border: "none", color: "#006B3C", fontSize: "0.72rem", fontWeight: 600, cursor: "pointer", padding: 0 }}
+                                                            >
+                                                                {isExpanded ? "Collapse ▲" : "Expand ▼"}
+                                                            </button>
+                                                        </div>
+                                                        <div
+                                                            style={{
+                                                                color: "var(--text-primary)",
+                                                                whiteSpace: "pre-line",
+                                                                maxHeight: isExpanded ? "none" : "3.6em",
+                                                                overflow: "hidden",
+                                                                lineHeight: "1.4",
+                                                                wordBreak: "break-word",
+                                                            }}
+                                                        >
+                                                            {p.parsedGroup.description}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Field Diffs for existing updates */}
+                                                {p.diffs.length > 0 && p.status === "existing_update" && (
+                                                    <div style={{ paddingTop: "8px", borderTop: "1px dashed var(--border-color)", fontSize: "0.78rem" }}>
+                                                        {p.diffs.map((d, dIdx) => (
+                                                            <div key={dIdx} style={{ display: "flex", gap: "6px", color: "var(--text-secondary)", marginBottom: "2px" }}>
+                                                                <strong style={{ color: "var(--text-primary)" }}>{d.label}:</strong>
+                                                                <span>{String(d.oldValue)}</span>
+                                                                <span>→</span>
+                                                                <strong style={{ color: "#006B3C" }}>{String(d.newValue)}</strong>
+                                                                {d.warning && <span style={{ color: "#b45309" }}>({d.warning})</span>}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {/* Errors & Warnings list */}
+                                                {(p.errors.length > 0 || p.warnings.length > 0) && (
+                                                    <div style={{ fontSize: "0.76rem" }}>
+                                                        {p.errors.map((e, eIdx) => (
+                                                            <div key={eIdx} style={{ color: "#ef4444", marginBottom: "2px" }}>
+                                                                • Error: Row {e.rowNumber} [{e.field}]: {e.message}
+                                                            </div>
+                                                        ))}
+                                                        {p.warnings.map((w, wIdx) => (
+                                                            <div key={wIdx} style={{ color: "#b45309", marginBottom: "2px" }}>
+                                                                • Warning: {w.message}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-
-                                            {/* Field Diffs for existing updates */}
-                                            {p.diffs.length > 0 && p.status === "existing_update" && (
-                                                <div style={{ marginTop: "8px", paddingTop: "8px", borderTop: "1px dashed var(--border-color)", fontSize: "0.78rem" }}>
-                                                    {p.diffs.map((d, dIdx) => (
-                                                        <div key={dIdx} style={{ display: "flex", gap: "6px", color: "var(--text-secondary)", marginBottom: "2px" }}>
-                                                            <strong style={{ color: "var(--text-primary)" }}>{d.label}:</strong>
-                                                            <span>{String(d.oldValue)}</span>
-                                                            <span>→</span>
-                                                            <strong style={{ color: "#006B3C" }}>{String(d.newValue)}</strong>
-                                                            {d.warning && <span style={{ color: "#b45309" }}>({d.warning})</span>}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-
-                                            {/* Errors list */}
-                                            {p.errors.length > 0 && (
-                                                <div style={{ marginTop: "8px", color: "#ef4444", fontSize: "0.76rem" }}>
-                                                    {p.errors.map((e, eIdx) => (
-                                                        <div key={eIdx}>
-                                                            • Row {e.rowNumber} [{e.field}]: {e.message}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                             </div>
 
-                            {/* Confirmation Dialog on Step 4 */}
+                            {/* Confirmation Dialog on Step 5 */}
                             {currentStep === "confirm" && (
                                 <div
                                     style={{
@@ -1005,11 +1420,14 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                         Administrator Confirmation Checkpoint
                                     </h4>
                                     <p style={{ fontSize: "0.82rem", color: "var(--text-primary)", margin: "0 0 12px 0" }}>
-                                        No CSV data will overwrite prices, stock, or photos without this explicit confirmation. Review the summary above:
+                                        No CSV data will overwrite prices, stock, categories, or photos without this explicit confirmation. Review the summary above:
                                     </p>
                                     <ul style={{ fontSize: "0.78rem", color: "var(--text-secondary)", margin: "0 0 14px 18px", padding: 0 }}>
                                         <li>{previewSummary.newProducts} new products will be created as <strong>Drafts (invisible to storefront shoppers by default)</strong>.</li>
                                         <li>{previewSummary.existingProducts} existing products will be safely merged with concurrency safeguards.</li>
+                                        {previewSummary.categoryChangeCount > 0 && (
+                                            <li><strong>{previewSummary.categoryChangeCount} existing products</strong> will have their category updated.</li>
+                                        )}
                                         <li>{previewSummary.expectedR2Transfers} remote product photographs will be ingested and stored in Cloudflare R2.</li>
                                     </ul>
 
@@ -1045,6 +1463,18 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                                     style={{ width: "18px", height: "18px", accentColor: "#0284c7", marginTop: "2px" }}
                                                 />
                                                 <span>Confirm Inventory Changes: I authorize updating stock on {previewSummary.inventoryChangeCount} existing catalog products.</span>
+                                            </label>
+                                        )}
+
+                                        {previewSummary.categoryChangeCount > 0 && (
+                                            <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "0.84rem", fontWeight: 600, color: "#7c3aed" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={confirmCategoryChanges}
+                                                    onChange={(e) => setConfirmCategoryChanges(e.target.checked)}
+                                                    style={{ width: "18px", height: "18px", accentColor: "#7c3aed", marginTop: "2px" }}
+                                                />
+                                                <span>Confirm Category Changes: I authorize updating categories on {previewSummary.categoryChangeCount} existing catalog products.</span>
                                             </label>
                                         )}
 
@@ -1234,7 +1664,7 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                 Back to Upload
                             </button>
                         )}
-                        {currentStep === "preview" && (
+                        {currentStep === "category" && (
                             <button
                                 type="button"
                                 onClick={() => setCurrentStep("mapping")}
@@ -1242,6 +1672,16 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                 style={{ fontSize: "0.85rem" }}
                             >
                                 Back to Mapping
+                            </button>
+                        )}
+                        {currentStep === "preview" && (
+                            <button
+                                type="button"
+                                onClick={() => setCurrentStep("category")}
+                                className="admin-btn admin-btn-secondary"
+                                style={{ fontSize: "0.85rem" }}
+                            >
+                                Back to Category Selection
                             </button>
                         )}
                         {currentStep === "confirm" && (
@@ -1272,11 +1712,23 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                         {currentStep === "mapping" && (
                             <button
                                 type="button"
-                                onClick={() => setCurrentStep("preview")}
+                                onClick={() => setCurrentStep("category")}
                                 className="admin-btn admin-btn-primary"
                                 style={{ fontSize: "0.85rem" }}
                             >
-                                View Dry-Run Preview →
+                                Next: Category Assignment →
+                            </button>
+                        )}
+
+                        {currentStep === "category" && (
+                            <button
+                                type="button"
+                                onClick={() => handleRunPreview()}
+                                className="admin-btn admin-btn-primary"
+                                disabled={isProcessing || (categoryMode === "create_new" && !newCategoryName.trim())}
+                                style={{ fontSize: "0.85rem" }}
+                            >
+                                {isProcessing ? "Generating Preview..." : "Next: Preview Products →"}
                             </button>
                         )}
 
@@ -1300,7 +1752,7 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                 disabled={!confirmedNotice || isProcessing}
                                 style={{ fontSize: "0.85rem" }}
                             >
-                                Confirm & Execute Import
+                                {isProcessing ? "Importing Products..." : "Confirm & Execute Import"}
                             </button>
                         )}
 

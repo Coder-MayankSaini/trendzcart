@@ -657,6 +657,12 @@ button {
   font-size: 0.95rem;
   line-height: 1.7;
   margin-bottom: 28px;
+  white-space: pre-line;
+}
+
+.pdp-description p {
+  white-space: pre-line;
+  margin-bottom: 12px;
 }
 
 /* Product Customizer */

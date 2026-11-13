@@ -8,6 +8,8 @@
 
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import Papa from "papaparse";
 import {
     detectCsvFormat,
@@ -31,14 +33,17 @@ import {
     formatSafeCsvRow,
     sanitizeHtmlDescription,
     sanitizeProductPayload,
+    decodeHtmlEntities,
+    normalizeProductDescription,
 } from "../../src/lib/products/import/sanitizer.ts";
 import {
     isPrivateIp,
     detectImageMagicBytes,
     validateRemoteImageUrl,
 } from "../../src/lib/products/import/imageIngestion.ts";
-import { buildProductPreview } from "../../src/lib/products/import/validation.ts";
+import { buildProductPreview, buildPreviewSummary } from "../../src/lib/products/import/validation.ts";
 import { isCustomizableProduct } from "../../src/lib/orders/customizationEligibility.ts";
+import type { CategoryAssignmentOptions } from "../../src/lib/products/import/types.ts";
 import {
     STANDARD_PRODUCT_TEMPLATE_CSV,
     VARIANTS_PRODUCT_TEMPLATE_CSV,
@@ -606,6 +611,241 @@ describe("CSV Bulk Product Import Unit Tests (TASK 030)", () => {
             // Normal text remains untouched
             assert.equal(sanitizeCsvCellValue("Standard Product Title"), "Standard Product Title");
             assert.equal(sanitizeCsvCellValue("100% Cotton"), "100% Cotton");
+        });
+    });
+
+    // -------------------------------------------------------------------------
+    // 8. TASK 035 Shopify Reference CSV Completeness, Integrity & Categories
+    // -------------------------------------------------------------------------
+    describe("8. TASK 035 Reference CSV Completeness, Integrity & Categories", () => {
+        const fixturePath = path.resolve(process.cwd(), "shopify_products_www-gillkart-com.csv");
+        let rawCsvContent: string;
+        let parsedRows: any[] = [];
+
+        try {
+            rawCsvContent = fs.readFileSync(fixturePath, "utf-8");
+            const parsed = Papa.parse(rawCsvContent, { header: true, skipEmptyLines: "greedy" });
+            parsedRows = parsed.data;
+        } catch {
+            // Fallback to tests/fixtures if root path is different
+            const altPath = path.resolve(process.cwd(), "tests/fixtures/shopify_products_www-gillkart-com.csv");
+            rawCsvContent = fs.readFileSync(altPath, "utf-8");
+            const parsed = Papa.parse(rawCsvContent, { header: true, skipEmptyLines: "greedy" });
+            parsedRows = parsed.data;
+        }
+
+        it("CSV-042: Reference Gillkart CSV parses into exactly 28 products from 61 rows, ignoring promo footer", () => {
+            assert.equal(parsedRows.length, 61, "Fixture must contain exactly 61 data rows");
+
+            const { groups, fileWarnings } = groupCsvRows(parsedRows);
+            assert.equal(groups.length, 28, "Must group into exactly 28 titled products");
+
+            // Non-product promotional footer row is recorded in fileWarnings
+            const promoWarning = fileWarnings.find(w => w.message.includes("Detected non-product promotional footer"));
+            assert.ok(promoWarning, "Must detect and ignore the Shopify Spy footer row");
+            assert.equal(promoWarning?.rowNumber, 61);
+        });
+
+        it("CSV-043: Total images across reference CSV equals exactly 60 image URLs", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const totalImages = groups.reduce((acc, g) => acc + g.images.length, 0);
+            assert.equal(totalImages, 60, "Total grouped images must equal 60 across 28 products");
+        });
+
+        it("CSV-044: Heng Balance Lamp correctly groups 4 images in order without duplicates", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const hengLamp = groups.find(g => g.handle === "plastic-design-lamp-heng-balance-white-68173");
+            assert.ok(hengLamp, "Heng Balance Lamp must exist in parsed groups");
+            assert.equal(hengLamp?.images.length, 4, "Heng Balance Lamp must have 4 images");
+
+            // Check URLs are unique and from Shopify CDN
+            const urls = hengLamp?.images.map(img => img.url) || [];
+            const uniqueUrls = new Set(urls);
+            assert.equal(uniqueUrls.size, 4, "All 4 images must be distinct URLs");
+            assert.ok(urls.every(u => u.includes("cdn.shopify.com")), "Images must be Shopify CDN URLs");
+        });
+
+        it("CSV-045: Single-variant products with Material/Type options preserve attributes without generating fake size/color selectors", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const mushak = groups.find(g => g.handle === "plastic-mushak-agarbati-holder-white-68186");
+            assert.ok(mushak, "Mushak Agarbati Holder must exist");
+            assert.equal(mushak?.isSimpleProduct, true, "Must be treated as simple product (no false size/color variants)");
+            assert.equal(mushak?.sizeMode, "none");
+            assert.ok(mushak?.attributes && mushak.attributes.length > 0, "Attributes must be preserved");
+
+            const matAttr = mushak?.attributes?.find(a => a.name === "Material");
+            assert.equal(matAttr?.value, "Plastic");
+        });
+
+        it("CSV-046: Body (HTML) entity decoding correctly decodes &amp;, &quot;, &#39;, &nbsp;", () => {
+            const input = "Divine &amp; Unique Design &quot;Special&quot; &#39;Edition&#39;&nbsp;&mdash;&nbsp;Authentic";
+            const decoded = decodeHtmlEntities(input);
+            assert.equal(decoded, 'Divine & Unique Design "Special" \'Edition\' — Authentic');
+        });
+
+        it("CSV-047: <br> and <br><br> tags normalize to clean paragraph line breaks", () => {
+            const html = "Paragraph One.<br><br>Feature 1<br>Feature 2<br><br>Final paragraph.";
+            const normalized = normalizeProductDescription(html);
+            assert.equal(normalized, "Paragraph One.\n\nFeature 1\nFeature 2\n\nFinal paragraph.");
+            assert.ok(!normalized.includes("<br>"));
+            assert.ok(!normalized.includes("<br/>"));
+        });
+
+        it("CSV-048: Description preserves meaningful content and punctuation without raw HTML tags", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const mushak = groups.find(g => g.handle === "plastic-mushak-agarbati-holder-white-68186");
+            assert.ok(mushak);
+            assert.ok(mushak.description.includes("Divine & Unique Design:"), "Must decode &amp; to &");
+            assert.ok(!mushak.description.includes("&amp;"), "Must not leak raw &amp;");
+            assert.ok(!mushak.description.includes("<br>"), "Must not leak raw <br>");
+            assert.ok(mushak.description.includes("\n\n"), "Must preserve paragraph breaks");
+        });
+
+        it("CSV-049: Dual pricing extracts Variant Price as selling price and Variant Compare At Price as original price", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const mushak = groups.find(g => g.handle === "plastic-mushak-agarbati-holder-white-68186");
+            assert.ok(mushak);
+            assert.equal(mushak.basePrice, 1000, "Selling price must be 1000");
+            assert.equal(mushak.compareAtPrice, 1330, "Compare at price must be 1330");
+        });
+
+        it("CSV-050: Category Option A applies selected existing category to all products", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const optionA: CategoryAssignmentOptions = {
+                mode: "assign_existing",
+                selectedCategory: "Home Decor",
+            };
+            const preview = buildProductPreview({
+                group: groups[0],
+                mode: "create_only",
+                categoryAssignment: optionA,
+            });
+            assert.equal(preview.category, "Home Decor");
+            assert.equal(preview.isCategoryNew, false);
+        });
+
+        it("CSV-051: Category Option B creates and assigns new category with slug generation", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const optionB: CategoryAssignmentOptions = {
+                mode: "create_new",
+                newCategoryName: "Home Decorations & Accessories",
+            };
+            const preview = buildProductPreview({
+                group: groups[0],
+                mode: "create_only",
+                categoryAssignment: optionB,
+            });
+            assert.equal(preview.category, "Home Decorations & Accessories");
+            assert.equal(preview.isCategoryNew, true);
+        });
+
+        it("CSV-052: Category Option C preserves CSV category (Type = Home Decor)", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const optionC: CategoryAssignmentOptions = {
+                mode: "preserve_csv",
+            };
+            const preview = buildProductPreview({
+                group: groups[0],
+                mode: "create_only",
+                categoryAssignment: optionC,
+            });
+            assert.equal(preview.category, "Home Decor");
+        });
+
+        it("CSV-053: Category policy preserves existing catalog categories on updated products when configured", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const existingProd = {
+                id: "prod_123",
+                name: "Plastic Mushak Agarbati Holder (White)",
+                category: "Spiritual & Puja Items",
+                price: 199,
+                inventory: 10,
+            };
+            const optionWithPreserve: CategoryAssignmentOptions = {
+                mode: "assign_existing",
+                selectedCategory: "Home Decor",
+                preserveExistingOnUpdatedProducts: true,
+            };
+            const preview = buildProductPreview({
+                group: groups[0],
+                existingProduct: existingProd,
+                mode: "create_and_update",
+                categoryAssignment: optionWithPreserve,
+            });
+            assert.equal(preview.category, "Spiritual & Puja Items", "Must preserve existing category when configured");
+            assert.equal(preview.categoryDiff, undefined);
+        });
+
+        it("CSV-054: Category diff is accurately reported when existing product category differs", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const existingProd = {
+                id: "prod_123",
+                name: "Plastic Mushak Agarbati Holder (White)",
+                category: "Spiritual & Puja Items",
+                price: 199,
+                inventory: 10,
+            };
+            const optionOverwrite: CategoryAssignmentOptions = {
+                mode: "assign_existing",
+                selectedCategory: "Home Decor",
+                preserveExistingOnUpdatedProducts: false,
+            };
+            const preview = buildProductPreview({
+                group: groups[0],
+                existingProduct: existingProd,
+                mode: "create_and_update",
+                categoryAssignment: optionOverwrite,
+            });
+            assert.equal(preview.category, "Home Decor");
+            assert.deepEqual(preview.categoryDiff, {
+                from: "Spiritual & Puja Items",
+                to: "Home Decor",
+            });
+            assert.ok(preview.diffs.some(d => d.field === "category" && d.action === "update"));
+        });
+
+        it("CSV-055: imageIngestion detects and allows Shopify CDN URLs containing /products/ without bypassing download", async () => {
+            const shopifyUrl = "https://cdn.shopify.com/s/files/1/0885/8763/2958/files/1_3a843e49-8c9f-4f6c-b26a-977caaaad6b1.jpg?v=1734676127";
+            const val = await validateRemoteImageUrl(shopifyUrl);
+            assert.equal(val.valid, true);
+            assert.equal(val.urlObj?.hostname, "cdn.shopify.com");
+
+            // Verify that local check correctly differentiates Shopify CDN URLs from local Bazaarvilla URLs
+            const isLocalShopify = shopifyUrl.startsWith("/api/media/public/products/");
+            assert.equal(isLocalShopify, false, "Shopify CDN URL must not be mistakenly treated as local Bazaarvilla URL");
+        });
+
+        it("CSV-056: buildPreviewSummary correctly calculates categoryChangeCount and specifications summary", () => {
+            const { groups } = groupCsvRows(parsedRows);
+            const existingProd = {
+                id: "prod_123",
+                name: "Plastic Mushak Agarbati Holder (White)",
+                category: "Spiritual & Puja Items",
+                price: 199,
+                inventory: 10,
+            };
+            const p1 = buildProductPreview({
+                group: groups[0],
+                existingProduct: existingProd,
+                mode: "create_and_update",
+                categoryAssignment: { mode: "assign_existing", selectedCategory: "Home Decor", preserveExistingOnUpdatedProducts: false },
+            });
+            const p2 = buildProductPreview({
+                group: groups[1],
+                mode: "create_only",
+                categoryAssignment: { mode: "assign_existing", selectedCategory: "Home Decor" },
+            });
+
+            const summary = buildPreviewSummary({
+                previews: [p1, p2],
+                totalRows: 2,
+                unsupportedHeaders: [],
+                detectedFormat: "shopify_standard",
+            });
+
+            assert.equal(summary.categoryChangeCount, 1);
+            assert.equal(summary.totalProducts, 2);
+            assert.ok(p1.specificationsSummary?.includes("Material: Plastic"));
         });
     });
 });

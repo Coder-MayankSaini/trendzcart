@@ -27,6 +27,7 @@ import { POST as commitRoute } from "../../src/app/api/admin/products/import/com
 import { GET as templatesRoute } from "../../src/app/api/admin/products/import/templates/route.ts";
 import { GET as historyRoute } from "../../src/app/api/admin/products/import/history/route.ts";
 import { POST as errorReportRoute } from "../../src/app/api/admin/products/import/error-report/route.ts";
+import { GET as getCategoriesRoute, POST as postCategoriesRoute } from "../../src/app/api/admin/categories/route.ts";
 import { adminAuth, adminDb } from "../../src/lib/firebase/admin.ts";
 import { clearCollection, createJsonPostRequest, getSyntheticUserAuthToken } from "./testHelper.ts";
 import { NextRequest } from "next/server";
@@ -1117,5 +1118,215 @@ free-stuff,Freebie,-50
         assert.equal(chunk2Data.remainingCount, 0);
         assert.equal(chunk2Data.hasMore, false);
         assert.equal(chunk2Data.status, "completed");
+    });
+
+    it("IMPORT-INT-028: Category Option A: Assign existing category to all products during batch commit", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Variant Price,Variant Inventory Qty",
+            "cat-test-prod-1,Cat Product 1,Desc,Bazaarvilla,OldCat,tag,TRUE,499,10",
+        ].join("\n");
+
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            {
+                csvText: csv,
+                mode: "create_and_update",
+                categoryAssignment: {
+                    mode: "assign_existing",
+                    selectedCategory: "Home Decor",
+                },
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum, previewSummary } = await previewRes.json();
+        assert.equal(previewSummary.productPreviews[0].category, "Home Decor");
+
+        const commitReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: { confirmedNotice: true },
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const commitRes = await commitRoute(commitReq);
+        assert.equal(commitRes.status, 200);
+
+        // Verify product in Firestore has category "Home Decor"
+        const snap = await adminDb.collection("products").where("slug", "==", "cat-test-prod-1").limit(1).get();
+        assert.equal(snap.empty, false);
+        assert.equal(snap.docs[0].data().category, "Home Decor");
+    });
+
+    it("IMPORT-INT-029: Category Option B: Idempotently creates new category and assigns to imported products", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Variant Price,Variant Inventory Qty",
+            "cat-new-prod-1,New Cat Product,Desc,Bazaarvilla,General,tag,TRUE,799,15",
+        ].join("\n");
+
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            {
+                csvText: csv,
+                mode: "create_and_update",
+                categoryAssignment: {
+                    mode: "create_new",
+                    newCategoryName: "Festive Lights & Lamps",
+                },
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum, previewSummary } = await previewRes.json();
+        assert.equal(previewSummary.productPreviews[0].category, "Festive Lights & Lamps");
+        assert.equal(previewSummary.productPreviews[0].isCategoryNew, true);
+
+        const commitReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: { confirmedNotice: true },
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const commitRes = await commitRoute(commitReq);
+        assert.equal(commitRes.status, 200);
+
+        // Verify category doc was idempotently created in Firestore
+        const catSnap = await adminDb.collection("categories").where("name", "==", "Festive Lights & Lamps").limit(1).get();
+        assert.equal(catSnap.empty, false, "Category 'Festive Lights & Lamps' must exist in categories collection");
+        assert.equal(catSnap.docs[0].data().name, "Festive Lights & Lamps");
+
+        // Verify product in Firestore has this category
+        const prodSnap = await adminDb.collection("products").where("slug", "==", "cat-new-prod-1").limit(1).get();
+        assert.equal(prodSnap.empty, false);
+        assert.equal(prodSnap.docs[0].data().category, "Festive Lights & Lamps");
+    });
+
+    it("IMPORT-INT-030: Category Confirmation Checkpoint: Throws error when categoryChangeCount > 0 and confirmCategoryChanges is omitted", async () => {
+        if (!adminDb) throw new Error("Firestore unavailable");
+
+        // Create an existing product with category "Apparel"
+        await adminDb.collection("products").doc("prod_cat_change_test").set({
+            id: "prod_cat_change_test",
+            name: "Category Change Test Product",
+            slug: "cat-change-test-prod",
+            category: "Apparel",
+            price: 500,
+            inventory: 10,
+            updatedAt: 1000,
+        });
+
+        const csv = [
+            "Handle,Title,Body (HTML),Vendor,Type,Tags,Published,Variant Price,Variant Inventory Qty",
+            "cat-change-test-prod,Category Change Test Product,Desc,Bazaarvilla,Home Decor,tag,TRUE,500,10",
+        ].join("\n");
+
+        const previewReq = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/preview",
+            {
+                csvText: csv,
+                mode: "create_and_update",
+                categoryAssignment: {
+                    mode: "assign_existing",
+                    selectedCategory: "Home Decor",
+                    preserveExistingOnUpdatedProducts: false,
+                },
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const previewRes = await previewRoute(previewReq);
+        assert.equal(previewRes.status, 200);
+        const { batchId, fileChecksum, previewSummary } = await previewRes.json();
+        assert.equal(previewSummary.categoryChangeCount, 1);
+
+        // Commit WITHOUT confirmCategoryChanges should throw 500 / error
+        const commitReqNoConfirm = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: {
+                    confirmedNotice: true,
+                    confirmExistingProductUpdates: true,
+                    confirmCategoryChanges: false, // OMITTED!
+                },
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const commitResNoConfirm = await commitRoute(commitReqNoConfirm);
+        assert.equal(commitResNoConfirm.status, 400);
+        const errData = await commitResNoConfirm.json();
+        assert.ok(errData.error.includes("Confirm Category Changes"), "Must enforce explicit category change confirmation");
+
+        // Commit WITH confirmCategoryChanges should succeed
+        const commitReqWithConfirm = createJsonPostRequest(
+            "http://localhost/api/admin/products/import/commit",
+            {
+                batchId,
+                fileChecksum,
+                confirmations: {
+                    confirmedNotice: true,
+                    confirmExistingProductUpdates: true,
+                    confirmCategoryChanges: true, // EXPLICITLY CONFIRMED!
+                },
+            },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const commitResWithConfirm = await commitRoute(commitReqWithConfirm);
+        assert.equal(commitResWithConfirm.status, 200);
+    });
+
+    it("IMPORT-INT-031: GET /api/admin/categories and POST /api/admin/categories endpoint validation & authorization", async () => {
+        // Customer forbidden
+        const getCustReq = new NextRequest("http://localhost/api/admin/categories", {
+            headers: { Authorization: `Bearer ${customerToken}` },
+        });
+        const getCustRes = await getCategoriesRoute(getCustReq);
+        assert.equal(getCustRes.status, 401);
+
+        // Admin authorized
+        const getAdminReq = new NextRequest("http://localhost/api/admin/categories", {
+            headers: { Authorization: `Bearer ${adminToken}` },
+        });
+        const getAdminRes = await getCategoriesRoute(getAdminReq);
+        assert.equal(getAdminRes.status, 200);
+        const getData = await getAdminRes.json();
+        assert.equal(getData.success, true);
+        assert.ok(Array.isArray(getData.categories));
+
+        // POST Category with valid name
+        const postReq = createJsonPostRequest(
+            "http://localhost/api/admin/categories",
+            { name: "Kitchen & Dining Decor" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const postRes = await postCategoriesRoute(postReq);
+        assert.equal(postRes.status, 201);
+        const postData = await postRes.json();
+        assert.equal(postData.success, true);
+        assert.equal(postData.category.name, "Kitchen & Dining Decor");
+        assert.equal(postData.isExisting, false);
+
+        // POST duplicate returns existing (idempotent)
+        const dupReq = createJsonPostRequest(
+            "http://localhost/api/admin/categories",
+            { name: "kitchen & dining decor" },
+            { Authorization: `Bearer ${adminToken}` }
+        );
+        const dupRes = await postCategoriesRoute(dupReq);
+        assert.equal(dupRes.status, 200);
+        const dupData = await dupRes.json();
+        assert.equal(dupData.isExisting, true);
+        assert.equal(dupData.category.name, "Kitchen & Dining Decor");
     });
 });

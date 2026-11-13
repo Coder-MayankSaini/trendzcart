@@ -404,7 +404,15 @@ export async function ingestRemoteProductImage(options: {
     }
 
     // If already a local Bazaarvilla R2 proxy URL, return as-is without re-ingesting!
-    if (url.includes("/api/media/public/products/") || url.includes("/products/")) {
+    // Stored URLs start with /api/media/public/products/ or use the custom R2 domain.
+    // External URLs (like Shopify CDN https://cdn.shopify.com/.../products/...) must NOT be skipped!
+    const customDomain = process.env.R2_PUBLIC_DOMAIN || process.env.NEXT_PUBLIC_R2_PUBLIC_DOMAIN;
+    const isLocalR2Url =
+        url.startsWith("/api/media/public/products/") ||
+        url.startsWith("/api/media/public?key=products/") ||
+        (Boolean(customDomain) && url.startsWith(customDomain!.replace(/\/$/, "") + "/products/"));
+
+    if (isLocalR2Url) {
         return {
             success: true,
             originalUrl: url,

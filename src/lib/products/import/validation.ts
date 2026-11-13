@@ -12,18 +12,20 @@ import type {
     ImportValidationError,
     ImportValidationWarning,
     ImportPreviewSummary,
+    CategoryAssignmentOptions,
 } from "./types.ts";
 
 /**
  * Validates a parsed product group against existing Firestore catalog state (dry-run).
- * Generates field-level diffs, price change alerts, stock change alerts, and conflict warnings.
+ * Generates field-level diffs, price change alerts, stock change alerts, category diffs, and conflict warnings.
  */
 export function buildProductPreview(options: {
     group: ParsedProductGroup;
     existingProduct?: any; // Live Firestore product document data
     mode: ImportMode;
+    categoryAssignment?: CategoryAssignmentOptions;
 }): ProductImportPreview {
-    const { group, existingProduct, mode } = options;
+    const { group, existingProduct, mode, categoryAssignment } = options;
 
     const diffs: ProductFieldDiff[] = [];
     const errors: ImportValidationError[] = [...group.errors];
@@ -309,12 +311,75 @@ export function buildProductPreview(options: {
         });
     }
 
+    // 7. Category Assignment & Diffs
+    let targetCategory = group.hasExplicitCategory ? (group.category || "").trim() : "";
+    let isCategoryNew = false;
+    let categoryDiff: { from: string; to: string } | undefined = undefined;
+
+    if (categoryAssignment) {
+        if (categoryAssignment.mode === "assign_existing" && categoryAssignment.selectedCategory?.trim()) {
+            targetCategory = categoryAssignment.selectedCategory.trim();
+        } else if (categoryAssignment.mode === "create_new" && categoryAssignment.newCategoryName?.trim()) {
+            targetCategory = categoryAssignment.newCategoryName.trim();
+            isCategoryNew = true;
+        } else if (categoryAssignment.mode === "preserve_csv") {
+            targetCategory = group.hasExplicitCategory ? (group.category || "").trim() : "";
+        }
+    }
+
+    if (existingProduct) {
+        // Safe preservation: preserve existing category if requested OR if CSV omitted category column without override
+        if (categoryAssignment?.preserveExistingOnUpdatedProducts || (!targetCategory && existingProduct.category)) {
+            targetCategory = existingProduct.category || "General";
+            diffs.push({
+                field: "category",
+                label: "Category",
+                oldValue: existingProduct.category || "General",
+                newValue: existingProduct.category || "General",
+                action: "preserve",
+            });
+        } else if (targetCategory && existingProduct.category && existingProduct.category !== targetCategory) {
+            categoryDiff = { from: existingProduct.category, to: targetCategory };
+            diffs.push({
+                field: "category",
+                label: "Category",
+                oldValue: existingProduct.category,
+                newValue: targetCategory,
+                action: "update",
+                warning: `Category will change from '${existingProduct.category}' to '${targetCategory}'`,
+            });
+        }
+    } else {
+        if (!targetCategory) {
+            targetCategory = "General";
+        }
+        diffs.push({
+            field: "category",
+            label: "Category",
+            oldValue: "—",
+            newValue: targetCategory,
+            action: "create",
+        });
+    }
+
+    // Specifications Summary
+    let specificationsSummary: string | undefined = undefined;
+    if (group.attributes && group.attributes.length > 0) {
+        specificationsSummary = group.attributes.map(a => `${a.name}: ${a.value}`).join(" · ");
+    } else if (group.sizeMode !== "none" && group.variants.length > 0) {
+        specificationsSummary = `${group.variants.length} variant${group.variants.length > 1 ? "s" : ""}`;
+    }
+
     return {
         handle: group.handle,
         title: group.title,
         status,
         existingProductId: existingProduct?.id,
         existingProductSnapshot: existingProduct,
+        category: targetCategory,
+        isCategoryNew,
+        categoryDiff,
+        specificationsSummary,
         diffs,
         priceChange,
         inventoryChange,
@@ -336,8 +401,9 @@ export function buildPreviewSummary(options: {
     totalRows: number;
     unsupportedHeaders: Array<{ header: string; reason: string }>;
     detectedFormat: any;
+    categoryAssignment?: CategoryAssignmentOptions;
 }): ImportPreviewSummary {
-    const { previews, totalRows, unsupportedHeaders, detectedFormat } = options;
+    const { previews, totalRows, unsupportedHeaders, detectedFormat, categoryAssignment } = options;
 
     let newProducts = 0;
     let existingProducts = 0;
@@ -350,6 +416,7 @@ export function buildPreviewSummary(options: {
     let warningCount = 0;
     let priceChangeCount = 0;
     let inventoryChangeCount = 0;
+    let categoryChangeCount = 0;
     let personalizationChangeCount = 0;
     let draftCount = 0;
     let publishedCount = 0;
@@ -368,6 +435,7 @@ export function buildPreviewSummary(options: {
 
         if (p.priceChange) priceChangeCount++;
         if (p.inventoryChange) inventoryChangeCount++;
+        if (p.categoryDiff) categoryChangeCount++;
         if (p.personalizationChange) personalizationChangeCount++;
 
         if (p.parsedGroup.isVisible) publishedCount++;
@@ -390,7 +458,10 @@ export function buildPreviewSummary(options: {
         warningCount,
         priceChangeCount,
         inventoryChangeCount,
+        categoryChangeCount,
         personalizationChangeCount,
+        categoryAssignment,
+        newCategoryName: categoryAssignment?.mode === "create_new" ? categoryAssignment.newCategoryName : undefined,
         draftCount,
         publishedCount,
         productPreviews: previews,

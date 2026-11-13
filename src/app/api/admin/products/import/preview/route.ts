@@ -5,7 +5,7 @@ import { verifyAdminRequest } from "@/lib/auth/adminAuth";
 import { resolveColumnMapping } from "@/lib/products/import/mapping";
 import { groupCsvRows } from "@/lib/products/import/grouping";
 import { generateDryRunPreview } from "@/lib/products/import/serverImportEngine";
-import type { ImportMode, RawCsvRow } from "@/lib/products/import/types";
+import type { ImportMode, RawCsvRow, CategoryAssignmentOptions } from "@/lib/products/import/types";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
         const body = await req.json().catch(() => ({}));
         const csvText = typeof body.csvText === "string" ? body.csvText : "";
         const mode: ImportMode = body.mode || "create_and_update";
+        const categoryAssignment: CategoryAssignmentOptions | undefined = body.categoryAssignment;
 
         if (!csvText || !csvText.trim()) {
             return NextResponse.json(
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
             unsupportedHeaders: mappingResult.unsupportedHeaders,
             detectedFormat: mappingResult.formatDetected,
             mode,
+            categoryAssignment,
         });
 
         return NextResponse.json({

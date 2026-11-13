@@ -35,6 +35,7 @@ import type {
     ImportConfirmationOptions,
     ImportChunkCommitResult,
     ImportBatchStatus,
+    CategoryAssignmentOptions,
 } from "./types.ts";
 
 export const PREVIEW_EXPIRATION_MS = 60 * 60 * 1000; // 1 hour preview validity
@@ -61,6 +62,7 @@ export async function generateDryRunPreview(options: {
     unsupportedHeaders: Array<{ header: string; reason: string }>;
     detectedFormat: any;
     mode: ImportMode;
+    categoryAssignment?: CategoryAssignmentOptions;
 }): Promise<{ previewSummary: ImportPreviewSummary; batchId: string }> {
     const {
         batchId = crypto.randomUUID(),
@@ -73,6 +75,7 @@ export async function generateDryRunPreview(options: {
         unsupportedHeaders,
         detectedFormat,
         mode,
+        categoryAssignment,
     } = options;
 
     if (!adminDb) {
@@ -139,6 +142,7 @@ export async function generateDryRunPreview(options: {
             group,
             existingProduct: existingDocData,
             mode,
+            categoryAssignment,
         });
 
         previews.push(preview);
@@ -162,6 +166,7 @@ export async function generateDryRunPreview(options: {
         totalRows,
         unsupportedHeaders,
         detectedFormat,
+        categoryAssignment,
     });
 
     const batchRef = db.collection("productImportBatches").doc(batchId);
@@ -212,6 +217,7 @@ export async function generateDryRunPreview(options: {
         sourceFileChecksum: fileChecksum,
         importMode: mode,
         formatDetected: detectedFormat,
+        categoryAssignment,
         totalRows,
         totalProducts: groups.length,
         createdCount: 0,
@@ -346,6 +352,13 @@ export async function executeBatchImport(options: {
                 `Explicit Confirmation Required: The import will update ${summary.existingProducts} existing catalog products. You must explicitly check 'Confirm Existing Product Updates' before importing.`
             );
         }
+
+        // Category change confirmation
+        if (summary.categoryChangeCount && summary.categoryChangeCount > 0 && !confirmations.confirmCategoryChanges) {
+            throw new Error(
+                `Explicit Confirmation Required: The CSV import will change categories for ${summary.categoryChangeCount} existing catalog products. You must explicitly verify and check 'Confirm Category Changes' before importing.`
+            );
+        }
     }
 
     // 6. Concurrency Lease Acquisition (Requirement 2):
@@ -378,6 +391,32 @@ export async function executeBatchImport(options: {
     });
 
     try {
+        // 6b. Idempotent Category Provisioning (Option B: Create New Category)
+        const catAssignment = batchDoc.categoryAssignment || batchDoc.previewSummary?.categoryAssignment;
+        if (catAssignment?.mode === "create_new" && catAssignment.newCategoryName?.trim()) {
+            const newCatName = catAssignment.newCategoryName.trim();
+            const existingCatQuery = await db.collection("categories").where("name", "==", newCatName).limit(1).get();
+            if (existingCatQuery.empty) {
+                const slug = newCatName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+                const catId = slug || crypto.randomUUID();
+                const catDocRef = db.collection("categories").doc(catId);
+                const existingCatDoc = await catDocRef.get();
+                if (!existingCatDoc.exists) {
+                    const allCats = await db.collection("categories").get();
+                    await catDocRef.set({
+                        id: catId,
+                        name: newCatName,
+                        description: "",
+                        image: "",
+                        showOnHome: false,
+                        order: allCats.size,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                    });
+                }
+            }
+        }
+
         // 7. Load Authoritative Items from Subcollection (or initialize from parent groups if legacy)
         const itemsCollection = batchRef.collection("items");
         const itemsSnap = await itemsCollection.orderBy("itemIndex").get();
@@ -653,12 +692,42 @@ export async function executeBatchImport(options: {
                     const finalIsCustomized = item.group.isCustomized || (oldIsCustom && !item.group.isCustomized && !item.group.customizationType);
                     const finalCustomizationType = item.group.customizationType || (oldIsCustom ? liveProduct?.customizationType : null);
 
+                    // Category assignment resolution
+                    let effectiveCategory = item.group.hasExplicitCategory ? (item.group.category || "").trim() : "";
+                    const batchCatAssignment = batchDoc.categoryAssignment || batchDoc.previewSummary?.categoryAssignment;
+                    if (batchCatAssignment) {
+                        if (batchCatAssignment.mode === "assign_existing" && batchCatAssignment.selectedCategory?.trim()) {
+                            effectiveCategory = batchCatAssignment.selectedCategory.trim();
+                        } else if (batchCatAssignment.mode === "create_new" && batchCatAssignment.newCategoryName?.trim()) {
+                            effectiveCategory = batchCatAssignment.newCategoryName.trim();
+                        } else if (batchCatAssignment.mode === "preserve_csv") {
+                            effectiveCategory = item.group.hasExplicitCategory ? (item.group.category || "").trim() : "";
+                        }
+                    }
+
+                    if (liveProduct) {
+                        if (batchCatAssignment?.preserveExistingOnUpdatedProducts || (!effectiveCategory && liveProduct.category)) {
+                            effectiveCategory = liveProduct.category || "General";
+                        }
+                    } else {
+                        if (!effectiveCategory) {
+                            effectiveCategory = "General";
+                        }
+                    }
+
+                    // Incomplete media tracking (TASK 035 Section 4)
+                    const hasIncompleteMedia = Boolean(imagesFailed > 0 && item.group.images.length > 0);
+
                     // Safe Publishing Defaults (Requirement 6):
                     // New products default to draft (isVisible: false) unless explicitly requested and confirmed!
-                    // Existing products retain visibility unless CSV explicitly specifies a valid state.
-                    const finalVisibility = liveProduct
+                    // Incomplete media safeguard: Never silently publish a product with failed media!
+                    let finalVisibility = liveProduct
                         ? (item.group.isVisible !== undefined ? item.group.isVisible : liveProduct.isVisible)
                         : Boolean(item.group.isVisible && confirmations.allowPublishNewProducts);
+
+                    if (hasIncompleteMedia && !liveProduct) {
+                        finalVisibility = false;
+                    }
 
                     // Price Safety Invariant: Ensure prices are non-zero
                     const finalBasePrice = item.group.basePrice > 0 ? item.group.basePrice : (liveProduct?.price || 0);
@@ -672,7 +741,7 @@ export async function executeBatchImport(options: {
                         slug: item.group.handle,
                         description: item.group.description || (liveProduct?.description || ""),
                         vendor: item.group.vendor || (liveProduct?.vendor || "Bazaarvilla"),
-                        category: item.group.category || (liveProduct?.category || "General"),
+                        category: effectiveCategory,
                         tags: item.group.tags.length > 0 ? item.group.tags : (liveProduct?.tags || []),
                         price: finalBasePrice,
                         compareAtPrice: item.group.compareAtPrice ?? (liveProduct?.compareAtPrice ?? null),
@@ -686,8 +755,10 @@ export async function executeBatchImport(options: {
                         sizesList: isVariantManaged ? (item.group.hasVariantColumns ? item.group.sizesList : (liveProduct?.sizesList || [])) : [],
                         colors: isVariantManaged ? (item.group.hasVariantColumns ? item.group.colors : (liveProduct?.colors || [])) : [],
                         variants: isVariantManaged ? (reconciled.variants || finalVariants) : [],
+                        attributes: item.group.attributes && item.group.attributes.length > 0 ? item.group.attributes : (liveProduct?.attributes || []),
                         images: ingestedImages.length > 0 ? ingestedImages : (liveProduct?.images || []),
                         thumbnails: ingestedImages.length > 0 ? ingestedImages : (liveProduct?.thumbnails || []),
+                        hasIncompleteMedia,
                         createdAt: liveProduct?.createdAt || Date.now(),
                         updatedAt: Date.now(),
                     };
@@ -699,9 +770,11 @@ export async function executeBatchImport(options: {
                         productId,
                         status: isExistingInSnapshot ? "updated" : "created",
                         title: item.group.title,
+                        category: effectiveCategory,
                         variantsCreatedOrUpdated: item.group.variants.length,
                         imagesIngested: ingestedImages.length,
                         imagesFailed,
+                        hasIncompleteMedia,
                     };
 
                     // ATOMIC COMMIT: Commit product document AND item completion state together!

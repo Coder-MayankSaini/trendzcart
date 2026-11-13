@@ -10,7 +10,7 @@ import type {
 } from "../variants.ts";
 import { MAX_VARIANT_LIMIT } from "../variants.ts";
 import { parseSizeString, buildExplicitDimensions } from "./dimensionsParser.ts";
-import { sanitizeHtmlDescription } from "./sanitizer.ts";
+import { sanitizeHtmlDescription, normalizeProductDescription } from "./sanitizer.ts";
 import type {
     RawCsvRow,
     ParsedProductGroup,
@@ -122,6 +122,25 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
         const rawHandle = getRowFieldValue(row, "handle");
         const rawTitle = getRowFieldValue(row, "title");
 
+        // Check for non-product promotional footer row (e.g. Shopify Spy export footer)
+        const lowerHandle = (rawHandle || "").toLowerCase();
+        const lowerTitle = (rawTitle || "").toLowerCase();
+        const isPromoFooter =
+            lowerHandle.includes("shopify-spy") ||
+            lowerTitle.includes("shopify spy") ||
+            lowerTitle.includes("export shopify products to csv") ||
+            lowerTitle.includes("shopifyspy.com");
+
+        if (isPromoFooter) {
+            fileWarnings.push({
+                rowNumber: currentRowIndex,
+                field: "handle",
+                providedValue: rawHandle || rawTitle,
+                message: `Row ${currentRowIndex} excluded: Detected non-product promotional footer ('${rawTitle || rawHandle}').`,
+            });
+            continue;
+        }
+
         // If both handle and title are missing on a row, skip or report error
         if (!rawHandle && !rawTitle) {
             fileWarnings.push({
@@ -160,6 +179,7 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
         let description = getRowFieldValue(cluster.firstRow, "description");
         let vendor = getRowFieldValue(cluster.firstRow, "vendor");
         let category = getRowFieldValue(cluster.firstRow, "category");
+        let hasExplicitCategory = Boolean(category && category.trim().length > 0);
         let tagsRaw = getRowFieldValue(cluster.firstRow, "tags");
         let publishedRaw = getRowFieldValue(cluster.firstRow, "published");
         let customizationTypeRaw = getRowFieldValue(cluster.firstRow, "customization_type");
@@ -170,7 +190,13 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
             if (!title) title = getRowFieldValue(item.row, "title");
             if (!description) description = getRowFieldValue(item.row, "description");
             if (!vendor) vendor = getRowFieldValue(item.row, "vendor");
-            if (!category) category = getRowFieldValue(item.row, "category");
+            if (!category) {
+                const catCandidate = getRowFieldValue(item.row, "category");
+                if (catCandidate && catCandidate.trim().length > 0) {
+                    category = catCandidate;
+                    hasExplicitCategory = true;
+                }
+            }
             if (!tagsRaw) tagsRaw = getRowFieldValue(item.row, "tags");
             if (!customizationTypeRaw) customizationTypeRaw = getRowFieldValue(item.row, "customization_type");
         }
@@ -191,8 +217,8 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
         // Only set true if explicitly published/active in CSV
         const isVisible = parseBoolean(publishedRaw, false);
 
-        // Clean & sanitize description
-        const cleanDescription = sanitizeHtmlDescription(description);
+        // Clean & sanitize description (TASK 035 normalized description with entity decoding and readable linebreaks)
+        const cleanDescription = normalizeProductDescription(description);
 
         // Tags parsing (comma separated)
         const tags = tagsRaw
@@ -300,6 +326,19 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
         const sizeOptionsMap = new Map<string, SizeOption>();
         const colorOptionsMap = new Map<string, ColorOption>();
         let detectedSizeMode: SizeMode = "none";
+
+        // Check if options are descriptive attributes rather than customer-selectable Size/Color variants
+        const hasSizeOrColorOption = opt1Class === "size" || opt1Class === "color" || opt2Class === "size" || opt2Class === "color";
+        const nonImageRows = cluster.rows.filter(item => {
+            const p = getRowFieldValue(item.row, "price");
+            const s = getRowFieldValue(item.row, "sku");
+            const q = getRowFieldValue(item.row, "inventory");
+            const o1 = getRowFieldValue(item.row, "option1_value");
+            const o2 = getRowFieldValue(item.row, "option2_value");
+            return Boolean(p || s || q || (o1 && o1.toLowerCase() !== "default title") || o2);
+        });
+        const isDescriptiveSingleVariant = !hasSizeOrColorOption && nonImageRows.length <= 1;
+        const productAttributes: Array<{ name: string; value: string }> = [];
 
         // Process rows for variants
         let hasExplicitInventory = false;
@@ -414,13 +453,24 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
                 }
             }
 
-            // Identify simple product: "Default Title" in Option1 or blank options
-            if (
-                (!opt1Val || opt1Val.toLowerCase() === "default title") &&
-                (!opt2Val || opt2Val.toLowerCase() === "default title") &&
-                cluster.rows.length <= (imagesList.length > 0 ? imagesList.length + 1 : 1)
-            ) {
+            // Identify simple product:
+            // 1. "Default Title" in Option1 or blank options
+            // 2. Descriptive options (neither Size nor Color) on a single-variant product (e.g. Material=Plastic, Type=Desk Lamp)
+            const isDefaultTitle = (!opt1Val || opt1Val.toLowerCase() === "default title") && (!opt2Val || opt2Val.toLowerCase() === "default title");
+
+            if (isDefaultTitle || isDescriptiveSingleVariant) {
                 isSimpleProduct = true;
+                if (isDescriptiveSingleVariant) {
+                    if (opt1Name && opt1Val && opt1Val.toLowerCase() !== "default title") {
+                        productAttributes.push({ name: opt1Name, value: opt1Val });
+                    }
+                    if (opt2Name && opt2Val && opt2Val.toLowerCase() !== "default title") {
+                        productAttributes.push({ name: opt2Name, value: opt2Val });
+                    }
+                    if (opt3Name && opt3Val && opt3Val.toLowerCase() !== "default title") {
+                        productAttributes.push({ name: opt3Name, value: opt3Val });
+                    }
+                }
                 parsedVariants.push({
                     csvRowNumber: item.rowNumber,
                     sku: sku || undefined,
@@ -598,7 +648,8 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
             title,
             description: cleanDescription,
             vendor: vendor || undefined,
-            category: category || "General",
+            category: hasExplicitCategory ? (category || "").trim() : undefined,
+            hasExplicitCategory,
             tags,
             isVisible,
             isCustomized,
@@ -611,14 +662,19 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
             hasExplicitInventory,
             hasExplicitPrice,
             hasVariantColumns,
-            sizeMode: detectedSizeMode,
-            sizesList: Array.from(sizeOptionsMap.values()),
-            colors: Array.from(colorOptionsMap.values()),
+            sizeMode: isSimpleProduct ? "none" : detectedSizeMode,
+            sizesList: isSimpleProduct ? [] : Array.from(sizeOptionsMap.values()),
+            colors: isSimpleProduct ? [] : Array.from(colorOptionsMap.values()),
+            attributes: productAttributes.length > 0 ? productAttributes : undefined,
             firstRowNumber: cluster.firstRowNumber,
             allRowNumbers,
             errors,
             warnings,
-            unsupportedColumns: [],
+            unsupportedColumns: productAttributes.map(attr => ({
+                column: attr.name,
+                value: attr.value,
+                reason: `Descriptive Shopify attribute '${attr.name}' preserved as product specification rather than size/color variant selector.`,
+            })),
         });
     }
 
