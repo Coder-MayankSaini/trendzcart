@@ -406,10 +406,12 @@ export async function executeBatchImport(options: {
                     await catDocRef.set({
                         id: catId,
                         name: newCatName,
+                        slug,
                         description: "",
                         image: "",
                         showOnHome: false,
                         order: allCats.size,
+                        isActive: true,
                         createdAt: Date.now(),
                         updatedAt: Date.now(),
                     });
@@ -758,6 +760,7 @@ export async function executeBatchImport(options: {
                         attributes: item.group.attributes && item.group.attributes.length > 0 ? item.group.attributes : (liveProduct?.attributes || []),
                         images: ingestedImages.length > 0 ? ingestedImages : (liveProduct?.images || []),
                         thumbnails: ingestedImages.length > 0 ? ingestedImages : (liveProduct?.thumbnails || []),
+                        imageUrl: ingestedImages[0] || (liveProduct?.imageUrl || null),
                         hasIncompleteMedia,
                         createdAt: liveProduct?.createdAt || Date.now(),
                         updatedAt: Date.now(),

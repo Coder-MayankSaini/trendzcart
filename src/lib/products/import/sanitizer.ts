@@ -205,6 +205,7 @@ export const ALLOWED_PRODUCT_IMPORT_FIELDS = new Set([
     "variants",
     "images",
     "thumbnails",
+    "imageUrl",
     "attributes",
     "hasIncompleteMedia",
     "createdAt",
