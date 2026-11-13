@@ -349,9 +349,29 @@ export function groupCsvRows(rawRows: RawCsvRow[]): {
             }
 
             let numCompare: number | null = null;
-            if (rawComparePrice) {
-                const parsedComp = parseFloat(rawComparePrice);
-                if (!isNaN(parsedComp) && parsedComp > 0) {
+            if (rawComparePrice && rawComparePrice.trim().length > 0) {
+                const parsedComp = parseFloat(rawComparePrice.trim());
+                if (isNaN(parsedComp) || parsedComp <= 0) {
+                    errors.push({
+                        rowNumber: item.rowNumber,
+                        handle,
+                        field: "compare_at_price",
+                        providedValue: rawComparePrice,
+                        message: `Invalid compare-at / original price '${rawComparePrice}'. Original price must be a valid positive number.`,
+                        suggestedCorrection: "Specify a positive number greater than or equal to selling price, or leave blank.",
+                        fatal: true,
+                    });
+                } else if (numPrice > 0 && parsedComp < numPrice) {
+                    errors.push({
+                        rowNumber: item.rowNumber,
+                        handle,
+                        field: "compare_at_price",
+                        providedValue: rawComparePrice,
+                        message: `Original / compare-at price (₹${parsedComp}) cannot be less than selling price (₹${numPrice}). Products cannot have a negative discount.`,
+                        suggestedCorrection: "Ensure original price is greater than or equal to selling price, or leave blank.",
+                        fatal: true,
+                    });
+                } else {
                     numCompare = parsedComp;
                     if (overallComparePrice === null) overallComparePrice = parsedComp;
                 }

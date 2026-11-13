@@ -17,12 +17,14 @@ import {
     formatSizeDisplay,
     resolveMatchingVariant,
     getEffectivePrice,
+    getEffectivePricing,
 } from "@/lib/products/variants";
 
 interface ProductProps {
     id: string;
     name: string;
     price: number;
+    compareAtPrice?: number | null;
     image: string;
     inventory?: number;
     isCustomized?: boolean;
@@ -322,6 +324,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
         } : undefined;
 
         if (product.hasVariants && matchedVariant) {
+            const vPricing = getEffectivePricing(product.price, product.compareAtPrice, matchedVariant);
             addToCart({
                 id: uuidv4(),
                 productId: product.id,
@@ -329,6 +332,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                 sku: matchedVariant.sku,
                 name: product.name,
                 price: effectivePrice,
+                compareAtPrice: vPricing.hasDiscount ? vPricing.originalPrice : null,
                 quantity,
                 image: matchedVariant.image || product.image,
                 size: matchedVariant.sizeName || activeSizes.find(s => s.id === selectedSizeId)?.name,
@@ -340,11 +344,13 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                 customizationData,
             });
         } else {
+            const pPricing = getEffectivePricing(product.price, product.compareAtPrice, null);
             addToCart({
                 id: uuidv4(),
                 productId: product.id,
                 name: product.name,
                 price: product.price,
+                compareAtPrice: pPricing.hasDiscount ? pPricing.originalPrice : null,
                 quantity,
                 image: product.image,
                 size: selectedLegacySize || undefined,

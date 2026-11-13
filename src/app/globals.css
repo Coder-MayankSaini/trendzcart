@@ -610,6 +610,37 @@ button {
   color: var(--text-primary);
 }
 
+.pdp-original-price {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+.product-discount-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background-color: #EAF8EE;
+  color: #006B3C;
+  white-space: nowrap;
+}
+
+.pdp-savings-row {
+  margin-top: 2px;
+  margin-bottom: 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #006B3C;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .pdp-tax-note {
   font-size: 0.8rem;
   color: var(--text-secondary);

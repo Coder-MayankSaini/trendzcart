@@ -16,6 +16,12 @@ export type {
     ProductVariant,
 };
 
+export {
+    calculateDiscountPercentage,
+    getEffectivePricing,
+    type EffectivePricing,
+} from "../products/variants.ts";
+
 export interface OrderItemInput {
     id?: string;
     productId?: string;
@@ -72,6 +78,7 @@ export interface ProductRecord {
     id: string;
     name: string;
     price: number;
+    compareAtPrice?: number | null;
     inventory?: number;
     isVisible?: boolean;
     images?: string[];
@@ -330,6 +337,23 @@ export async function calculateOrderPricing(
         if (Number.isNaN(authoritativePrice) || authoritativePrice < 0) {
             errors.push(`Product '${product.name}' has invalid catalog price.`);
             continue;
+        }
+
+        // Validate compareAtPrice if present on product or matched variant
+        const rawCompare = (matchedVariant && typeof matchedVariant.compareAtPrice === "number")
+            ? matchedVariant.compareAtPrice
+            : product.compareAtPrice;
+
+        if (rawCompare !== undefined && rawCompare !== null) {
+            const numCompare = Number(rawCompare);
+            if (Number.isNaN(numCompare) || numCompare <= 0) {
+                errors.push(`Product '${product.name}' has invalid original price (${rawCompare}).`);
+                continue;
+            }
+            if (numCompare < authoritativePrice) {
+                errors.push(`Product '${product.name}' original price (₹${numCompare}) cannot be less than selling price (₹${authoritativePrice}).`);
+                continue;
+            }
         }
 
         const itemSubtotal = authoritativePrice * quantity;

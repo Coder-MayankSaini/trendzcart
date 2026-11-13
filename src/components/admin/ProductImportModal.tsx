@@ -923,7 +923,7 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                                         {p.title || p.handle}
                                                     </div>
                                                     <div style={{ fontSize: "0.76rem", color: "var(--text-secondary)" }}>
-                                                        Slug: <code>{p.handle}</code> · {p.variantCount} variants · {p.imagesCount} images · Base Price: ₹{p.parsedGroup.basePrice}
+                                                        Slug: <code>{p.handle}</code> · {p.variantCount} variants · {p.imagesCount} images · Base Price: ₹{p.parsedGroup.basePrice}{typeof p.parsedGroup.compareAtPrice === "number" && p.parsedGroup.compareAtPrice > 0 ? ` · Original: ₹${p.parsedGroup.compareAtPrice}` : ""}
                                                     </div>
                                                 </div>
 

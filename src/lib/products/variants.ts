@@ -41,6 +41,7 @@ export interface ProductVariant {
     colorName?: string;
     sku?: string;
     price?: number | null; // Optional override; if null/undefined, uses base product price
+    compareAtPrice?: number | null; // Optional original/MRP override; if null/undefined, inherited or suppressed
     inventory: number; // Variant-specific inventory count (>= 0)
     isActive: boolean; // Enabled/disabled state
     image?: string; // Variant-specific photo URL or R2 key
@@ -262,6 +263,7 @@ export function generateVariantMatrix(
                     colorName: c.name,
                     sku: existing?.sku || generateVariantSku(options?.baseSku || "SKU", s.name, c.name),
                     price: typeof existing?.price === "number" ? existing.price : null,
+                    compareAtPrice: typeof existing?.compareAtPrice === "number" ? existing.compareAtPrice : null,
                     inventory: typeof existing?.inventory === "number" ? existing.inventory : defaultStock,
                     isActive: existing?.isActive !== undefined ? existing.isActive : true,
                     image: existing?.image || c.image || undefined,
@@ -283,6 +285,7 @@ export function generateVariantMatrix(
                 sizeName: s.name,
                 sku: existing?.sku || generateVariantSku(options?.baseSku || "SKU", s.name, undefined),
                 price: typeof existing?.price === "number" ? existing.price : null,
+                compareAtPrice: typeof existing?.compareAtPrice === "number" ? existing.compareAtPrice : null,
                 inventory: typeof existing?.inventory === "number" ? existing.inventory : defaultStock,
                 isActive: existing?.isActive !== undefined ? existing.isActive : true,
                 image: existing?.image || undefined,
@@ -303,6 +306,7 @@ export function generateVariantMatrix(
                 colorName: c.name,
                 sku: existing?.sku || generateVariantSku(options?.baseSku || "SKU", undefined, c.name),
                 price: typeof existing?.price === "number" ? existing.price : null,
+                compareAtPrice: typeof existing?.compareAtPrice === "number" ? existing.compareAtPrice : null,
                 inventory: typeof existing?.inventory === "number" ? existing.inventory : defaultStock,
                 isActive: existing?.isActive !== undefined ? existing.isActive : true,
                 image: existing?.image || c.image || undefined,
@@ -363,6 +367,99 @@ export function getEffectivePrice(basePrice: number, variant?: ProductVariant | 
         return variant.price;
     }
     return Number(basePrice) || 0;
+}
+
+/**
+ * Calculates discount percentage given a selling price and original price.
+ * Formula: Math.round(((originalPrice - sellingPrice) / originalPrice) * 100)
+ * Returns 0 if prices are equal, original <= selling, or values are invalid.
+ */
+export function calculateDiscountPercentage(sellingPrice: number, originalPrice: number | null | undefined): number {
+    if (
+        typeof originalPrice !== "number" ||
+        !Number.isFinite(originalPrice) ||
+        originalPrice <= 0 ||
+        typeof sellingPrice !== "number" ||
+        !Number.isFinite(sellingPrice) ||
+        sellingPrice <= 0 ||
+        originalPrice <= sellingPrice
+    ) {
+        return 0;
+    }
+    const discount = Math.round(((originalPrice - sellingPrice) / originalPrice) * 100);
+    return Number.isFinite(discount) && discount > 0 ? discount : 0;
+}
+
+export interface EffectivePricing {
+    sellingPrice: number;
+    originalPrice: number | null;
+    discountPercentage: number;
+    savings: number;
+    hasDiscount: boolean;
+}
+
+/**
+ * Calculates effective selling price, original price, discount percentage, and customer savings
+ * for a product, taking into account variant overrides and fallback rules.
+ *
+ * Rules:
+ * 1. Selling price uses variant.price override if present, else basePrice.
+ * 2. If variant has an explicit positive compareAtPrice override, that is its original price.
+ * 3. If variant has a custom selling price override differing from basePrice but NO compareAtPrice override:
+ *    Suppress discount (never pair a variant's selling price with an unrelated original price).
+ * 4. If variant inherits base price (or no variant selected) and baseCompareAtPrice is valid:
+ *    Use baseCompareAtPrice.
+ * 5. If originalPrice <= sellingPrice or discountPercentage <= 0, no discount is displayed.
+ */
+export function getEffectivePricing(
+    basePrice: number,
+    baseCompareAtPrice?: number | null,
+    variant?: ProductVariant | null
+): EffectivePricing {
+    const rawSellingPrice = getEffectivePrice(basePrice, variant);
+    const sellingPrice = (typeof rawSellingPrice === "number" && Number.isFinite(rawSellingPrice) && rawSellingPrice > 0)
+        ? Math.round(rawSellingPrice)
+        : 0;
+
+    let originalPrice: number | null = null;
+
+    if (variant && typeof variant.compareAtPrice === "number" && Number.isFinite(variant.compareAtPrice) && variant.compareAtPrice > 0) {
+        // Variant has its own explicit compareAtPrice override
+        originalPrice = Math.round(variant.compareAtPrice);
+    } else if (
+        variant &&
+        typeof variant.price === "number" &&
+        Number.isFinite(variant.price) &&
+        variant.price !== basePrice
+    ) {
+        // Variant has a custom price override that differs from base price, but NO compareAtPrice override.
+        // Never show a misleading discount pairing one variant's selling price with another's original price.
+        originalPrice = null;
+    } else if (typeof baseCompareAtPrice === "number" && Number.isFinite(baseCompareAtPrice) && baseCompareAtPrice > 0) {
+        // Inherits base compareAtPrice
+        originalPrice = Math.round(baseCompareAtPrice);
+    }
+
+    if (originalPrice !== null && originalPrice > sellingPrice && sellingPrice > 0) {
+        const discountPercentage = calculateDiscountPercentage(sellingPrice, originalPrice);
+        if (discountPercentage > 0) {
+            return {
+                sellingPrice,
+                originalPrice,
+                discountPercentage,
+                savings: originalPrice - sellingPrice,
+                hasDiscount: true,
+            };
+        }
+    }
+
+    return {
+        sellingPrice,
+        originalPrice: null,
+        discountPercentage: 0,
+        savings: 0,
+        hasDiscount: false,
+    };
 }
 
 /**
@@ -451,6 +548,14 @@ export function validateVariantConfiguration(config: ProductVariantConfig): {
         if (v.price !== null && v.price !== undefined) {
             if (isNaN(v.price) || v.price < 0) {
                 errors.push(`Variant '${v.id}' has invalid price override: ${v.price}. Must be a non-negative number.`);
+            }
+        }
+
+        if (v.compareAtPrice !== null && v.compareAtPrice !== undefined) {
+            if (isNaN(v.compareAtPrice) || v.compareAtPrice <= 0) {
+                errors.push(`Variant '${v.id}' has invalid compare-at price override: ${v.compareAtPrice}. Must be a positive number.`);
+            } else if (typeof v.price === "number" && v.compareAtPrice < v.price) {
+                errors.push(`Variant '${v.id}' compare-at price (₹${v.compareAtPrice}) cannot be less than its selling price override (₹${v.price}).`);
             }
         }
     }

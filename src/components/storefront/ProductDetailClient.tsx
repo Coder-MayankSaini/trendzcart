@@ -7,6 +7,7 @@ import ProductCustomizer from "@/components/storefront/ProductCustomizer";
 import ProductPurchaseActivity from "@/components/storefront/ProductPurchaseActivity";
 import { isCustomizableProduct } from "@/lib/orders/customizationEligibility";
 import type { ProductVariant } from "@/lib/products/variants";
+import { getEffectivePricing } from "@/lib/products/variants";
 
 export default function ProductDetailClient({ product }: { product: any }) {
     const [activeVariant, setActiveVariant] = useState<ProductVariant | null>(null);
@@ -14,10 +15,8 @@ export default function ProductDetailClient({ product }: { product: any }) {
     const images: string[] = product.images || [];
     const mainImage = images.length > 0 ? images[0] : null;
 
-    // Server-authoritative fallback price updated with active variant price override
-    const currentPrice = (product.hasVariants && activeVariant && typeof activeVariant.price === "number" && activeVariant.price >= 0)
-        ? activeVariant.price
-        : Number(product.price) || 0;
+    // Dual-pricing and variant-reactive calculations (TASK 034)
+    const pricing = getEffectivePricing(product.price, product.compareAtPrice, activeVariant);
 
     return (
         <div className="pdp-layout" data-testid="pdp-layout">
@@ -56,10 +55,26 @@ export default function ProductDetailClient({ product }: { product: any }) {
 
                 <h1 className="pdp-title">{product.name}</h1>
 
-                <div className="pdp-price-row">
-                    <span className="pdp-price">₹{currentPrice.toLocaleString("en-IN")}</span>
+                <div className="pdp-price-row" style={{ display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                    <span className="pdp-price">₹{pricing.sellingPrice.toLocaleString("en-IN")}</span>
+                    {pricing.hasDiscount && pricing.originalPrice && (
+                        <>
+                            <span className="pdp-original-price">
+                                ₹{pricing.originalPrice.toLocaleString("en-IN")}
+                            </span>
+                            <span className="product-discount-badge" style={{ fontSize: '0.8rem', padding: '3px 8px' }}>
+                                {pricing.discountPercentage}% OFF
+                            </span>
+                        </>
+                    )}
                     <span className="pdp-tax-note">Inclusive of all taxes</span>
                 </div>
+
+                {pricing.hasDiscount && (
+                    <div className="pdp-savings-row">
+                        <span>You save ₹{pricing.savings.toLocaleString("en-IN")}</span>
+                    </div>
+                )}
 
                 <div style={{ marginTop: '4px', marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '8px', maxWidth: '100%' }}>
                     {isCustomizableProduct(product) ? (
@@ -89,6 +104,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
                         id: product.id,
                         name: product.name,
                         price: product.price,
+                        compareAtPrice: product.compareAtPrice,
                         image: mainImage || "",
                         inventory: product.inventory,
                         isCustomized: isCustomizableProduct(product),

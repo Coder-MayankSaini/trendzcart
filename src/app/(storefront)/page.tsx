@@ -252,8 +252,18 @@ export default async function Home() {
                     </div>
                     <div className="hp-product-details">
                       <h3 className="hp-product-name">{product.name}</h3>
-                      <div className="hp-product-price-row">
+                      <div className="hp-product-price-row" style={{ display: "flex", alignItems: "baseline", gap: "6px", flexWrap: "wrap" }}>
                         <p className="hp-product-price">₹{Number(product.price).toLocaleString("en-IN")}</p>
+                        {typeof product.compareAtPrice === "number" && product.compareAtPrice > Number(product.price) && (
+                          <>
+                            <span className="hp-product-original-price">
+                              ₹{product.compareAtPrice.toLocaleString("en-IN")}
+                            </span>
+                            <span className="product-discount-badge">
+                              {Math.round(((product.compareAtPrice - Number(product.price)) / product.compareAtPrice) * 100)}% OFF
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
                   </Link>

@@ -91,7 +91,21 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                                 </div>
                                 <div className="product-info" style={{ padding: '8px 0' }}>
                                     <h3 className="product-name" style={{ fontSize: '1rem' }}>{product.name}</h3>
-                                    <p className="product-price">₹{Number(product.price).toLocaleString("en-IN")}</p>
+                                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', flexWrap: 'wrap', marginTop: 'auto' }}>
+                                        <p className="product-price" style={{ margin: 0, fontWeight: 700, color: 'var(--text-primary)' }}>
+                                            ₹{Number(product.price).toLocaleString("en-IN")}
+                                        </p>
+                                        {typeof product.compareAtPrice === "number" && product.compareAtPrice > Number(product.price) && (
+                                            <>
+                                                <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', textDecoration: 'line-through' }}>
+                                                    ₹{product.compareAtPrice.toLocaleString("en-IN")}
+                                                </span>
+                                                <span className="product-discount-badge">
+                                                    {Math.round(((product.compareAtPrice - Number(product.price)) / product.compareAtPrice) * 100)}% OFF
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </Link>
                         );

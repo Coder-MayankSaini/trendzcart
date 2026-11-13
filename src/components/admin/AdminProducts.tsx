@@ -29,6 +29,7 @@ import {
     calculateVariantStockBreakdown,
     validateVariantConfiguration,
     reconcileProductInventoryOnSave,
+    getEffectivePricing,
 } from "@/lib/products/variants";
 
 async function uploadFileToR2(file: File, folder: string, subId?: string): Promise<string> {
@@ -79,6 +80,7 @@ interface Product {
     slug: string;
     description: string;
     price: number;
+    compareAtPrice?: number | null;
     images: string[];
     thumbnails?: string[];
     category: string;
@@ -251,6 +253,7 @@ export default function AdminProducts() {
             slug: "",
             description: "",
             price: 0,
+            compareAtPrice: null,
             images: [],
             thumbnails: [],
             category: "",
@@ -566,6 +569,31 @@ export default function AdminProducts() {
                 finalCategory = finalCategories[0];
             }
 
+            // Validate authoritative pricing and original/compare-at pricing
+            const baseSellingPrice = Number(formData.price);
+            if (isNaN(baseSellingPrice) || baseSellingPrice <= 0 || !isFinite(baseSellingPrice)) {
+                alert("Invalid Selling Price: Base selling price must be a valid positive number (greater than ₹0).");
+                setUploading(false);
+                return;
+            }
+
+            const rawCompareAtPrice = formData.compareAtPrice;
+            let finalCompareAtPrice: number | null = null;
+            if (rawCompareAtPrice !== null && rawCompareAtPrice !== undefined && String(rawCompareAtPrice).trim() !== "") {
+                const compPrice = Number(rawCompareAtPrice);
+                if (isNaN(compPrice) || compPrice <= 0 || !isFinite(compPrice)) {
+                    alert("Invalid Original Price: Original / MRP price must be a positive number.");
+                    setUploading(false);
+                    return;
+                }
+                if (compPrice < baseSellingPrice) {
+                    alert(`Invalid Pricing: Original price (₹${compPrice}) cannot be less than selling price (₹${baseSellingPrice}).`);
+                    setUploading(false);
+                    return;
+                }
+                finalCompareAtPrice = Math.round(compPrice);
+            }
+
             const hasVariants = Boolean(formData.hasVariants);
             const variants = formData.variants || [];
             const sizesList = formData.sizesList || [];
@@ -637,6 +665,8 @@ export default function AdminProducts() {
                 const payload = {
                     ...formData,
                     id: productId,
+                    price: Math.round(baseSellingPrice),
+                    compareAtPrice: finalCompareAtPrice,
                     images: allImages,
                     thumbnails: allThumbnails,
                     category: finalCategory,
@@ -924,10 +954,13 @@ export default function AdminProducts() {
                             </div>
                         </div>
 
-                        {/* Base Price and Stock Grid */}
-                        <div className="admin-form-grid-2" style={{ marginBottom: "20px" }}>
+                        {/* Pricing & Stock Grid */}
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "16px" }}>
                             <div className="admin-form-group">
-                                <label htmlFor="prod-price">Base Price (₹ INR) *</label>
+                                <label htmlFor="prod-price" style={{ display: "flex", justifyContent: "space-between" }}>
+                                    <span>Selling Price (₹ INR) *</span>
+                                    <span style={{ fontSize: "0.72rem", color: "var(--accent)", fontWeight: 600 }}>Checkout Price</span>
+                                </label>
                                 <input
                                     id="prod-price"
                                     type="number"
@@ -937,16 +970,40 @@ export default function AdminProducts() {
                                     required
                                     className="admin-form-input"
                                     value={formData.price ?? 0}
-                                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                                    onChange={(e) => setFormData({ ...formData, price: e.target.value === "" ? 0 : Number(e.target.value) })}
                                 />
                                 <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
-                                    Default price for product or variants without explicit price overrides.
+                                    Actual current price customers pay at checkout.
+                                </span>
+                            </div>
+
+                            <div className="admin-form-group">
+                                <label htmlFor="prod-compare-at" style={{ display: "flex", justifyContent: "space-between" }}>
+                                    <span>Original Price / MRP (₹)</span>
+                                    <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)" }}>Optional Strikethrough</span>
+                                </label>
+                                <input
+                                    id="prod-compare-at"
+                                    type="number"
+                                    inputMode="decimal"
+                                    step="1"
+                                    min="0"
+                                    className="admin-form-input"
+                                    value={typeof formData.compareAtPrice === "number" ? formData.compareAtPrice : ""}
+                                    onChange={(e) => setFormData({
+                                        ...formData,
+                                        compareAtPrice: e.target.value === "" ? null : Number(e.target.value)
+                                    })}
+                                    placeholder="e.g. 1499"
+                                />
+                                <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                    Must be ≥ selling price to display discount badge.
                                 </span>
                             </div>
 
                             <div className="admin-form-group">
                                 <label htmlFor="prod-inventory">
-                                    {formData.hasVariants ? "Total Inventory (Aggregated across variants)" : "Inventory Count *"}
+                                    {formData.hasVariants ? "Total Inventory (Aggregated)" : "Inventory Count *"}
                                 </label>
                                 <input
                                     id="prod-inventory"
@@ -963,11 +1020,75 @@ export default function AdminProducts() {
                                 />
                                 <span style={{ fontSize: "0.75rem", color: "var(--text-secondary)", marginTop: "4px" }}>
                                     {formData.hasVariants
-                                        ? "Automatically computed from the sum of active variant stock."
+                                        ? "Computed from sum of active variant stock."
                                         : "Direct product-level stock count."}
                                 </span>
                             </div>
                         </div>
+
+                        {/* Live Customer-Facing Price Preview Card */}
+                        {(() => {
+                            const sPrice = Number(formData.price) || 0;
+                            const cPrice = typeof formData.compareAtPrice === "number" ? formData.compareAtPrice : null;
+                            const previewPricing = getEffectivePricing(sPrice, cPrice, null);
+
+                            return (
+                                <div
+                                    data-testid="admin-price-preview-card"
+                                    style={{
+                                        padding: "14px 18px",
+                                        borderRadius: "12px",
+                                        backgroundColor: previewPricing.hasDiscount ? "rgba(0, 107, 60, 0.04)" : "var(--bg-secondary)",
+                                        border: previewPricing.hasDiscount ? "1.5px solid rgba(0, 107, 60, 0.25)" : "1px solid var(--border-color)",
+                                        marginBottom: "20px",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "6px",
+                                    }}
+                                >
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "8px" }}>
+                                        <span style={{ fontSize: "0.75rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-secondary)" }}>
+                                            Live Customer Price Preview
+                                        </span>
+                                        {previewPricing.hasDiscount && (
+                                            <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#006B3C" }}>
+                                                Customer Savings: ₹{previewPricing.savings.toLocaleString("en-IN")}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+                                        <span style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--text-primary)" }}>
+                                            ₹{previewPricing.sellingPrice.toLocaleString("en-IN")}
+                                        </span>
+                                        {previewPricing.hasDiscount && previewPricing.originalPrice && (
+                                            <>
+                                                <span style={{ fontSize: "1rem", color: "var(--text-secondary)", textDecoration: "line-through" }}>
+                                                    ₹{previewPricing.originalPrice.toLocaleString("en-IN")}
+                                                </span>
+                                                <span className="product-discount-badge" style={{ fontSize: "0.78rem", fontWeight: 700, padding: "2px 8px", borderRadius: "4px", backgroundColor: "#EAF8EE", color: "#006B3C" }}>
+                                                    {previewPricing.discountPercentage}% OFF
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    <div style={{ fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                        {previewPricing.hasDiscount ? (
+                                            <span>
+                                                Customers see <strong>₹{previewPricing.sellingPrice.toLocaleString("en-IN")}</strong> with strikethrough original price and <strong>{previewPricing.discountPercentage}% OFF</strong> discount badge.
+                                            </span>
+                                        ) : cPrice !== null && cPrice <= sPrice ? (
+                                            <span style={{ color: "#d97706" }}>
+                                                Original price (₹{cPrice}) is not greater than selling price (₹{sPrice}). No discount badge will be shown.
+                                            </span>
+                                        ) : (
+                                            <span>Standard single-price display. No strikethrough or discount badge.</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* Variants Toggle Card */}
                         <div style={{
@@ -1468,7 +1589,8 @@ export default function AdminProducts() {
                                                         <th style={{ width: "36px" }}>Active</th>
                                                         <th>Option Combination</th>
                                                         <th>SKU</th>
-                                                        <th>Price (₹) Override</th>
+                                                        <th>Selling (₹)</th>
+                                                        <th>Original / MRP (₹)</th>
                                                         <th>Stock Count</th>
                                                         <th>Photo</th>
                                                         <th style={{ textAlign: "right" }}>Action</th>
@@ -1480,6 +1602,7 @@ export default function AdminProducts() {
                                                         if (v.sizeName) labelParts.push(v.sizeName);
                                                         if (v.colorName) labelParts.push(v.colorName);
                                                         const comboLabel = labelParts.length > 0 ? labelParts.join(" / ") : "Default";
+                                                        const vPricing = getEffectivePricing(Number(formData.price) || 0, formData.compareAtPrice, v);
 
                                                         return (
                                                             <tr key={v.id || vIdx} style={{ opacity: v.isActive === false ? 0.5 : 1 }}>
@@ -1516,6 +1639,23 @@ export default function AdminProducts() {
                                                                         style={{ height: "28px", minHeight: "28px", fontSize: "0.78rem", padding: "2px 6px", width: "95px" }}
                                                                         placeholder={`₹${formData.price || 0}`}
                                                                     />
+                                                                </td>
+                                                                <td>
+                                                                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={typeof v.compareAtPrice === "number" ? v.compareAtPrice : ""}
+                                                                            onChange={(e) => handleUpdateVariant(vIdx, { compareAtPrice: e.target.value === "" ? null : Number(e.target.value) })}
+                                                                            className="admin-form-input"
+                                                                            style={{ height: "28px", minHeight: "28px", fontSize: "0.78rem", padding: "2px 6px", width: "95px" }}
+                                                                            placeholder={formData.compareAtPrice ? `₹${formData.compareAtPrice}` : "None"}
+                                                                        />
+                                                                        {vPricing.hasDiscount && (
+                                                                            <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 4px", borderRadius: "3px", backgroundColor: "#EAF8EE", color: "#006B3C", whiteSpace: "nowrap" }}>
+                                                                                {vPricing.discountPercentage}%
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </td>
                                                                 <td>
                                                                     <input
@@ -1567,6 +1707,7 @@ export default function AdminProducts() {
                                                 if (v.sizeName) labelParts.push(v.sizeName);
                                                 if (v.colorName) labelParts.push(v.colorName);
                                                 const comboLabel = labelParts.length > 0 ? labelParts.join(" / ") : "Default";
+                                                const vPricing = getEffectivePricing(Number(formData.price) || 0, formData.compareAtPrice, v);
 
                                                 return (
                                                     <div key={v.id || vIdx} className="admin-mobile-item-card" style={{ padding: "12px", border: "1px solid var(--border-color)", opacity: v.isActive === false ? 0.6 : 1 }}>
@@ -1596,7 +1737,7 @@ export default function AdminProducts() {
                                                                 />
                                                             </div>
                                                             <div>
-                                                                <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Price Override (₹)</span>
+                                                                <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Selling Price (₹)</span>
                                                                 <input
                                                                     type="number"
                                                                     value={typeof v.price === "number" ? v.price : ""}
@@ -1608,7 +1749,25 @@ export default function AdminProducts() {
                                                             </div>
                                                         </div>
 
-                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "center" }}>
+                                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginBottom: "8px" }}>
+                                                            <div>
+                                                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                                                    <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Original / MRP (₹)</span>
+                                                                    {vPricing.hasDiscount && (
+                                                                        <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 4px", borderRadius: "3px", backgroundColor: "#EAF8EE", color: "#006B3C" }}>
+                                                                            {vPricing.discountPercentage}%
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <input
+                                                                    type="number"
+                                                                    value={typeof v.compareAtPrice === "number" ? v.compareAtPrice : ""}
+                                                                    onChange={(e) => handleUpdateVariant(vIdx, { compareAtPrice: e.target.value === "" ? null : Number(e.target.value) })}
+                                                                    className="admin-form-input"
+                                                                    style={{ height: "30px", minHeight: "30px", fontSize: "0.78rem" }}
+                                                                    placeholder={formData.compareAtPrice ? `Base (₹${formData.compareAtPrice})` : "None"}
+                                                                />
+                                                            </div>
                                                             <div>
                                                                 <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Stock Count</span>
                                                                 <input
@@ -1620,6 +1779,9 @@ export default function AdminProducts() {
                                                                     style={{ height: "30px", minHeight: "30px", fontSize: "0.78rem" }}
                                                                 />
                                                             </div>
+                                                        </div>
+
+                                                        <div style={{ display: "flex", gap: "4px", alignItems: "flex-end" }}>
                                                             <div style={{ display: "flex", gap: "4px", alignItems: "flex-end" }}>
                                                                 <div style={{ flex: 1 }}>
                                                                     <span style={{ fontSize: "0.7rem", color: "var(--text-secondary)", display: "block" }}>Photo</span>
@@ -2645,7 +2807,15 @@ export default function AdminProducts() {
                                         {product.category || (product.categories && product.categories[0]) || "—"}
                                     </td>
                                     <td style={{ fontWeight: 700, color: "var(--accent)" }}>
-                                        ₹{(product.price || 0).toLocaleString("en-IN")}
+                                        <div>₹{(product.price || 0).toLocaleString("en-IN")}</div>
+                                        {typeof product.compareAtPrice === "number" && product.compareAtPrice > product.price && (
+                                            <div style={{ fontSize: "0.74rem", color: "var(--text-secondary)", fontWeight: 400 }}>
+                                                <span style={{ textDecoration: "line-through" }}>₹{product.compareAtPrice.toLocaleString("en-IN")}</span>
+                                                <span style={{ color: "#006B3C", fontWeight: 700, marginLeft: "4px" }}>
+                                                    ({Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}% OFF)
+                                                </span>
+                                            </div>
+                                        )}
                                     </td>
                                     <td>
                                         <span style={{
@@ -2766,6 +2936,14 @@ export default function AdminProducts() {
                                     <span style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--accent)" }}>
                                         ₹{(product.price || 0).toLocaleString("en-IN")}
                                     </span>
+                                    {typeof product.compareAtPrice === "number" && product.compareAtPrice > product.price && (
+                                        <span style={{ fontSize: "0.72rem", color: "var(--text-secondary)", display: "block" }}>
+                                            <span style={{ textDecoration: "line-through" }}>₹{product.compareAtPrice.toLocaleString("en-IN")}</span>
+                                            <span style={{ color: "#006B3C", fontWeight: 700, marginLeft: "4px" }}>
+                                                ({Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}%)
+                                            </span>
+                                        </span>
+                                    )}
                                 </div>
                             </div>
 

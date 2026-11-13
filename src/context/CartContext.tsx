@@ -9,6 +9,7 @@ export interface CartItem {
     sku?: string;
     name: string;
     price: number;
+    compareAtPrice?: number | null;
     quantity: number;
     image: string;
     size?: string; // Display size / dimensions (e.g. "XL", "Large — 26 × 26 cm")

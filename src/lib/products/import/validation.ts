@@ -70,6 +70,34 @@ export function buildProductPreview(options: {
                 fatal: true,
             });
         }
+        if (v.compareAtPrice !== null && v.compareAtPrice !== undefined) {
+            if (isNaN(v.compareAtPrice) || v.compareAtPrice <= 0) {
+                errors.push({
+                    rowNumber: v.csvRowNumber,
+                    handle: group.handle,
+                    field: "compare_at_price",
+                    providedValue: String(v.compareAtPrice),
+                    message: `Variant '${v.sku || v.sizeName || "item"}' on '${group.title}' has non-positive compare-at price override (${v.compareAtPrice}). Variant compare-at prices must be positive numbers.`,
+                    suggestedCorrection: "Provide a positive compare-at price override or leave blank.",
+                    fatal: true,
+                });
+            } else {
+                const effectiveSelling = (v.price !== null && v.price !== undefined && !isNaN(v.price) && v.price > 0)
+                    ? v.price
+                    : group.basePrice;
+                if (effectiveSelling > 0 && v.compareAtPrice < effectiveSelling) {
+                    errors.push({
+                        rowNumber: v.csvRowNumber,
+                        handle: group.handle,
+                        field: "compare_at_price",
+                        providedValue: String(v.compareAtPrice),
+                        message: `Variant '${v.sku || v.sizeName || "item"}' on '${group.title}' has compare-at price (₹${v.compareAtPrice}) lower than selling price (₹${effectiveSelling}).`,
+                        suggestedCorrection: "Ensure compare-at price is greater than or equal to selling price.",
+                        fatal: true,
+                    });
+                }
+            }
+        }
     }
 
     // 3. Image completeness warning on new products
@@ -145,6 +173,20 @@ export function buildProductPreview(options: {
                 newValue: `₹${group.basePrice}`,
                 action: "update",
                 warning: `Price will change from ₹${existingProduct.price} to ₹${group.basePrice}`,
+            });
+        }
+
+        // 2b. Original Price / Compare At Price
+        if (group.compareAtPrice !== undefined && group.compareAtPrice !== null && group.compareAtPrice !== (existingProduct.compareAtPrice ?? null)) {
+            const oldCompare = existingProduct.compareAtPrice ? `₹${existingProduct.compareAtPrice}` : "None";
+            const newCompare = `₹${group.compareAtPrice}`;
+            diffs.push({
+                field: "compareAtPrice",
+                label: "Original Price / Compare At",
+                oldValue: oldCompare,
+                newValue: newCompare,
+                action: "update",
+                warning: `Original price will change from ${oldCompare} to ${newCompare}`,
             });
         }
 

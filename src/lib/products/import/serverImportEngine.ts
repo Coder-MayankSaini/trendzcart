@@ -604,6 +604,7 @@ export async function executeBatchImport(options: {
                                 colorName: pv.colorName,
                                 sku: pv.sku || existing?.sku || generateVariantSku(item.group.handle, pv.sizeName, pv.colorName),
                                 price: pv.price !== null && pv.price !== undefined ? pv.price : (existing?.price ?? null),
+                                compareAtPrice: pv.compareAtPrice !== null && pv.compareAtPrice !== undefined ? pv.compareAtPrice : (existing?.compareAtPrice ?? null),
                                 inventory: variantInventory,
                                 isActive: existing?.isActive !== undefined ? existing.isActive : pv.isActive,
                                 image: pv.imageUrl || existing?.image || undefined,

@@ -133,7 +133,21 @@ export default function CartPage() {
                                         Remove
                                     </button>
                                 </div>
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '1.125rem', fontWeight: 500, margin: '0 0 16px 0' }}>₹{Number(item.price).toLocaleString("en-IN")}</p>
+                                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', margin: '0 0 16px 0', flexWrap: 'wrap' }}>
+                                    <span style={{ color: 'var(--text-primary)', fontSize: '1.125rem', fontWeight: 700 }}>
+                                        ₹{Number(item.price).toLocaleString("en-IN")}
+                                    </span>
+                                    {typeof item.compareAtPrice === "number" && item.compareAtPrice > item.price && (
+                                        <>
+                                            <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', textDecoration: 'line-through' }}>
+                                                ₹{Number(item.compareAtPrice).toLocaleString("en-IN")}
+                                            </span>
+                                            <span className="product-discount-badge">
+                                                {Math.round(((item.compareAtPrice - item.price) / item.compareAtPrice) * 100)}% OFF
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
 
                                 {(item.size || item.color || item.sku) && (
                                     <div style={{ margin: '0 0 8px 0', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
