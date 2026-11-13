@@ -7,8 +7,8 @@
 **Production Published Deploy ID:** `6af4b40fecdefd9cbd208f07`  
 **Production URL:** `https://bazaarvilla.com`  
 **Automated Test Suite Baseline:** 581 unique passing tests (215 unit + 366 integration; 41 rules)  
-**Current Automated Test Suite:** **605 unique passing tests** (239 unit + 366 integration; 41 rules; 100% pass)  
-**Status:** **TASK 034 — LOCALLY COMPLETED AND VERIFIED, PRODUCTION APPROVAL PENDING.** (Zero production mutations; zero secrets exposed; 100% tests passing; 16 visual QA screenshots captured across 7 viewports; Next.js production build passing)
+**Current Automated Test Suite:** **621 unique passing tests** (239 unit + 382 integration; 41 rules; 100% pass)  
+**Status:** **TASK 034 — FINAL PREFLIGHT PASSED, READY FOR OWNER DEPLOYMENT APPROVAL.** (Zero production mutations; zero secrets exposed; 100% tests passing; 16 visual QA screenshots captured across 7 viewports; 16 comprehensive end-to-end pricing lifecycle integration tests passing; browser layout and zero overflow verified across 320px–430px; Next.js production build passing)
 
 ---
 
@@ -212,6 +212,43 @@ In `src/lib/products/import/`:
   # Output: Compiled successfully in 6.5s -> 35 static/dynamic routes generated cleanly
   ```
 
+### 7.4 End-to-End Pricing Lifecycle Integration Tests (`tests/integration/pricing-lifecycle-e2e.test.ts`)
+
+To definitively verify the end-to-end pricing lifecycle prior to release approval, 16 comprehensive integration tests were authored and executed against the live Firebase Emulator:
+
+| Test ID | Test Category | Scenario & Verification Assertions | Result |
+|---|---|---|---|
+| `PERSIST-001` | Product Persistence | Dual price persistence: saves Selling Price ₹1,249 and Original Price ₹1,499 to Firestore emulator and reloads with exact numeric fidelity | **PASSED** |
+| `PERSIST-002` | Backward Compatibility | Legacy product without `compareAtPrice`: saves and reloads normally; storefront renders single selling price without strikethrough or discount badge | **PASSED** |
+| `PERSIST-003` | Authoritative Validation | Authoritative server validation: `compareAtPrice < price` strictly rejected by `calculateOrderPricing` (`isValid: false`) and product save logic | **PASSED** |
+| `VAR-INT-001` | Variant Overrides | Independent variant pricing: Size S (Selling ₹1,249, Original ₹1,499, 17% OFF) vs Size XL (Selling ₹1,499, Original ₹1,799, 17% OFF) resolved independently | **PASSED** |
+| `VAR-INT-002` | Mispairing Prevention | Variant price override lacking compare-at price suppresses discount badge rather than mispairing with root original price | **PASSED** |
+| `VAR-INT-003` | Checkout Resolution | Server-side checkout resolves exact variant selling price, calculates correct totals, and decrements variant inventory atomically | **PASSED** |
+| `CHECKOUT-001` | Subtotal Calculation | Quantity scaling: 2 units at Selling ₹1,249 yields subtotal ₹2,498 before coupons and shipping (NOT ₹2,998) | **PASSED** |
+| `CHECKOUT-002` | Coupon Integrity | Coupon discount applied on selling price subtotal without MRP double-discounting: ₹2,498 - ₹200 = ₹2,298 | **PASSED** |
+| `CHECKOUT-003` | Tampering Resistance | Client price tampering strictly defeated: forged total rejected with HTTP 400; forged item prices ignored and priced strictly from catalog | **PASSED** |
+| `CHECKOUT-004` | Gateway Precision | COD and Razorpay test mode: order amount is exactly 249800 paise (₹2,498.00) matching server order record | **PASSED** |
+| `CHECKOUT-005` | Historical Immutability | Historical order snapshot immutability: editing product price in catalog later does not alter previously placed order line items or totals | **PASSED** |
+| `CSV-001` | Shopify CSV Import | Shopify CSV bulk import correctly parses and persists selling and compare-at prices (`Variant Price`, `Variant Compare At Price`) | **PASSED** |
+| `CSV-002` | Variant CSV Import | Variant-specific comparison prices imported accurately across multiple size/color rows | **PASSED** |
+| `CSV-003` | Non-Destructive Update | Partial CSV update of selling price alone preserves existing `compareAtPrice` without data loss | **PASSED** |
+| `CSV-004` | Non-Destructive Update | Partial CSV update of compare-at price alone preserves existing `price` without data loss | **PASSED** |
+| `CSV-005` | CSV Validation Gate | CSV dry-run preview and commit strictly reject rows where compareAtPrice < price and require admin confirmation for price updates | **PASSED** |
+
+### 7.5 Browser & Layout Responsiveness Verification
+
+Automated browser-based layout tests (`scripts/verify-pricing-browser.mjs` and `scripts/verify-pricing-browser-inner.mjs`) verified customer-facing pricing and viewport containment across desktop and mobile devices:
+
+- **Customer-Visible Pricing:**
+  - Homepage (`/`): `.hp-product-card` renders prominent selling price `₹1,249`, strikethrough `₹1,499`, and green `17% OFF` badge for discounted products; regular product renders `₹1,499` with zero badge or strikethrough.
+  - Catalog (`/products`): Dual-price badges and prices render cleanly in grid cards.
+  - Product Detail Page (`/products/[slug]`): Renders Selling Price `₹1,249`, Strikethrough Original Price `₹1,499`, `17% OFF` badge, and "You save ₹250".
+  - Variant Switching: Selecting Size XL updates live display to `₹1,499`, strikethrough `₹1,799`, `17% OFF`, and "You save ₹300".
+  - Cart (`/cart`) & Checkout (`/checkout`): Cart line items display dual prices; order totals strictly calculate from unit selling price.
+- **Zero Horizontal Overflow:**
+  - Tested viewports: **320px, 375px, 390px, 430px, 768px, 1024px, 1440px**.
+  - Verified `scrollWidth <= innerWidth` with 0px horizontal overflow across all tested routes.
+
 ---
 
 ## 8. Visual QA & Multi-Viewport Verification
@@ -258,7 +295,10 @@ If any unexpected issue occurs after production deployment:
 
 - **Zero Production Mutations:** All testing was performed strictly using the local Firebase Emulator Suite (`demo-trendkartz`). Zero production products, orders, or credentials were touched.
 - **Zero Secrets Committed:** No API keys, credentials, or secrets have been committed.
-- **Automated Tests:** 605 passing tests (239 unit + 366 integration; 41 rules; 0 failures).
-- **TypeScript & Build:** Clean compilation, 0 errors.
+- **Automated Tests:** **621 unique passing tests** (239 unit + 382 integration including 41 security rules tests across 30 suites; 0 failures).
+- **TypeScript & Build:** Clean compilation, 0 errors across 35 routes.
+- **Pricing Integrity:** 100% verified across cart, checkout, variants, coupons, Razorpay paise amounts, and historical order immutability.
+- **CSV Import Compatibility:** 100% verified for Shopify format, dry-run diffs, partial updates, and validation guards.
+- **Responsive Viewports:** 100% verified zero overflow across 320px, 375px, 390px, 430px, 768px, 1024px, and 1440px.
 
-**TASK 034 — LOCALLY COMPLETED AND VERIFIED, PRODUCTION APPROVAL PENDING.**
+**TASK 034 — FINAL PREFLIGHT PASSED, READY FOR OWNER DEPLOYMENT APPROVAL.**

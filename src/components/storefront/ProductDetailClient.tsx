@@ -114,7 +114,7 @@ export default function ProductDetailClient({ product }: { product: any }) {
                         sizes: product.sizes || [],
                         hasVariants: product.hasVariants,
                         sizeMode: product.sizeMode,
-                        sizesList: product.sizesList || [],
+                        sizesList: product.sizesList || (Array.isArray(product.sizes) && typeof product.sizes[0] === 'object' ? product.sizes : []),
                         colors: product.colors || [],
                         variants: product.variants || [],
                         onVariantChange: setActiveVariant,
