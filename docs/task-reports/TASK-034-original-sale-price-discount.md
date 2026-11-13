@@ -2,13 +2,14 @@
 
 **Task ID:** TASK-034  
 **Title:** Bazaarvilla Original Price, Sale Price & Automatic Discount Percentage  
-**Git Branch:** `task/034-product-sale-pricing-discount`  
+**Git Branch:** `task/035-shopify-csv-import-completeness` (Combined Release with TASK 035)  
+**Deployed Commit:** [`072b2a1`](https://github.com/Coder-MayankSaini/trendzcart/commit/072b2a11df73fe73ee3d1d37a68c40db773ca8c8)  
 **Base Commit:** [`46445f4`](https://github.com/Coder-MayankSaini/trendzcart/commit/46445f4fd0665068de7e655eac45c6be4d0ac6c5) (Production Baseline TASK 033)  
-**Production Published Deploy ID:** `6af4b40fecdefd9cbd208f07`  
+**Production Published Deploy ID:** [`6af7330865a5b35d525ec2c0`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af7330865a5b35d525ec2c0)  
 **Production URL:** `https://bazaarvilla.com`  
 **Automated Test Suite Baseline:** 581 unique passing tests (215 unit + 366 integration; 41 rules)  
-**Current Automated Test Suite:** **621 unique passing tests** (239 unit + 382 integration; 41 rules; 100% pass)  
-**Status:** **TASK 034 — FINAL PREFLIGHT PASSED, READY FOR OWNER DEPLOYMENT APPROVAL.** (Zero production mutations; zero secrets exposed; 100% tests passing; 16 visual QA screenshots captured across 7 viewports; 16 comprehensive end-to-end pricing lifecycle integration tests passing; browser layout and zero overflow verified across 320px–430px; Next.js production build passing)
+**Current Automated Test Suite:** **648 unique passing tests** (254 unit + 394 integration; 41 rules; 100% pass)  
+**Status:** **TASK 034 + TASK 035 — DEPLOYED & VERIFIED LIVE.** (Combined production release published to Netlify; zero production data mutations; zero secrets exposed; 100% automated tests passing; 17 read-only live production checks passing; live mobile viewports verified across 320px–430px)
 
 ---
 
@@ -301,4 +302,4 @@ If any unexpected issue occurs after production deployment:
 - **CSV Import Compatibility:** 100% verified for Shopify format, dry-run diffs, partial updates, and validation guards.
 - **Responsive Viewports:** 100% verified zero overflow across 320px, 375px, 390px, 430px, 768px, 1024px, and 1440px.
 
-**TASK 034 — FINAL PREFLIGHT PASSED, READY FOR OWNER DEPLOYMENT APPROVAL.**
+**TASK 034 + TASK 035 — DEPLOYED & VERIFIED LIVE.**

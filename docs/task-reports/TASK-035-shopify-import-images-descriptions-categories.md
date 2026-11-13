@@ -1,11 +1,15 @@
 # TASK 035 — Bazaarvilla Complete Shopify CSV Import, Image & Description Integrity, and Bulk Category Assignment
 
-**Document Version:** 1.1.0  
+**Document Version:** 1.2.0  
 **Date:** 2026-11-13  
-**Status:** **FINAL END-TO-END PREFLIGHT COMPLETE, AWAITING OWNER DEPLOYMENT APPROVAL**  
+**Status:** **TASK 034 + TASK 035 — DEPLOYED & VERIFIED LIVE**  
 **Git Branch:** `task/035-shopify-csv-import-completeness`  
+**Deployed Commit:** [`072b2a1`](https://github.com/Coder-MayankSaini/trendzcart/commit/072b2a11df73fe73ee3d1d37a68c40db773ca8c8)  
 **Base Commit:** `7f79ad2` (TASK 034 dual-price baseline)  
 **Parent Production Deployment:** Netlify Deploy ID `6af4b40fecdefd9cbd208f07` (Commit `46445f4`, TASK 033)  
+**Published Netlify Deploy ID:** [`6af7330865a5b35d525ec2c0`](https://app.netlify.com/projects/trendzcartdemo/deploys/6af7330865a5b35d525ec2c0)  
+**Netlify Build ID:** `6af7330865a5b35d525ec2be`  
+**Previous Known-Good Rollback Deploy ID:** `6af4b40fecdefd9cbd208f07`  
 **Store Domain:** [bazaarvilla.com](https://bazaarvilla.com)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Tailwind CSS 4  
@@ -272,9 +276,17 @@ If any unexpected behavior occurs upon staging review or subsequent release:
 
 ## 11. Final Sign-Off & Status
 
-**TASK 035 is locally complete, fully tested, and ready for owner review and production approval.**
+**TASK 034 and TASK 035 combined production release successfully deployed and verified live on bazaarvilla.com.**
 
 ```
-Status: FINAL END-TO-END PREFLIGHT COMPLETE, AWAITING OWNER DEPLOYMENT APPROVAL.
-Deploy: NONE (Awaiting store owner authorization for combined TASK 034 + TASK 035 release)
+Status: DEPLOYED & VERIFIED LIVE
+Deploy ID: 6af7330865a5b35d525ec2c0 (Netlify Production)
+Build ID: 6af7330865a5b35d525ec2be
+Deployed Commit: 072b2a1
+Rollback Deploy ID: 6af4b40fecdefd9cbd208f07
+Automated Secret Scan: 142 files scanned — 0 secrets detected
+Live Smoke Tests: 17/17 passed
+Production Data Mutations: 0
 ```
+
+**`TASK 034 + TASK 035 — DEPLOYED & VERIFIED LIVE.`**
