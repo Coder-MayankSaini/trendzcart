@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
-    const type = (searchParams.get("type") || "standard") as "standard" | "variants" | "personalized";
+    const type = (searchParams.get("type") || "bazaarvilla") as "standard" | "variants" | "personalized" | "bazaarvilla";
 
-    const template = BAZAARVILLA_TEMPLATES[type] || BAZAARVILLA_TEMPLATES.standard;
+    const template = BAZAARVILLA_TEMPLATES[type] || BAZAARVILLA_TEMPLATES.bazaarvilla;
 
     // Check if client requested JSON metadata
     if (searchParams.get("format") === "json") {

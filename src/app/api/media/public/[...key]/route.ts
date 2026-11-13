@@ -4,7 +4,7 @@ import { GetObjectCommand } from "@aws-sdk/client-s3";
 
 export const dynamic = "force-dynamic";
 
-// Safe SVG fallback for missing or unavailable legacy images
+// Safe SVG fallback for missing or unavailable legacy images (no-cache to avoid poisoning CDN/browser)
 const FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400" fill="none">
   <rect width="400" height="400" fill="#f1f5f9"/>
   <path d="M160 160C160 148.954 168.954 140 180 140H220C231.046 140 240 148.954 240 160V240C240 251.046 231.046 260 220 260H180C168.954 260 160 251.046 160 240V160Z" fill="#cbd5e1"/>
@@ -12,6 +12,20 @@ const FALLBACK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height
   <path d="M160 230L190 195L215 220L230 205L240 215V240H160V230Z" fill="#94a3b8"/>
   <text x="200" y="290" text-anchor="middle" fill="#64748b" font-family="system-ui, sans-serif" font-size="14" font-weight="500">Bazaarvilla Image</text>
 </svg>`;
+
+function createFallbackResponse(key = "") {
+    return new NextResponse(FALLBACK_SVG, {
+        status: 200,
+        headers: {
+            "Content-Type": "image/svg+xml",
+            "Cache-Control": "no-cache, no-store, max-age=0, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Bazaarvilla-Media-Status": "fallback",
+            "X-Bazaarvilla-Media-Key": key,
+        },
+    });
+}
 
 interface RouteParams {
     params: Promise<{ key: string | string[] }>;
@@ -25,10 +39,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             : resolvedParams.key;
 
         if (!rawKey) {
-            return new NextResponse(FALLBACK_SVG, {
-                status: 200,
-                headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
-            });
+            return createFallbackResponse();
         }
 
         const cleanKey = decodeURIComponent(rawKey).trim().replace(/^\/+/, "");
@@ -54,13 +65,12 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
                     headers: {
                         "Content-Type": mock.contentType || "image/jpeg",
                         "Cache-Control": "public, max-age=31536000, immutable",
+                        "X-Bazaarvilla-Media-Status": "hit",
+                        "X-Bazaarvilla-Media-Key": cleanKey,
                     },
                 });
             }
-            return new NextResponse(FALLBACK_SVG, {
-                status: 200,
-                headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
-            });
+            return createFallbackResponse(cleanKey);
         }
 
         const command = new GetObjectCommand({
@@ -71,11 +81,8 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         const s3Response = await client.send(command);
         const byteArray = await s3Response.Body?.transformToByteArray();
 
-        if (!byteArray) {
-            return new NextResponse(FALLBACK_SVG, {
-                status: 200,
-                headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
-            });
+        if (!byteArray || byteArray.length === 0) {
+            return createFallbackResponse(cleanKey);
         }
 
         return new NextResponse(new Uint8Array(byteArray), {
@@ -83,12 +90,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
             headers: {
                 "Content-Type": s3Response.ContentType || "image/jpeg",
                 "Cache-Control": "public, max-age=31536000, immutable",
+                "X-Bazaarvilla-Media-Status": "hit",
+                "X-Bazaarvilla-Media-Key": cleanKey,
             },
         });
     } catch {
-        return new NextResponse(FALLBACK_SVG, {
-            status: 200,
-            headers: { "Content-Type": "image/svg+xml", "Cache-Control": "public, max-age=3600" },
-        });
+        return createFallbackResponse();
     }
 }

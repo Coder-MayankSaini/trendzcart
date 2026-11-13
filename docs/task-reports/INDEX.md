@@ -2,9 +2,9 @@
 
 **Project Name:** Bazaarvilla (formerly TrendKartz | Domain: `bazaarvilla.com`)  
 **Repository Remote:** `https://github.com/Coder-MayankSaini/trendzcart.git`  
-**Current Active Git Branch:** `task/035-shopify-csv-import-completeness`  
+**Current Active Git Branch:** `task/036-production-csv-image-reliability`  
 **Primary Tech Stack:** Next.js 16.1.6 (App Router), React 19.2.3, TypeScript 5, Cloudflare R2 (`@aws-sdk/client-s3`), Firebase Auth & Cloud Firestore (Spark plan), Razorpay 2.9.6, Netlify Hosting  
-**Current Commercial Transacting Safety Status:** **TASK 034 + TASK 035 — DEPLOYED & VERIFIED LIVE.** (Combined production release published to Netlify Deploy ID `6af7330865a5b35d525ec2c0`; dual-price selling price/MRP architecture and automatic 25% discount display live; bulk Shopify CSV product importer upgraded with 60/60 Shopify CDN images downloaded into R2 via deterministic SHA-256 content-addressable keys, HTML description normalization, 3 bulk category options, and safety confirmation gates; 648 unique automated tests passing [254 unit + 394 integration, 100% pass]; 17/17 read-only live production checks passing on https://bazaarvilla.com; zero production data mutations; rollback deploy `6af4b40fecdefd9cbd208f07` available)
+**Current Commercial Transacting Safety Status:** **TASK 036 — ROOT CAUSE FIXED, LOCAL END-TO-END VERIFIED, PRODUCTION RELEASE AND REPAIR APPROVAL PENDING.** (Proven and resolved IPv6/IPv4 routing failure in serverless image ingestion and silent error masking; built strict non-false-positive media verification rejecting SVG fallbacks; hardened media proxy with no-cache on fallbacks preventing CDN/browser cache poisoning; built administrator Media Repair & Reconciliation engine with dry-run/apply modes and atomic media-only Firestore updates; completed 100% read-only production audit and dry-run across 18 live products with zero mutations; added official canonical Bazaarvilla CSV template and automated Shopify conversion; 701 unique automated tests passing [263 unit + 41 rules + 397 integration, 100% pass]; Next.js build verified across 35 routes; rollback deploy `6af7330865a5b35d525ec2c0` available)
 
 ---
 
@@ -65,13 +65,14 @@ The relaunch objective is to systematically harden backend trust boundaries, est
 | **TASK-033** | Bazaarvilla Production Readiness Audit & Hardening of Admin-Configurable Purchase Counter | **COMPLETED & PUBLISHED** | `task/033-purchase-counter-hardening` (`46445f4`) | [TASK-033-PURCHASE-COUNTER-HARDENING.md](./TASK-033-PURCHASE-COUNTER-HARDENING.md) | Decoupled authoritative transaction-derived sales metrics from administrator-configured display values (`displayMode: "auto" \| "custom"`); enforced strict server-side validation rejecting decimal counts, negative values, and numbers >99,999; verified product isolation, CSV import preservation, and automatic-mode restoration; 581 unique automated tests passing (215 unit + 366 integration across 25 suites); 17 visual QA screenshots captured across 6 viewports down to 320px; published Netlify deploy `6af4b40fecdefd9cbd208f07`; 12/12 live read-only verification checks passed on `https://bazaarvilla.com`; zero production database mutations; zero secrets staged. |
 | **TASK-034** | Bazaarvilla Original Price, Sale Price & Automatic Discount Percentage | **COMPLETED & PUBLISHED** | `task/035-shopify-csv-import-completeness` (`072b2a1`) | [TASK-034-original-sale-price-discount.md](./TASK-034-original-sale-price-discount.md) | Dual-price admin configuration (Selling Price vs Original / MRP); dynamic discount percentage formula Math.round(((orig - sell) / orig) * 100) with live preview; full variant matrix compatibility (TASK 029) with variant price overrides and mispairing suppression; dual-price storefront display (₹1,249 ~~₹1,499~~ 17% OFF with You save ₹250); server-authoritative checkout charging selling price with zero double-discounting; client price tampering defeated; Shopify CSV import compatibility (TASK 030); published to production in combined release with TASK 035 (Netlify Deploy ID `6af7330865a5b35d525ec2c0`); 648 unique automated tests passing; 17 read-only live checks verified. |
 | **TASK-035** | Bazaarvilla Complete Shopify CSV Import, Image & Description Integrity, and Bulk Category Assignment | **COMPLETED & PUBLISHED** | `task/035-shopify-csv-import-completeness` (`072b2a1`) | [TASK-035-shopify-import-images-descriptions-categories.md](./TASK-035-shopify-import-images-descriptions-categories.md) | Full reference CSV end-to-end import verification: exactly 28 products, 60 images grouped, promotional footer suppressed; remote Shopify CDN image ingestion verified 60/60 live, uploaded to R2 with deterministic SHA-256 content-addressable keys and served via public media proxy; description integrity verified with entity decoding and line-break preservation; 3 bulk category assignment scenarios (existing, inline creation with auto-slug, preserve CSV) verified; TASK 034 dual-price integration intact; published to production in combined release with TASK 034 (Netlify Deploy ID `6af7330865a5b35d525ec2c0`); 648 unique automated tests passing; 17 read-only live checks verified. |
+| **TASK-036** | Bazaarvilla Production CSV Image Failure, Existing Product Media Repair & Universal CSV Import | **COMPLETED LOCALLY — RELEASE PENDING** | `task/036-production-csv-image-reliability` | [TASK-036-csv-image-production-reliability.md](./TASK-036-csv-image-production-reliability.md) | Diagnosed and proved root cause of production CSV image import failure (IPv6/IPv4 routing failure in serverless image ingestion and silent error masking); eliminated false-positive verification by validating non-empty binary bytes and rejecting SVG placeholders; hardened media proxy headers (`no-cache` on fallback) preventing CDN/browser cache poisoning; built administrator Media Repair & Reconciliation engine with dry-run/apply modes and atomic media-only Firestore updates; completed 100% read-only production audit and dry-run across 18 live products with zero mutations; added official canonical Bazaarvilla CSV template and automated Shopify conversion; 701 unique automated tests passing (263 unit + 41 rules + 397 integration, 100% pass); Next.js build verified across 35 routes. |
 
 ---
 
 ## 4. Current Project State
 
 - **Verified Facts:**
-  - Git working tree is on active task branch `task/035-shopify-csv-import-completeness`.
+  - Git working tree is on active task branch `task/036-production-csv-image-reliability`.
   - Razorpay merchant account approval confirmed and configured in Live Mode (`rzp_live_Ty8CuwoSSBGpHi`).
   - Production website is live and operational at `https://bazaarvilla.com/` (Netlify Site ID: `4fb9d66a-fccf-4ea3-8320-5c43c27f2b6c`, Published Deploy ID: `6af7330865a5b35d525ec2c0`, Commit `072b2a1`).
   - Netlify secret scanning is active (`SECRETS_SCAN_ENABLED=true`) with targeted exclusions (`SECRETS_SCAN_OMIT_KEYS`, `SECRETS_SCAN_OMIT_PATHS`), verified passing on remote build (142 files scanned, 0 leaks).
@@ -88,20 +89,23 @@ The relaunch objective is to systematically harden backend trust boundaries, est
   - Authoritative Firestore Security Rules (`firestore.rules`) and composite indexes (`firestore.indexes.json`) deployed to live Firebase project `trendkartz`.
   - Native Netlify Scheduled Function (`netlify/functions/reservation-cleanup.mts`) configured with schedule `*/5 * * * *` and verified executing cleanly.
   - Full automated test suite passes:
-    - `npm test`: 254/254 unit tests passing across 38 suites (including CSV-042 through CSV-056).
+    - `npm test`: 263/263 unit tests passing across 43 suites (including IMG-UNIT-001 through IMG-UNIT-009).
     - `npm run test:rules`: 41/41 rules and authorization tests passing (subset of integration suite).
-    - `npm run test:integration`: 394/394 integration tests across 27 suites passing (including reference CSV E2E suite `tests/integration/reference-csv-e2e.test.ts` with 8 tests GILLKART-E2E-001 through GILLKART-E2E-008).
+    - `npm run test:integration`: 397/397 integration tests across 28 suites passing (including `tests/integration/csv-image-repair-e2e.test.ts` with tests E2E-036-001 through E2E-036-003).
     - `npm run typecheck`: 0 TypeScript errors.
-    - `npm run build`: 35/35 Next.js routes compiling cleanly with Turbopack.
-    - Total unique automated tests: **648 passing** (254 unit + 394 integration; zero double-counting).
-  - TASK 034 + TASK 035 Status:
-    - Combined production release deployed and verified live on Netlify (Deploy ID `6af7330865a5b35d525ec2c0`, commit `072b2a1`).
-    - TASK 034 dual-price architecture active: dynamic 25% discount formula, strikethrough MRP, variant pricing overrides, and server-authoritative checkout.
-    - TASK 035 comprehensive bulk importer upgrade active: 60/60 remote Shopify CDN images ingested into R2 using deterministic SHA-256 content-addressable keys, HTML description normalization, 3 bulk category options, and safety confirmation gates.
-    - 648 unique automated tests passing (254 unit + 394 integration; 100% pass).
-    - 17/17 read-only live production checks passing on https://bazaarvilla.com.
-    - Zero production database mutations; zero secrets staged; rollback deploy `6af4b40fecdefd9cbd208f07` available.
-    - Final state: `TASK 034 + TASK 035 — DEPLOYED & VERIFIED LIVE.`
+    - `npm run build`: 35/35 Next.js routes compiling cleanly with Turbopack (5.7s).
+    - Total unique automated tests: **701 passing** (263 unit + 41 rules + 397 integration; zero double-counting).
+  - TASK 036 Status:
+    - Root cause of production CSV image ingestion failure diagnosed and proved (IPv6 network unreachability in serverless container + silent error masking in import batch item records).
+    - False-positive image verification eliminated; placeholder SVGs strictly rejected as valid product media.
+    - Media proxy headers hardened (`Cache-Control: no-cache, no-store, max-age=0, must-revalidate` on fallbacks; `Cache-Control: public, max-age=31536000, immutable` on hits).
+    - Incomplete media safeguards implemented: products with failed images forced to Draft (`isVisible: false`), batch status set to `partially_failed`.
+    - Production Media Repair & Reconciliation Engine implemented with dry-run/apply modes, audit endpoints, and non-destructive media-only updates.
+    - Read-only production dry-run completed on live database: 18 products audited, 17 healthy, 1 affected product identified (`53d5be36-5962-405a-9e51-39bc00ef04f5`), source URL matched, proposed action `reingest_to_r2`.
+    - Official downloadable Bazaarvilla Canonical CSV Template provided with 4-image example product.
+    - Deterministic Shopify-to-Bazaarvilla CSV converter implemented and exposed in admin UI.
+    - Zero production database mutations; zero secrets staged; rollback deploy `6af7330865a5b35d525ec2c0` available.
+    - Final state: `TASK 036 — ROOT CAUSE FIXED, LOCAL END-TO-END VERIFIED, PRODUCTION RELEASE AND REPAIR APPROVAL PENDING.`
   - TASK 031 Status:
     - Mobile storefront responsiveness and compact homepage benefits fully implemented and verified across 8 viewports (320px–1440px).
     - Grid track and gallery containment eliminated image blowout; 4:5 image ratio and `object-fit: contain` preserved without CLS.

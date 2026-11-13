@@ -6,7 +6,7 @@
 import { formatSafeCsvRow } from "./sanitizer.ts";
 
 export interface TemplateDefinition {
-    id: "standard" | "variants" | "personalized";
+    id: "standard" | "variants" | "personalized" | "bazaarvilla";
     name: string;
     filename: string;
     description: string;
@@ -411,7 +411,136 @@ const PERSONALIZED_ROWS = [
 
 export const PERSONALIZED_PRODUCT_TEMPLATE_CSV = PERSONALIZED_ROWS.map(formatSafeCsvRow).join("\r\n") + "\r\n";
 
-export const BAZAARVILLA_TEMPLATES: Record<"standard" | "variants" | "personalized", TemplateDefinition> = {
+const BAZAARVILLA_CANONICAL_HEADER = [
+    "Handle",
+    "Title",
+    "Description",
+    "Category",
+    "SKU",
+    "Price",
+    "Compare At Price",
+    "Stock",
+    "Image Src",
+    "Image Position",
+    "Attributes",
+    "Option1 Name",
+    "Option1 Value",
+    "Option2 Name",
+    "Option2 Value",
+    "Published",
+];
+
+const BAZAARVILLA_CANONICAL_ROWS = [
+    BAZAARVILLA_CANONICAL_HEADER,
+    // Example Product 1: Complete 4-Image Product with Specifications & 25% Discount (TASK 036 requirement)
+    [
+        "plastic-design-lamp-heng-balance-white-68173",
+        "Plastic Design Lamp - Heng Balance (White)",
+        "Design Lamp Heng Balance White\n\nFeatures:\n- Magnetic levitating switch\n- Warm ambient 3000K LED\n- USB-C rechargeable\n- Material: Durable Polymer",
+        "Home Decor",
+        "A3592003681",
+        "985",
+        "1310",
+        "25",
+        "https://cdn.shopify.com/s/files/1/0821/4475/6011/files/PID-68173-Plastic-Design-Lamp-Heng-Balance-White-1.jpg?v=1791097588",
+        "1",
+        "Material: Plastic | Finish: Matte White | Style: Modern",
+        "",
+        "",
+        "",
+        "",
+        "true",
+    ],
+    // Supplementary gallery image 2
+    [
+        "plastic-design-lamp-heng-balance-white-68173",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "https://cdn.shopify.com/s/files/1/0821/4475/6011/files/PID-68173-Plastic-Design-Lamp-Heng-Balance-White-3.jpg?v=1791097587",
+        "2",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ],
+    // Supplementary gallery image 3
+    [
+        "plastic-design-lamp-heng-balance-white-68173",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "https://cdn.shopify.com/s/files/1/0821/4475/6011/files/PID-68173-Plastic-Design-Lamp-Heng-Balance-White-4.jpg?v=1791097587",
+        "3",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ],
+    // Supplementary gallery image 4
+    [
+        "plastic-design-lamp-heng-balance-white-68173",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "https://cdn.shopify.com/s/files/1/0821/4475/6011/files/PID-68173-Plastic-Design-Lamp-Heng-Balance-White-5.jpg?v=1791097587",
+        "4",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+    ],
+    // Example Product 2: Single-Image Product
+    [
+        "plastic-mushak-agarbati-holder-white-68186",
+        "Plastic Mushak Agarbati Holder (White)",
+        "Traditional decorative incense holder crafted from durable eco-friendly polymer.",
+        "Home Decor",
+        "A3592003694",
+        "1000",
+        "1330",
+        "40",
+        "https://cdn.shopify.com/s/files/1/0821/4475/6011/files/PID-68186-Plastic-Mushak-Agarbati-Holder-White-1.jpg?v=1791097609",
+        "1",
+        "Material: Plastic | Color: White",
+        "",
+        "",
+        "",
+        "",
+        "true",
+    ],
+];
+
+export const BAZAARVILLA_CANONICAL_TEMPLATE_CSV = BAZAARVILLA_CANONICAL_ROWS.map(formatSafeCsvRow).join("\r\n") + "\r\n";
+
+export const BAZAARVILLA_TEMPLATES: Record<"standard" | "variants" | "personalized" | "bazaarvilla", TemplateDefinition> = {
+    bazaarvilla: {
+        id: "bazaarvilla",
+        name: "Official Bazaarvilla Canonical Import Template",
+        filename: "bazaarvilla-product-import-canonical-template.csv",
+        description: "Official canonical Bazaarvilla format supporting multi-image galleries, dual-pricing (MRP & selling price), specifications, and variants.",
+        csvContent: BAZAARVILLA_CANONICAL_TEMPLATE_CSV,
+        minimumColumns: ["Handle", "Title", "Price", "Stock"],
+        exampleCount: 2,
+    },
     standard: {
         id: "standard",
         name: "Bazaarvilla Standard Products Template",

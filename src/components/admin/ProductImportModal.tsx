@@ -19,7 +19,7 @@ interface ProductImportModalProps {
     onImportSuccess?: () => void;
 }
 
-type WizardStep = "upload" | "mapping" | "category" | "preview" | "confirm" | "importing" | "complete" | "history";
+type WizardStep = "upload" | "mapping" | "category" | "preview" | "confirm" | "importing" | "complete" | "history" | "repair";
 
 export default function ProductImportModal({ isOpen, onClose, onImportSuccess }: ProductImportModalProps) {
     const [currentStep, setCurrentStep] = useState<WizardStep>("upload");
@@ -62,6 +62,12 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
     const [historyBatches, setHistoryBatches] = useState<ProductImportBatchRecord[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [selectedHistoryBatch, setSelectedHistoryBatch] = useState<ProductImportBatchRecord | null>(null);
+
+    // Media Repair State (TASK 036)
+    const [repairAudit, setRepairAudit] = useState<any | null>(null);
+    const [isRepairing, setIsRepairing] = useState<boolean>(false);
+    const [repairSuccessMessage, setRepairSuccessMessage] = useState<string | null>(null);
+    const [confirmRepairAuthorization, setConfirmRepairAuthorization] = useState<boolean>(false);
 
     // Active preview tab
     const [previewTab, setPreviewTab] = useState<"all" | "new" | "updates" | "issues">("all");
@@ -369,6 +375,74 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
         }
     };
 
+    // Convert Shopify CSV to Canonical Bazaarvilla Format (TASK 036)
+    const handleConvertCsv = async () => {
+        if (!csvContent.trim()) return;
+        setIsProcessing(true);
+        setErrorMessage(null);
+        try {
+            const token = await getIdToken();
+            const res = await fetch("/api/admin/products/import/convert", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ csvText: csvContent }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "CSV conversion failed");
+
+            const blob = new Blob([data.convertedCsv], { type: "text/csv;charset=utf-8;" });
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = downloadUrl;
+            a.download = `bazaarvilla-canonical-${sourceFileName || "products.csv"}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (err: any) {
+            setErrorMessage(`Failed to convert CSV: ${err.message}`);
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Run Media Repair Audit & Reconciliation (TASK 036)
+    const handleRunMediaRepair = async (dryRun = true) => {
+        setIsRepairing(true);
+        setRepairSuccessMessage(null);
+        setErrorMessage(null);
+        try {
+            const token = await getIdToken();
+            const res = await fetch("/api/admin/products/import/repair", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    dryRun,
+                    confirmed: !dryRun,
+                    csvText: csvContent || undefined,
+                }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Media repair operation failed");
+
+            setRepairAudit(data);
+            if (!dryRun) {
+                setRepairSuccessMessage(`Successfully repaired media for ${data.repairedCount} product(s)!`);
+                if (onImportSuccess) onImportSuccess();
+            }
+        } catch (err: any) {
+            setErrorMessage(`Media repair error: ${err.message}`);
+        } finally {
+            setIsRepairing(false);
+        }
+    };
+
     // Load Audit History
     const handleLoadHistory = async () => {
         setIsLoadingHistory(true);
@@ -460,6 +534,20 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        {currentStep !== "repair" && (
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setCurrentStep("repair");
+                                    handleRunMediaRepair(true);
+                                }}
+                                className="admin-btn admin-btn-secondary"
+                                style={{ fontSize: "0.82rem", padding: "6px 12px" }}
+                                title="Audit catalog for missing or broken images and safely reconcile R2 storage"
+                            >
+                                🛠️ Media Repair
+                            </button>
+                        )}
                         {currentStep !== "history" ? (
                             <button
                                 type="button"
@@ -469,7 +557,8 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                             >
                                 Import History
                             </button>
-                        ) : (
+                        ) : null}
+                        {(currentStep === "history" || currentStep === "repair") && (
                             <button
                                 type="button"
                                 onClick={() => setCurrentStep("upload")}
@@ -504,7 +593,7 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                 </div>
 
                 {/* STEP WIZARD INDICATOR */}
-                {currentStep !== "history" && (
+                {currentStep !== "history" && currentStep !== "repair" && (
                     <div
                         style={{
                             display: "flex",
@@ -788,8 +877,20 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                             : "Custom / Generic CSV"}
                                     </div>
                                 </div>
-                                <div style={{ fontSize: "0.82rem", color: "#1e293b" }}>
-                                    {mappingResult.recognizedHeaders.length} recognized columns mapped
+                                <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                                    <div style={{ fontSize: "0.82rem", color: "#1e293b" }}>
+                                        {mappingResult.recognizedHeaders.length} recognized columns mapped
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleConvertCsv}
+                                        className="admin-btn admin-btn-secondary"
+                                        style={{ fontSize: "0.8rem", padding: "6px 12px", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                                        disabled={isProcessing}
+                                        title="Converts Shopify rows to canonical Bazaarvilla schema and downloads CSV"
+                                    >
+                                        📥 Convert to Bazaarvilla CSV
+                                    </button>
                                 </div>
                             </div>
 
@@ -1570,6 +1671,49 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                     <div style={{ fontSize: "1.4rem", fontWeight: 800, color: completedBatch.failedCount > 0 ? "#991b1b" : "var(--text-primary)" }}>{completedBatch.failedCount}</div>
                                 </div>
                             </div>
+
+                            {/* Media Ingestion Status Breakdown */}
+                            <div style={{ padding: "16px", borderRadius: "10px", backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-color)", marginBottom: "20px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                                    <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                        Cloudflare R2 Media Ingestion Summary
+                                    </span>
+                                    <span style={{
+                                        fontSize: "0.75rem",
+                                        fontWeight: 700,
+                                        padding: "3px 8px",
+                                        borderRadius: "6px",
+                                        backgroundColor: (completedBatch.imagesFailedCount ?? 0) === 0 ? "#EAF8EE" : "#FEF3C7",
+                                        color: (completedBatch.imagesFailedCount ?? 0) === 0 ? "#006B3C" : "#92400e",
+                                    }}>
+                                        {(completedBatch.imagesFailedCount ?? 0) === 0 ? "All Media Verified" : "Partial Media Ingestion"}
+                                    </span>
+                                </div>
+                                <div style={{ display: "flex", gap: "20px", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+                                    <div><strong>Images Ingested:</strong> {completedBatch.imagesUploadedCount ?? 0}</div>
+                                    <div><strong>Images Failed:</strong> {completedBatch.imagesFailedCount ?? 0}</div>
+                                    <div><strong>Images Skipped:</strong> {completedBatch.imagesSkippedCount ?? 0}</div>
+                                </div>
+
+                                {((completedBatch.imagesFailedCount ?? 0) > 0 || completedBatch.status === "partially_failed") && (
+                                    <div style={{ marginTop: "12px", padding: "10px 12px", borderRadius: "8px", backgroundColor: "#fffbeb", border: "1px solid #fef3c7", color: "#92400e", fontSize: "0.8rem" }}>
+                                        <strong>⚠️ Incomplete Media Notice:</strong> Some product photographs could not be fetched or verified. Newly created products with missing images remain safely in <strong>Draft mode (hidden from storefront)</strong> until media is recovered. You can inspect and reconcile them using the Media Repair tool.
+                                        <div style={{ marginTop: "8px" }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setCurrentStep("repair");
+                                                    handleRunMediaRepair(true);
+                                                }}
+                                                className="admin-btn admin-btn-secondary"
+                                                style={{ fontSize: "0.78rem", padding: "4px 10px" }}
+                                            >
+                                                Open Media Repair Tool →
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -1640,6 +1784,177 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                             )}
                         </div>
                     )}
+
+                    {/* ========================================================================= */}
+                    {/* MEDIA REPAIR & RECONCILIATION TAB (TASK 036) */}
+                    {/* ========================================================================= */}
+                    {currentStep === "repair" && (
+                        <div>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "10px" }}>
+                                <div>
+                                    <h3 style={{ fontSize: "1.05rem", fontWeight: 800, margin: 0, color: "var(--text-primary)" }}>
+                                        Media Repair & Reconciliation Engine
+                                    </h3>
+                                    <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "3px 0 0" }}>
+                                        Audits catalog products for missing or invalid Cloudflare R2 images and performs safe, non-destructive reconciliation.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleRunMediaRepair(true)}
+                                    className="admin-btn admin-btn-secondary"
+                                    style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                                    disabled={isRepairing}
+                                >
+                                    {isRepairing ? "Scanning Catalog..." : "🔄 Run Audit / Dry-Run"}
+                                </button>
+                            </div>
+
+                            {repairSuccessMessage && (
+                                <div
+                                    style={{
+                                        padding: "12px 16px",
+                                        borderRadius: "8px",
+                                        backgroundColor: "#f0fdf4",
+                                        border: "1px solid #bbf7d0",
+                                        color: "#166534",
+                                        fontSize: "0.86rem",
+                                        marginBottom: "16px",
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    ✅ {repairSuccessMessage}
+                                </div>
+                            )}
+
+                            {repairAudit ? (
+                                <div>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "10px", marginBottom: "16px" }}>
+                                        <div style={{ padding: "12px", borderRadius: "10px", backgroundColor: "var(--bg-secondary)", textAlign: "center", border: "1px solid var(--border-color)" }}>
+                                            <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>Total Audited</div>
+                                            <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--text-primary)" }}>{repairAudit.totalAudited ?? 0}</div>
+                                        </div>
+                                        <div style={{ padding: "12px", borderRadius: "10px", backgroundColor: "#f0fdf4", textAlign: "center", border: "1px solid #bbf7d0" }}>
+                                            <div style={{ fontSize: "0.72rem", color: "#166534", textTransform: "uppercase" }}>Healthy Media</div>
+                                            <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#166534" }}>{repairAudit.healthyCount ?? 0}</div>
+                                        </div>
+                                        <div style={{ padding: "12px", borderRadius: "10px", backgroundColor: (repairAudit.affectedCount ?? 0) > 0 ? "#fef2f2" : "#f0fdf4", textAlign: "center", border: "1px solid var(--border-color)" }}>
+                                            <div style={{ fontSize: "0.72rem", color: (repairAudit.affectedCount ?? 0) > 0 ? "#991b1b" : "#166534", textTransform: "uppercase" }}>Affected / Incomplete</div>
+                                            <div style={{ fontSize: "1.4rem", fontWeight: 800, color: (repairAudit.affectedCount ?? 0) > 0 ? "#991b1b" : "#166534" }}>{repairAudit.affectedCount ?? 0}</div>
+                                        </div>
+                                        <div style={{ padding: "12px", borderRadius: "10px", backgroundColor: "var(--bg-secondary)", textAlign: "center", border: "1px solid var(--border-color)" }}>
+                                            <div style={{ fontSize: "0.72rem", color: "var(--text-secondary)", textTransform: "uppercase" }}>Execution Mode</div>
+                                            <div style={{ fontSize: "0.95rem", fontWeight: 800, color: repairAudit.dryRun ? "#0284c7" : "#006B3C", marginTop: "6px" }}>
+                                                {repairAudit.dryRun ? "DRY-RUN (Safe)" : "COMMITTED"}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {(repairAudit.affectedCount ?? 0) === 0 ? (
+                                        <div style={{ textAlign: "center", padding: "32px 20px", backgroundColor: "rgba(0, 107, 60, 0.04)", borderRadius: "10px", border: "1px solid rgba(0, 107, 60, 0.15)" }}>
+                                            <div style={{ fontSize: "1.5rem", marginBottom: "8px" }}>🎉</div>
+                                            <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "#006B3C" }}>All Catalog Products Have Verified Storage Media!</div>
+                                            <div style={{ fontSize: "0.8rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                                                Every product has valid binary image assets verified in Cloudflare R2.
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <div style={{ fontSize: "0.85rem", fontWeight: 700, marginBottom: "8px", color: "#991b1b" }}>
+                                                Affected Products Needing Media Repair ({repairAudit.affectedCount}):
+                                            </div>
+
+                                            <div style={{ overflowX: "auto", border: "1px solid var(--border-color)", borderRadius: "10px", marginBottom: "16px" }}>
+                                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.78rem" }}>
+                                                    <thead>
+                                                        <tr style={{ backgroundColor: "var(--bg-secondary)", borderBottom: "1px solid var(--border-color)", textAlign: "left" }}>
+                                                            <th style={{ padding: "8px 12px" }}>Product</th>
+                                                            <th style={{ padding: "8px 12px" }}>Handle</th>
+                                                            <th style={{ padding: "8px 12px" }}>Current Media Status</th>
+                                                            <th style={{ padding: "8px 12px" }}>Source URLs Found</th>
+                                                            <th style={{ padding: "8px 12px" }}>Proposed Action</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {(repairAudit.auditEntries || []).filter((e: any) => e.needsRepair).map((entry: any) => (
+                                                            <tr key={entry.productId} style={{ borderBottom: "1px solid var(--border-color)" }}>
+                                                                <td style={{ padding: "8px 12px", fontWeight: 600 }}>{entry.title}</td>
+                                                                <td style={{ padding: "8px 12px", fontFamily: "monospace" }}>{entry.slug}</td>
+                                                                <td style={{ padding: "8px 12px", color: "#991b1b" }}>
+                                                                    {entry.reasons?.join("; ") || "Missing/Broken R2 references"}
+                                                                </td>
+                                                                <td style={{ padding: "8px 12px" }}>
+                                                                    {entry.sourceImageUrls?.length ?? 0} URL(s)
+                                                                </td>
+                                                                <td style={{ padding: "8px 12px" }}>
+                                                                    <span style={{
+                                                                        padding: "2px 6px",
+                                                                        borderRadius: "4px",
+                                                                        fontWeight: 700,
+                                                                        fontSize: "0.72rem",
+                                                                        backgroundColor: entry.proposedAction === "reingest_to_r2" ? "#fef3c7" : "#fee2e2",
+                                                                        color: entry.proposedAction === "reingest_to_r2" ? "#92400e" : "#991b1b",
+                                                                    }}>
+                                                                        {entry.proposedAction}
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+
+                                            {/* Production Repair Confirmation Guard */}
+                                            <div
+                                                style={{
+                                                    padding: "16px",
+                                                    borderRadius: "10px",
+                                                    backgroundColor: "rgba(234, 179, 8, 0.08)",
+                                                    border: "1.5px solid rgba(234, 179, 8, 0.4)",
+                                                    marginBottom: "16px",
+                                                }}
+                                            >
+                                                <h4 style={{ fontSize: "0.9rem", fontWeight: 700, margin: "0 0 6px 0", color: "#854d0e" }}>
+                                                    Production Authorization Checkpoint
+                                                </h4>
+                                                <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", margin: "0 0 12px 0" }}>
+                                                    Media repair only writes image assets to Cloudflare R2 and reconstructs product media references. It will NEVER modify prices, inventory, categories, descriptions, or variants.
+                                                </p>
+                                                <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", cursor: "pointer", fontSize: "0.84rem", fontWeight: 700, color: "var(--text-primary)" }}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={confirmRepairAuthorization}
+                                                        onChange={(e) => setConfirmRepairAuthorization(e.target.checked)}
+                                                        style={{ width: "18px", height: "18px", accentColor: "#006B3C", marginTop: "2px" }}
+                                                    />
+                                                    <span>I explicitly authorize executing production media repair for the affected products identified above.</span>
+                                                </label>
+
+                                                <div style={{ marginTop: "12px", display: "flex", gap: "10px" }}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleRunMediaRepair(false)}
+                                                        className="admin-btn admin-btn-primary"
+                                                        disabled={!confirmRepairAuthorization || isRepairing}
+                                                        style={{ fontSize: "0.84rem" }}
+                                                    >
+                                                        {isRepairing ? "Repairing Media..." : "Execute Media Repair (Write to R2 & Firestore)"}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div style={{ textAlign: "center", padding: "40px 20px" }}>
+                                    <div className="admin-spinner" style={{ margin: "0 auto 12px", width: "32px", height: "32px", border: "3px solid var(--border-color)", borderTopColor: "#006B3C", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                                    <div style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>
+                                        Auditing Cloudflare R2 and Firestore catalog media integrity...
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* MODAL FOOTER ACTIONS */}
@@ -1692,6 +2007,16 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                 style={{ fontSize: "0.85rem" }}
                             >
                                 Back to Preview
+                            </button>
+                        )}
+                        {currentStep === "repair" && (
+                            <button
+                                type="button"
+                                onClick={() => setCurrentStep("upload")}
+                                className="admin-btn admin-btn-secondary"
+                                style={{ fontSize: "0.85rem" }}
+                            >
+                                Back to Importer
                             </button>
                         )}
                     </div>
@@ -1764,6 +2089,17 @@ export default function ProductImportModal({ isOpen, onClose, onImportSuccess }:
                                 style={{ fontSize: "0.85rem" }}
                             >
                                 View Products in Catalog
+                            </button>
+                        )}
+
+                        {currentStep === "repair" && (
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="admin-btn admin-btn-secondary"
+                                style={{ fontSize: "0.85rem" }}
+                            >
+                                Close
                             </button>
                         )}
                     </div>

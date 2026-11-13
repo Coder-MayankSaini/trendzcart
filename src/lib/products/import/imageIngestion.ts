@@ -133,6 +133,7 @@ export async function validateRemoteImageUrl(rawUrl: string): Promise<{
     error?: string;
     urlObj?: URL;
     pinnedIp?: string;
+    allPinnedIps?: string[];
 }> {
     let urlObj: URL;
     try {
@@ -181,8 +182,22 @@ export async function validateRemoteImageUrl(rawUrl: string): Promise<{
             }
         }
 
-        // Pin to the first validated IP
-        return { valid: true, urlObj, pinnedIp: lookupResult[0].address };
+        // Prioritize IPv4 addresses over IPv6. Serverless runtimes (AWS Lambda, Netlify functions)
+        // often do not have outbound IPv6 routing enabled, causing ENETUNREACH socket failures.
+        const ipv4Entries = lookupResult.filter(e => e.family === 4);
+        const ipv6Entries = lookupResult.filter(e => e.family === 6);
+        const candidateIps = [...ipv4Entries.map(e => e.address), ...ipv6Entries.map(e => e.address)];
+
+        if (candidateIps.length === 0) {
+            return { valid: false, error: `DNS resolution returned no valid public addresses for '${hostname}'` };
+        }
+
+        return {
+            valid: true,
+            urlObj,
+            pinnedIp: candidateIps[0],
+            allPinnedIps: candidateIps,
+        };
     } catch (err: any) {
         return { valid: false, error: `DNS resolution failed for '${hostname}': ${err.message}` };
     }
@@ -244,26 +259,13 @@ export function detectImageMagicBytes(buffer: Buffer): { contentType: string; ex
     return null;
 }
 
-/**
- * Securely fetches a remote image buffer.
- * PINNED DESTINATION: Connects TCP socket directly to the validated pinned IP address
- * to mathematically prevent DNS rebinding attacks between preflight and connection.
- * Enforces manual redirect tracking, streaming size caps, and socket timeouts.
- */
-export async function fetchSecureRemoteBuffer(
-    targetUrl: string,
-    redirectDepth = 0
-): Promise<{ buffer: Buffer; finalUrl: string; contentType?: string }> {
-    if (redirectDepth > MAX_REDIRECT_DEPTH) {
-        throw new Error(`Exceeded maximum redirect depth (${MAX_REDIRECT_DEPTH})`);
-    }
-
-    const validation = await validateRemoteImageUrl(targetUrl);
-    if (!validation.valid || !validation.urlObj || !validation.pinnedIp) {
-        throw new Error(validation.error || "Prohibited target URL");
-    }
-
-    const { urlObj, pinnedIp } = validation;
+function attemptFetchPinnedIp(options: {
+    targetUrl: string;
+    urlObj: URL;
+    pinnedIp: string;
+    redirectDepth: number;
+}): Promise<{ buffer: Buffer; finalUrl: string; contentType?: string }> {
+    const { targetUrl, urlObj, pinnedIp, redirectDepth } = options;
 
     return new Promise<{ buffer: Buffer; finalUrl: string; contentType?: string }>((resolve, reject) => {
         let isDone = false;
@@ -386,6 +388,63 @@ export async function fetchSecureRemoteBuffer(
             finalizeError(err);
         }
     });
+}
+
+/**
+ * Securely fetches a remote image buffer.
+ * PINNED DESTINATION: Connects TCP socket directly to the validated pinned IP address
+ * to mathematically prevent DNS rebinding attacks between preflight and connection.
+ * Prioritizes IPv4 addresses and fails over between resolved candidate IPs to prevent
+ * IPv6 network unreachability errors (ENETUNREACH) in serverless execution environments.
+ * Enforces manual redirect tracking, streaming size caps, and socket timeouts.
+ */
+export async function fetchSecureRemoteBuffer(
+    targetUrl: string,
+    redirectDepth = 0
+): Promise<{ buffer: Buffer; finalUrl: string; contentType?: string }> {
+    if (redirectDepth > MAX_REDIRECT_DEPTH) {
+        throw new Error(`Exceeded maximum redirect depth (${MAX_REDIRECT_DEPTH})`);
+    }
+
+    const validation = await validateRemoteImageUrl(targetUrl);
+    if (!validation.valid || !validation.urlObj || !validation.pinnedIp) {
+        throw new Error(validation.error || "Prohibited target URL");
+    }
+
+    const { urlObj } = validation;
+    const candidateIps = (validation.allPinnedIps && validation.allPinnedIps.length > 0)
+        ? validation.allPinnedIps
+        : [validation.pinnedIp];
+
+    let lastError: Error = new Error(`Failed to connect to image destination at '${targetUrl}'`);
+
+    for (const currentIp of candidateIps) {
+        try {
+            return await attemptFetchPinnedIp({
+                targetUrl,
+                urlObj,
+                pinnedIp: currentIp,
+                redirectDepth,
+            });
+        } catch (err: any) {
+            lastError = err;
+            const code = err.code || "";
+            // If network unreachable, address family not supported, or connection refused, try next candidate IP
+            if (
+                code === "ENETUNREACH" ||
+                code === "EAFNOSUPPORT" ||
+                code === "ECONNREFUSED" ||
+                code === "EHOSTUNREACH" ||
+                err.message?.includes("timed out")
+            ) {
+                continue;
+            }
+            // For fatal errors (HTTP status, size limit, redirect downgrade), fail fast
+            throw err;
+        }
+    }
+
+    throw lastError;
 }
 
 /**

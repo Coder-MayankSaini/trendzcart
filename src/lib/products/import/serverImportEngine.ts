@@ -762,6 +762,11 @@ export async function executeBatchImport(options: {
                         thumbnails: ingestedImages.length > 0 ? ingestedImages : (liveProduct?.thumbnails || []),
                         imageUrl: ingestedImages[0] || (liveProduct?.imageUrl || null),
                         hasIncompleteMedia,
+                        mediaIngestionStatus: {
+                            total: item.group.images.length,
+                            ingested: ingestedImages.length,
+                            failed: imagesFailed,
+                        },
                         createdAt: liveProduct?.createdAt || Date.now(),
                         updatedAt: Date.now(),
                     };
@@ -788,7 +793,9 @@ export async function executeBatchImport(options: {
                         productId,
                         result: itemResult,
                         stagedImageKeys: stagedKeys,
-                        error: null,
+                        error: hasIncompleteMedia
+                            ? `Incomplete media: ${imagesFailed} of ${item.group.images.length} images failed to ingest`
+                            : null,
                     });
                 });
             } catch (err: any) {
@@ -831,8 +838,9 @@ export async function executeBatchImport(options: {
         const totalProcessedCount = completedOrTerminated.length;
         const isAllFinished = totalProcessedCount >= batchDoc.totalProducts;
 
+        const hasAnyIncompleteMedia = currentItems.some(i => i.result?.hasIncompleteMedia);
         const finalStatus: ImportBatchStatus = isAllFinished
-            ? (failedCount === 0 ? "completed" : "partially_failed")
+            ? (failedCount === 0 && !hasAnyIncompleteMedia ? "completed" : "partially_failed")
             : "in_progress";
 
         const results = currentItems
@@ -841,17 +849,29 @@ export async function executeBatchImport(options: {
 
         const processedHandles = completedOrTerminated.map(i => i.handle);
 
+        const errorSummary = Array.from(new Set([
+            ...(batchDoc.errorSummary || []),
+            ...currentItems
+                .filter(i => i.error)
+                .map(i => `${i.handle}: ${i.error}`),
+        ]));
+
+        const imagesUploadedCount = currentItems.reduce((acc, i) => acc + (i.result?.imagesIngested || 0), 0);
+        const imagesFailedCount = currentItems.reduce((acc, i) => acc + (i.result?.imagesFailed || 0), 0);
+
         const updatedBatchRecord: ProductImportBatchRecord = {
             ...batchDoc,
             createdCount,
             updatedCount,
             failedCount,
             skippedCount,
+            imagesUploadedCount,
+            imagesFailedCount,
             processedCount: totalProcessedCount,
             processedHandles,
             status: finalStatus,
             results,
-            errorSummary: (batchDoc.errorSummary || []).slice(0, 50),
+            errorSummary: errorSummary.slice(0, 100),
             lockedUntil: null, // Lease safely released!
             lockedBy: null,
             lastProcessedAt: Date.now(),
