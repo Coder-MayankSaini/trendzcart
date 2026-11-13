@@ -112,11 +112,13 @@ export async function auditCatalogMedia(options?: {
 
     const auditEntries: ProductMediaAuditEntry[] = [];
 
-    // Also load recent import batches to discover source URLs if reference CSV wasn't provided
+    // Cache of handle to source URLs discovered from recent batches
     const batchHandleMap = new Map<string, string[]>();
-    if (handleToImages.size === 0) {
+
+    async function lookupBatchSourceUrls(targetHandle: string): Promise<string[]> {
+        if (batchHandleMap.has(targetHandle)) return batchHandleMap.get(targetHandle)!;
         try {
-            const batchesSnap = await db.collection("productImportBatches").limit(20).get();
+            const batchesSnap = await db.collection("productImportBatches").limit(5).get();
             for (const bDoc of batchesSnap.docs) {
                 const itemsSnap = await bDoc.ref.collection("items").get();
                 for (const itDoc of itemsSnap.docs) {
@@ -132,67 +134,90 @@ export async function auditCatalogMedia(options?: {
         } catch (err) {
             console.error("[MediaRepair] Error reading batch metadata:", err);
         }
+        return batchHandleMap.get(targetHandle) || [];
     }
 
-    for (const doc of snap.docs) {
-        const p = doc.data();
-        const images: string[] = Array.isArray(p.images) ? p.images : (p.images ? [p.images] : []);
-        const imageUrl: string | null = p.imageUrl || (images.length > 0 ? images[0] : null);
+    // Process products in bounded concurrent batches to respect serverless execution budgets
+    const CHUNK_SIZE = 6;
+    for (let i = 0; i < snap.docs.length; i += CHUNK_SIZE) {
+        const chunk = snap.docs.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+            chunk.map(async (doc: any) => {
+                const p = doc.data();
+                const images: string[] = Array.isArray(p.images) ? p.images : (p.images ? [p.images] : []);
+                const imageUrl: string | null = p.imageUrl || (images.length > 0 ? images[0] : null);
 
-        const reasons: string[] = [];
-        let needsRepair = false;
+                const reasons: string[] = [];
+                let needsRepair = false;
 
-        // 1. Check for empty media
-        if (images.length === 0 || !imageUrl) {
-            needsRepair = true;
-            reasons.push("Product has empty or missing images array and imageUrl.");
-        } else {
-            // 2. Check for broken R2 references or SVG fallback
-            for (const imgUrl of images) {
-                if (imgUrl.startsWith("/api/media/public/products/")) {
-                    const ver = await verifyStoredMedia(imgUrl);
-                    if (!ver.isValid) {
-                        needsRepair = true;
-                        reasons.push(`Stored reference is invalid: ${ver.error || "R2 object missing"}`);
-                    }
-                } else if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
-                    // Stored URL is external CDN (un-ingested Shopify/supplier URL)
+                // 1. Check for empty media
+                if (images.length === 0 || !imageUrl) {
                     needsRepair = true;
-                    reasons.push(`External remote URL not ingested into Cloudflare R2: ${imgUrl}`);
+                    reasons.push("Product has empty or missing images array and imageUrl.");
+                } else {
+                    // 2. Check stored images in parallel
+                    const verifications = await Promise.all(
+                        images.map(async (imgUrl) => {
+                            if (imgUrl.startsWith("/api/media/public/products/")) {
+                                const ver = await verifyStoredMedia(imgUrl);
+                                if (!ver.isValid) {
+                                    return `Stored reference is invalid: ${ver.error || "R2 object missing"}`;
+                                }
+                            } else if (imgUrl.startsWith("http://") || imgUrl.startsWith("https://")) {
+                                return `External remote URL not ingested into Cloudflare R2: ${imgUrl}`;
+                            }
+                            return null;
+                        })
+                    );
+
+                    for (const err of verifications) {
+                        if (err) {
+                            needsRepair = true;
+                            reasons.push(err);
+                        }
+                    }
                 }
-            }
-        }
 
-        // Find candidate source URLs
-        const slug = p.slug || p.handle || "";
-        let sourceUrls = handleToImages.get(slug) || batchHandleMap.get(slug) || [];
-        if (sourceUrls.length === 0 && p.handle) {
-            sourceUrls = handleToImages.get(p.handle) || batchHandleMap.get(p.handle) || [];
-        }
+                // Find candidate source URLs
+                const slug = p.slug || p.handle || "";
+                let sourceUrls = handleToImages.get(slug) || batchHandleMap.get(slug) || [];
+                if (sourceUrls.length === 0 && p.handle) {
+                    sourceUrls = handleToImages.get(p.handle) || batchHandleMap.get(p.handle) || [];
+                }
 
-        let proposedAction: ProductMediaAuditEntry["proposedAction"] = "healthy";
-        if (needsRepair) {
-            if (sourceUrls.length > 0) {
-                proposedAction = "reingest_to_r2";
-            } else {
-                proposedAction = "no_source_images_found";
-            }
-        }
+                // If needs repair and no source URLs yet, lazily inspect recent batches
+                if (needsRepair && sourceUrls.length === 0) {
+                    sourceUrls = await lookupBatchSourceUrls(slug);
+                    if (sourceUrls.length === 0 && p.handle) {
+                        sourceUrls = await lookupBatchSourceUrls(p.handle);
+                    }
+                }
 
-        auditEntries.push({
-            productId: doc.id,
-            slug,
-            title: p.title || p.name || slug,
-            category: p.category || "General",
-            price: p.price || 0,
-            isVisible: p.isVisible !== false,
-            currentImages: images,
-            currentImageUrl: imageUrl,
-            needsRepair,
-            reasons,
-            sourceImageUrls: sourceUrls,
-            proposedAction,
-        });
+                let proposedAction: ProductMediaAuditEntry["proposedAction"] = "healthy";
+                if (needsRepair) {
+                    if (sourceUrls.length > 0) {
+                        proposedAction = "reingest_to_r2";
+                    } else {
+                        proposedAction = "no_source_images_found";
+                    }
+                }
+
+                auditEntries.push({
+                    productId: doc.id,
+                    slug,
+                    title: p.title || p.name || slug,
+                    category: p.category || "General",
+                    price: p.price || 0,
+                    isVisible: p.isVisible !== false,
+                    currentImages: images,
+                    currentImageUrl: imageUrl,
+                    needsRepair,
+                    reasons,
+                    sourceImageUrls: sourceUrls,
+                    proposedAction,
+                });
+            })
+        );
     }
 
     const affectedProducts = auditEntries.filter((e) => e.needsRepair);
