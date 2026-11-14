@@ -479,6 +479,11 @@ export function validateVariantConfiguration(config: ProductVariantConfig): {
     const colors = Array.isArray(config.colors) ? config.colors : [];
     const variants = Array.isArray(config.variants) ? config.variants : [];
 
+    // TASK 037 Hardening: A product with variants enabled must have generated variant combinations
+    if (variants.length === 0) {
+        errors.push("Product has variants enabled, but no variant combinations have been generated. Please generate combinations or disable variants before saving.");
+    }
+
     // Check size IDs uniqueness
     const sizeIds = new Set<string>();
     for (const s of sizes) {

@@ -64,20 +64,38 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
     const [selectedSizeId, setSelectedSizeId] = useState<string>("");
     const [selectedColorId, setSelectedColorId] = useState<string>("");
 
-    // Auto-select initial variant options (e.g. Free Size, single sizes, single colors)
+    // Variant presence & configuration states (TASK 037)
+    const hasConfiguredVariants = Boolean(product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0);
+    const isVariantMisconfigured = Boolean(product.hasVariants && (!Array.isArray(product.variants) || product.variants.length === 0));
+
+    // Auto-select initial variant options (e.g. in-stock variant preferred, Free Size, single sizes/colors)
     useEffect(() => {
-        if (product.hasVariants) {
-            if (activeSizes.length > 0) {
-                // Mode C: Free Size auto-select, or single size option auto-select
-                if (product.sizeMode === "free_size" || activeSizes.length === 1) {
-                    setSelectedSizeId(activeSizes[0].id);
-                } else if (!selectedSizeId) {
-                    setSelectedSizeId(activeSizes[0].id);
-                }
-            }
-            if (activeColors.length > 0) {
-                if (activeColors.length === 1 || !selectedColorId) {
-                    setSelectedColorId(activeColors[0].id);
+        if (hasConfiguredVariants && Array.isArray(product.variants)) {
+            // Mode C: Free Size auto-select
+            if (product.sizeMode === "free_size" && activeSizes.length > 0) {
+                setSelectedSizeId(activeSizes[0].id);
+            } else {
+                // Intelligent selection: Prefer first active variant with genuine available stock
+                const inStockVariant = product.variants.find(v => v.isActive !== false && typeof v.inventory === "number" && v.inventory > 0);
+                if (inStockVariant) {
+                    if (inStockVariant.sizeId && !selectedSizeId) {
+                        setSelectedSizeId(inStockVariant.sizeId);
+                    } else if (activeSizes.length > 0 && !selectedSizeId) {
+                        setSelectedSizeId(activeSizes[0].id);
+                    }
+                    if (inStockVariant.colorId && !selectedColorId) {
+                        setSelectedColorId(inStockVariant.colorId);
+                    } else if (activeColors.length > 0 && !selectedColorId) {
+                        setSelectedColorId(activeColors[0].id);
+                    }
+                } else {
+                    // Fall back to first active options if all variants out of stock
+                    if (activeSizes.length > 0 && !selectedSizeId) {
+                        setSelectedSizeId(activeSizes[0].id);
+                    }
+                    if (activeColors.length > 0 && !selectedColorId) {
+                        setSelectedColorId(activeColors[0].id);
+                    }
                 }
             }
         } else if (product.sizes && product.sizes.length > 0) {
@@ -85,39 +103,43 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                 setSelectedLegacySize(product.sizes[0]);
             }
         }
-    }, [product.hasVariants, product.sizeMode, activeSizes, activeColors, product.sizes]);
+    }, [hasConfiguredVariants, product.variants, product.sizeMode, activeSizes, activeColors, product.sizes]);
 
     // Resolve matching variant
     const matchedVariant = useMemo<ProductVariant | null>(() => {
-        if (!product.hasVariants || !Array.isArray(product.variants)) {
+        if (!hasConfiguredVariants || !Array.isArray(product.variants)) {
             return null;
         }
         return resolveMatchingVariant(product.variants, {
             sizeId: selectedSizeId || undefined,
             colorId: selectedColorId || undefined,
         });
-    }, [product.hasVariants, product.variants, selectedSizeId, selectedColorId]);
+    }, [hasConfiguredVariants, product.variants, selectedSizeId, selectedColorId]);
 
     // Inform parent of resolved variant
     useEffect(() => {
-        if (product.hasVariants) {
+        if (hasConfiguredVariants) {
             product.onVariantChange?.(matchedVariant);
         }
-    }, [product.hasVariants, matchedVariant, product.onVariantChange]);
+    }, [hasConfiguredVariants, matchedVariant, product.onVariantChange]);
 
     // Pricing & Availability calculations
     const effectivePrice = useMemo(() => {
-        if (product.hasVariants && matchedVariant) {
+        if (hasConfiguredVariants && matchedVariant) {
             return getEffectivePrice(product.price, matchedVariant);
         }
         return Number(product.price) || 0;
-    }, [product.hasVariants, product.price, matchedVariant]);
+    }, [hasConfiguredVariants, product.price, matchedVariant]);
 
-    const isVariantDisabled = product.hasVariants ? (!matchedVariant || matchedVariant.isActive === false) : false;
-    const currentStock = product.hasVariants
-        ? (matchedVariant ? matchedVariant.inventory : 0)
+    const isVariantDisabled = hasConfiguredVariants
+        ? (!matchedVariant || matchedVariant.isActive === false)
+        : isVariantMisconfigured;
+
+    const currentStock = hasConfiguredVariants
+        ? (matchedVariant ? (typeof matchedVariant.inventory === "number" ? matchedVariant.inventory : 0) : 0)
         : (typeof product.inventory === "number" ? product.inventory : 999);
-    const isOutOfStock = currentStock <= 0;
+
+    const isOutOfStock = !isVariantDisabled && currentStock <= 0;
 
     // Customization states
     const [customName, setCustomName] = useState("");
@@ -170,6 +192,10 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
     const handleAddToCart = async (isBuyNow = false) => {
         // Variant validation
         if (product.hasVariants) {
+            if (isVariantMisconfigured) {
+                alert("This product's variant options are currently being updated. Please check back shortly.");
+                return false;
+            }
             if (activeSizes.length > 0 && !selectedSizeId) {
                 alert("Please select a size option.");
                 return false;
@@ -706,7 +732,7 @@ export default function ProductCustomizer({ product }: { product: ProductProps }
                             cursor: (isVariantDisabled || isOutOfStock) ? "not-allowed" : "pointer",
                         }}
                     >
-                        <span>{isUploading ? "..." : (isVariantDisabled || isOutOfStock) ? "Unavailable" : "Buy Now"}</span>
+                        <span>{isUploading ? "..." : isVariantDisabled ? "Unavailable" : isOutOfStock ? "Out of Stock" : "Buy Now"}</span>
                     </button>
                 </div>
             </div>

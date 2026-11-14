@@ -1,0 +1,736 @@
+{
+  "generatedAt": "2026-11-14T09:16:27.331Z",
+  "mode": "DRY_RUN_READ_ONLY",
+  "totalProductsAudited": 7,
+  "affectedProductsCount": 6,
+  "options": {
+    "option1_description": "Variant Matrix Model (Recommended for apparel): Generates deterministic variants for each size with allocated stock, SKU, and active status.",
+    "option2_description": "Legacy Sized Product Model: Sets hasVariants=false, preserving sizes array for customer selection with single root inventory pool."
+  },
+  "products": [
+    {
+      "id": "14a29e10-758e-4fd2-a10a-6c04c74fe73a",
+      "title": "**Men’s Premium Grey Bomber Jacket with Black Ribbed Collar & Full Zip – Stylish Winter Casual Wear**",
+      "isAffected": true,
+      "availabilityStatus": "DEFECTIVE_UNAVAILABLE",
+      "currentStoredData": {
+        "hasVariants": true,
+        "variantCount": 0,
+        "variants": [],
+        "sizesList": [
+          {
+            "id": "size-s",
+            "name": "S",
+            "isActive": true,
+            "order": 0
+          },
+          {
+            "id": "size-m",
+            "name": "M",
+            "isActive": true,
+            "order": 1
+          },
+          {
+            "id": "size-l",
+            "name": "L",
+            "isActive": true,
+            "order": 2
+          },
+          {
+            "id": "size-xl",
+            "name": "XL",
+            "isActive": true,
+            "order": 3
+          },
+          {
+            "id": "size-xxl",
+            "name": "XXL",
+            "isActive": true,
+            "order": 4
+          }
+        ],
+        "sizes": [
+          "S",
+          "M",
+          "L",
+          "XL",
+          "XXL"
+        ],
+        "price": 750,
+        "compareAtPrice": 6999,
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "sku": null,
+        "isVisible": true,
+        "categoryName": "Winter Special"
+      },
+      "proposedOption1_VariantMatrix": {
+        "hasVariants": true,
+        "variants": [
+          {
+            "id": "var_size-s",
+            "sizeId": "size-s",
+            "sizeName": "S",
+            "sku": "BV-WTR-14A29-S",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-m",
+            "sizeId": "size-m",
+            "sizeName": "M",
+            "sku": "BV-WTR-14A29-M",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-l",
+            "sizeId": "size-l",
+            "sizeName": "L",
+            "sku": "BV-WTR-14A29-L",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-xl",
+            "sizeId": "size-xl",
+            "sizeName": "XL",
+            "sku": "BV-WTR-14A29-XL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-xxl",
+            "sizeId": "size-xxl",
+            "sizeName": "XXL",
+            "sku": "BV-WTR-14A29-XXL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          }
+        ],
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "allocatedStockSum": 10
+      },
+      "proposedOption2_LegacySizedProduct": {
+        "hasVariants": false,
+        "inventory": 10,
+        "sizes": [
+          "S",
+          "M",
+          "L",
+          "XL",
+          "XXL"
+        ]
+      },
+      "justification": "Product was saved with hasVariants=true but empty variants[] matrix. Storefront PDP requires a matched variant to enable Add to Cart/Buy Now, resulting in 100% false-positive 'Unavailable' state despite genuine positive stock."
+    },
+    {
+      "id": "2a4b51a9-991d-4d62-905e-d0e6cf243879",
+      "title": "Men’s Premium Grey Fleece-Lined Hooded Puffer Winter Jacket",
+      "isAffected": true,
+      "availabilityStatus": "DEFECTIVE_UNAVAILABLE",
+      "currentStoredData": {
+        "hasVariants": true,
+        "variantCount": 0,
+        "variants": [],
+        "sizesList": [
+          {
+            "id": "size-s",
+            "name": "S",
+            "isActive": true,
+            "order": 0
+          },
+          {
+            "id": "size-m",
+            "name": "M",
+            "isActive": true,
+            "order": 1
+          },
+          {
+            "id": "size-l",
+            "name": "L",
+            "isActive": true,
+            "order": 2
+          },
+          {
+            "id": "size-xl",
+            "name": "XL",
+            "isActive": true,
+            "order": 3
+          }
+        ],
+        "sizes": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ],
+        "price": 1400,
+        "compareAtPrice": 8999,
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "sku": null,
+        "isVisible": true,
+        "categoryName": "Winter Special"
+      },
+      "proposedOption1_VariantMatrix": {
+        "hasVariants": true,
+        "variants": [
+          {
+            "id": "var_size-s",
+            "sizeId": "size-s",
+            "sizeName": "S",
+            "sku": "BV-WTR-2A4B5-S",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 4,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-m",
+            "sizeId": "size-m",
+            "sizeName": "M",
+            "sku": "BV-WTR-2A4B5-M",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-l",
+            "sizeId": "size-l",
+            "sizeName": "L",
+            "sku": "BV-WTR-2A4B5-L",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-xl",
+            "sizeId": "size-xl",
+            "sizeName": "XL",
+            "sku": "BV-WTR-2A4B5-XL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787332
+          }
+        ],
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "allocatedStockSum": 10
+      },
+      "proposedOption2_LegacySizedProduct": {
+        "hasVariants": false,
+        "inventory": 10,
+        "sizes": [
+          "S",
+          "M",
+          "L",
+          "XL"
+        ]
+      },
+      "justification": "Product was saved with hasVariants=true but empty variants[] matrix. Storefront PDP requires a matched variant to enable Add to Cart/Buy Now, resulting in 100% false-positive 'Unavailable' state despite genuine positive stock."
+    },
+    {
+      "id": "51adb109-1acb-4f7e-96b7-cdccba9ed961",
+      "title": "Men's Premium Black Sherpa Fur-Lined Winter Jacket",
+      "isAffected": true,
+      "availabilityStatus": "DEFECTIVE_UNAVAILABLE",
+      "currentStoredData": {
+        "hasVariants": true,
+        "variantCount": 0,
+        "variants": [],
+        "sizesList": [
+          {
+            "id": "size-s",
+            "name": "S",
+            "isActive": true,
+            "order": 0
+          },
+          {
+            "id": "size-l",
+            "name": "L",
+            "isActive": true,
+            "order": 1
+          },
+          {
+            "id": "size-m",
+            "name": "M",
+            "isActive": true,
+            "order": 2
+          },
+          {
+            "id": "size-xl",
+            "name": "XL",
+            "isActive": true,
+            "order": 3
+          }
+        ],
+        "sizes": [
+          "S",
+          "L",
+          "M",
+          "XL"
+        ],
+        "price": 1400,
+        "compareAtPrice": 7888,
+        "inventory": 106,
+        "totalPhysicalInventory": 106,
+        "sku": null,
+        "isVisible": true,
+        "categoryName": "Winter Special"
+      },
+      "proposedOption1_VariantMatrix": {
+        "hasVariants": true,
+        "variants": [
+          {
+            "id": "var_size-s",
+            "sizeId": "size-s",
+            "sizeName": "S",
+            "sku": "BV-WTR-51ADB-S",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 28,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-l",
+            "sizeId": "size-l",
+            "sizeName": "L",
+            "sku": "BV-WTR-51ADB-L",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 26,
+            "isActive": true,
+            "createdAt": 1794647787332
+          },
+          {
+            "id": "var_size-m",
+            "sizeId": "size-m",
+            "sizeName": "M",
+            "sku": "BV-WTR-51ADB-M",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 26,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-xl",
+            "sizeId": "size-xl",
+            "sizeName": "XL",
+            "sku": "BV-WTR-51ADB-XL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 26,
+            "isActive": true,
+            "createdAt": 1794647787333
+          }
+        ],
+        "inventory": 106,
+        "totalPhysicalInventory": 106,
+        "allocatedStockSum": 106
+      },
+      "proposedOption2_LegacySizedProduct": {
+        "hasVariants": false,
+        "inventory": 106,
+        "sizes": [
+          "S",
+          "L",
+          "M",
+          "XL"
+        ]
+      },
+      "justification": "Product was saved with hasVariants=true but empty variants[] matrix. Storefront PDP requires a matched variant to enable Add to Cart/Buy Now, resulting in 100% false-positive 'Unavailable' state despite genuine positive stock."
+    },
+    {
+      "id": "af7ddaf9-bb61-43fa-846f-22f9b69e4c01",
+      "title": "Men’s Premium Black Hooded Winter Jacket with Soft Fur Fleece Lining & Full Zip",
+      "isAffected": true,
+      "availabilityStatus": "DEFECTIVE_UNAVAILABLE",
+      "currentStoredData": {
+        "hasVariants": true,
+        "variantCount": 0,
+        "variants": [],
+        "sizesList": [
+          {
+            "id": "size-m",
+            "name": "M",
+            "isActive": true,
+            "order": 0
+          },
+          {
+            "id": "size-l",
+            "name": "L",
+            "isActive": true,
+            "order": 1
+          },
+          {
+            "id": "size-xl",
+            "name": "XL",
+            "isActive": true,
+            "order": 2
+          }
+        ],
+        "sizes": [
+          "M",
+          "L",
+          "XL"
+        ],
+        "price": 1300,
+        "compareAtPrice": 6999,
+        "inventory": 115,
+        "totalPhysicalInventory": 115,
+        "sku": null,
+        "isVisible": true,
+        "categoryName": "Winter Special"
+      },
+      "proposedOption1_VariantMatrix": {
+        "hasVariants": true,
+        "variants": [
+          {
+            "id": "var_size-m",
+            "sizeId": "size-m",
+            "sizeName": "M",
+            "sku": "BV-WTR-AF7DD-M",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 39,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-l",
+            "sizeId": "size-l",
+            "sizeName": "L",
+            "sku": "BV-WTR-AF7DD-L",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 38,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-xl",
+            "sizeId": "size-xl",
+            "sizeName": "XL",
+            "sku": "BV-WTR-AF7DD-XL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 38,
+            "isActive": true,
+            "createdAt": 1794647787333
+          }
+        ],
+        "inventory": 115,
+        "totalPhysicalInventory": 115,
+        "allocatedStockSum": 115
+      },
+      "proposedOption2_LegacySizedProduct": {
+        "hasVariants": false,
+        "inventory": 115,
+        "sizes": [
+          "M",
+          "L",
+          "XL"
+        ]
+      },
+      "justification": "Product was saved with hasVariants=true but empty variants[] matrix. Storefront PDP requires a matched variant to enable Add to Cart/Buy Now, resulting in 100% false-positive 'Unavailable' state despite genuine positive stock."
+    },
+    {
+      "id": "f176b9a7-313a-4cae-936a-bd26bde6ab36",
+      "title": "BazaarVilla Premium White Varsity Bomber Jacket for Men",
+      "isAffected": false,
+      "availabilityStatus": "HEALTHY_AVAILABLE",
+      "currentStoredData": {
+        "hasVariants": false,
+        "variantCount": 0,
+        "variants": [],
+        "sizesList": [],
+        "sizes": [
+          "L",
+          "XL",
+          "XXL"
+        ],
+        "price": 649,
+        "compareAtPrice": 2999,
+        "inventory": 95,
+        "totalPhysicalInventory": 95,
+        "sku": null,
+        "isVisible": true,
+        "categoryName": "Winter Special"
+      },
+      "proposedOption1_VariantMatrix": null,
+      "proposedOption2_LegacySizedProduct": null,
+      "justification": "Product has hasVariants=false with legacy sizes array. Already available for purchase."
+    },
+    {
+      "id": "f1b8f647-1b61-4b90-9978-a4f719c5d901",
+      "title": "Men's Premium Plain Zip-Up Jacket Combo – Black & Olive Green | Buy 1 Get 1 Free",
+      "isAffected": true,
+      "availabilityStatus": "DEFECTIVE_UNAVAILABLE",
+      "currentStoredData": {
+        "hasVariants": true,
+        "variantCount": 0,
+        "variants": [],
+        "sizesList": [
+          {
+            "id": "size-m",
+            "name": "M",
+            "isActive": true,
+            "order": 0
+          },
+          {
+            "id": "size-xl",
+            "name": "XL",
+            "isActive": true,
+            "order": 1
+          },
+          {
+            "id": "size-l",
+            "name": "L",
+            "isActive": true,
+            "order": 2
+          },
+          {
+            "id": "size-xxl",
+            "name": "XXL",
+            "isActive": true,
+            "order": 3
+          }
+        ],
+        "sizes": [
+          "M",
+          "XL",
+          "L",
+          "XXL"
+        ],
+        "price": 949,
+        "compareAtPrice": 5999,
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "sku": null,
+        "isVisible": true,
+        "categoryName": "Winter Special"
+      },
+      "proposedOption1_VariantMatrix": {
+        "hasVariants": true,
+        "variants": [
+          {
+            "id": "var_size-m",
+            "sizeId": "size-m",
+            "sizeName": "M",
+            "sku": "BV-WTR-F1B8F-M",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 4,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-xl",
+            "sizeId": "size-xl",
+            "sizeName": "XL",
+            "sku": "BV-WTR-F1B8F-XL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-l",
+            "sizeId": "size-l",
+            "sizeName": "L",
+            "sku": "BV-WTR-F1B8F-L",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-xxl",
+            "sizeId": "size-xxl",
+            "sizeName": "XXL",
+            "sku": "BV-WTR-F1B8F-XXL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          }
+        ],
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "allocatedStockSum": 10
+      },
+      "proposedOption2_LegacySizedProduct": {
+        "hasVariants": false,
+        "inventory": 10,
+        "sizes": [
+          "M",
+          "XL",
+          "L",
+          "XXL"
+        ]
+      },
+      "justification": "Product was saved with hasVariants=true but empty variants[] matrix. Storefront PDP requires a matched variant to enable Add to Cart/Buy Now, resulting in 100% false-positive 'Unavailable' state despite genuine positive stock."
+    },
+    {
+      "id": "f728d2b8-089c-4cc1-9c7f-2f7fe0f0c3dd",
+      "title": "Premium Men's Solid Pullover Hoodie Combo – Black & Mocha Brown (Pack of 2) | 1+1 FREE",
+      "isAffected": true,
+      "availabilityStatus": "DEFECTIVE_UNAVAILABLE",
+      "currentStoredData": {
+        "hasVariants": true,
+        "variantCount": 0,
+        "variants": [],
+        "sizesList": [
+          {
+            "id": "size-m",
+            "name": "M",
+            "isActive": true,
+            "order": 0
+          },
+          {
+            "id": "size-s",
+            "name": "S",
+            "isActive": true,
+            "order": 1
+          },
+          {
+            "id": "size-xl",
+            "name": "XL",
+            "isActive": true,
+            "order": 2
+          },
+          {
+            "id": "size-l",
+            "name": "L",
+            "isActive": true,
+            "order": 3
+          },
+          {
+            "id": "size-xxl",
+            "name": "XXL",
+            "isActive": true,
+            "order": 4
+          }
+        ],
+        "sizes": [
+          "M",
+          "S",
+          "XL",
+          "L",
+          "XXL"
+        ],
+        "price": 699,
+        "compareAtPrice": 3999,
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "sku": null,
+        "isVisible": true,
+        "categoryName": "Winter Special"
+      },
+      "proposedOption1_VariantMatrix": {
+        "hasVariants": true,
+        "variants": [
+          {
+            "id": "var_size-m",
+            "sizeId": "size-m",
+            "sizeName": "M",
+            "sku": "BV-WTR-F728D-M",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-s",
+            "sizeId": "size-s",
+            "sizeName": "S",
+            "sku": "BV-WTR-F728D-S",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-xl",
+            "sizeId": "size-xl",
+            "sizeName": "XL",
+            "sku": "BV-WTR-F728D-XL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-l",
+            "sizeId": "size-l",
+            "sizeName": "L",
+            "sku": "BV-WTR-F728D-L",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          },
+          {
+            "id": "var_size-xxl",
+            "sizeId": "size-xxl",
+            "sizeName": "XXL",
+            "sku": "BV-WTR-F728D-XXL",
+            "price": null,
+            "compareAtPrice": null,
+            "inventory": 2,
+            "isActive": true,
+            "createdAt": 1794647787333
+          }
+        ],
+        "inventory": 10,
+        "totalPhysicalInventory": 10,
+        "allocatedStockSum": 10
+      },
+      "proposedOption2_LegacySizedProduct": {
+        "hasVariants": false,
+        "inventory": 10,
+        "sizes": [
+          "M",
+          "S",
+          "XL",
+          "L",
+          "XXL"
+        ]
+      },
+      "justification": "Product was saved with hasVariants=true but empty variants[] matrix. Storefront PDP requires a matched variant to enable Add to Cart/Buy Now, resulting in 100% false-positive 'Unavailable' state despite genuine positive stock."
+    }
+  ]
+}

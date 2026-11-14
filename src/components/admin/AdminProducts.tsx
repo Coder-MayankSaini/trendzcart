@@ -1573,10 +1573,27 @@ export default function AdminProducts() {
                                         Clicking &quot;Generate / Refresh Matrix&quot; creates all enabled combinations while preserving any custom SKUs, prices, stock, and photo associations you have already configured.
                                     </div>
 
-                                    {/* Empty Matrix State */}
+                                    {/* Empty Matrix State & Generation Prompt (TASK 037) */}
                                     {(!formData.variants || formData.variants.length === 0) && (
-                                        <div style={{ padding: "24px 16px", textAlign: "center", backgroundColor: "var(--bg-secondary)", borderRadius: "10px", border: "1px dashed var(--border-color)", color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-                                            No variant combinations generated yet. Select your sizing mode and colors above, then click &quot;Generate / Refresh Matrix&quot;.
+                                        <div style={{ padding: "16px 20px", borderRadius: "10px", backgroundColor: "rgba(220, 38, 38, 0.08)", border: "1.5px solid #ef4444", color: "#991b1b", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px", marginBottom: "12px" }}>
+                                            <div>
+                                                <strong style={{ fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                                                    Action Required: Combinations Not Generated
+                                                </strong>
+                                                <p style={{ margin: "4px 0 0 0", fontSize: "0.8rem", color: "#b91c1c" }}>
+                                                    You have enabled variants and configured options, but 0 variant combinations exist. You must click &quot;Generate / Refresh Matrix&quot; before saving.
+                                                </p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={handleGenerateMatrix}
+                                                className="admin-btn admin-btn-primary admin-btn-sm"
+                                                style={{ display: "inline-flex", alignItems: "center", gap: "6px", backgroundColor: "#b91c1c", borderColor: "#b91c1c" }}
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+                                                Generate Combinations Now
+                                            </button>
                                         </div>
                                     )}
 
@@ -2786,6 +2803,11 @@ export default function AdminProducts() {
                                                     {product.variants.length} Variants
                                                 </span>
                                             )}
+                                            {product.hasVariants && (!Array.isArray(product.variants) || product.variants.length === 0) && (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" }}>
+                                                    ⚠️ 0 Variants (Incomplete)
+                                                </span>
+                                            )}
                                             {product.isFeatured && (
                                                 <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "var(--accent-light)", color: "var(--accent)" }}>
                                                     Featured
@@ -2900,6 +2922,11 @@ export default function AdminProducts() {
                                             {product.hasVariants && Array.isArray(product.variants) && product.variants.length > 0 && (
                                                 <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#f3e8ff", color: "#7e22ce", border: "1px solid #e9d5ff" }}>
                                                     {product.variants.length} Variants
+                                                </span>
+                                            )}
+                                            {product.hasVariants && (!Array.isArray(product.variants) || product.variants.length === 0) && (
+                                                <span style={{ fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px", borderRadius: "4px", backgroundColor: "#fee2e2", color: "#b91c1c", border: "1px solid #fecaca" }}>
+                                                    ⚠️ 0 Variants (Incomplete)
                                                 </span>
                                             )}
                                             {product.reviewCount && product.reviewCount > 0 ? (
