@@ -1,0 +1,100 @@
+{
+  "14a29e10-758e-4fd2-a10a-6c04c74fe73a": {
+    "title": "**Men’s Premium Grey Bomber Jacket with Black Ribbed Collar & Full Zip – Stylish Winter Casual Wear**",
+    "parentInventory": 10,
+    "sizes": [
+      "S",
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
+    "sizeAllocations": {
+      "S": null,
+      "M": null,
+      "L": null,
+      "XL": null,
+      "XXL": null
+    }
+  },
+  "2a4b51a9-991d-4d62-905e-d0e6cf243879": {
+    "title": "Men’s Premium Grey Fleece-Lined Hooded Puffer Winter Jacket",
+    "parentInventory": 10,
+    "sizes": [
+      "S",
+      "M",
+      "L",
+      "XL"
+    ],
+    "sizeAllocations": {
+      "S": null,
+      "M": null,
+      "L": null,
+      "XL": null
+    }
+  },
+  "51adb109-1acb-4f7e-96b7-cdccba9ed961": {
+    "title": "Men's Premium Black Sherpa Fur-Lined Winter Jacket",
+    "parentInventory": 106,
+    "sizes": [
+      "S",
+      "L",
+      "M",
+      "XL"
+    ],
+    "sizeAllocations": {
+      "S": null,
+      "L": null,
+      "M": null,
+      "XL": null
+    }
+  },
+  "af7ddaf9-bb61-43fa-846f-22f9b69e4c01": {
+    "title": "Men’s Premium Black Hooded Winter Jacket with Soft Fur Fleece Lining & Full Zip",
+    "parentInventory": 115,
+    "sizes": [
+      "M",
+      "L",
+      "XL"
+    ],
+    "sizeAllocations": {
+      "M": null,
+      "L": null,
+      "XL": null
+    }
+  },
+  "f1b8f647-1b61-4b90-9978-a4f719c5d901": {
+    "title": "Men's Premium Plain Zip-Up Jacket Combo – Black & Olive Green | Buy 1 Get 1 Free",
+    "parentInventory": 10,
+    "sizes": [
+      "M",
+      "XL",
+      "L",
+      "XXL"
+    ],
+    "sizeAllocations": {
+      "M": null,
+      "XL": null,
+      "L": null,
+      "XXL": null
+    }
+  },
+  "f728d2b8-089c-4cc1-9c7f-2f7fe0f0c3dd": {
+    "title": "Premium Men's Solid Pullover Hoodie Combo – Black & Mocha Brown (Pack of 2) | 1+1 FREE",
+    "parentInventory": 10,
+    "sizes": [
+      "M",
+      "S",
+      "XL",
+      "L",
+      "XXL"
+    ],
+    "sizeAllocations": {
+      "M": null,
+      "S": null,
+      "XL": null,
+      "L": null,
+      "XXL": null
+    }
+  }
+}
