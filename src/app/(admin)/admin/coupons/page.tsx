@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, doc, setDoc, deleteDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import AdminPageHeader from "@/components/admin/ui/AdminPageHeader";
+import AdminBadge from "@/components/admin/ui/AdminBadge";
 
 interface Coupon {
     code: string;
@@ -13,18 +15,6 @@ interface Coupon {
     timesUsed: number;
     isActive: boolean;
 }
-
-const inputStyle: React.CSSProperties = {
-    width: '100%', padding: '10px 14px', borderRadius: '12px',
-    border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-primary)',
-    color: 'var(--text-primary)', fontSize: '0.9rem', fontFamily: 'inherit', outline: 'none',
-};
-
-const labelStyle: React.CSSProperties = {
-    display: 'block', fontSize: '0.8rem', fontWeight: 600,
-    color: 'var(--text-secondary)', marginBottom: '6px',
-    textTransform: 'uppercase', letterSpacing: '0.04em',
-};
 
 export default function AdminCoupons() {
     const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -59,132 +49,328 @@ export default function AdminCoupons() {
         if (!finalCode) return;
         try {
             await setDoc(doc(db, "coupons", finalCode), {
-                code: finalCode, discountType: type, discountValue: Number(value),
+                code: finalCode,
+                discountType: type,
+                discountValue: Number(value),
                 expiryDate: expiry ? Timestamp.fromDate(new Date(expiry)) : null,
-                usageLimit: Number(limit), timesUsed: 0, isActive: true,
+                usageLimit: Number(limit),
+                timesUsed: 0,
+                isActive: true,
             });
-            setIsAdding(false); setCode(""); setValue(10); setExpiry("");
-        } catch (err) { console.error(err); alert("Failed to save coupon."); }
+            setIsAdding(false);
+            setCode("");
+            setValue(10);
+            setExpiry("");
+        } catch (err) {
+            console.error(err);
+            alert("Failed to save coupon.");
+        }
     };
 
     const handleToggleStatus = async (couponCode: string, currentStatus: boolean) => {
-        try { await setDoc(doc(db, "coupons", couponCode), { isActive: !currentStatus }, { merge: true }); }
-        catch (err) { console.error(err); alert("Failed to toggle status."); }
+        try {
+            await setDoc(doc(db, "coupons", couponCode), { isActive: !currentStatus }, { merge: true });
+        } catch (err) {
+            console.error(err);
+            alert("Failed to toggle coupon status.");
+        }
     };
 
     const handleDelete = async (couponCode: string) => {
-        if (confirm("Delete this coupon permanently?")) {
-            try { await deleteDoc(doc(db, "coupons", couponCode)); }
-            catch (err) { console.error(err); alert("Failed to delete coupon."); }
+        if (confirm(`Delete coupon "${couponCode}" permanently?`)) {
+            try {
+                await deleteDoc(doc(db, "coupons", couponCode));
+            } catch (err) {
+                console.error(err);
+                alert("Failed to delete coupon.");
+            }
         }
     };
 
     return (
         <div className="animate-fade-in">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '16px' }}>
-                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Coupon Management</h1>
-                <button onClick={() => setIsAdding(!isAdding)} style={{ padding: '12px 24px', borderRadius: '999px', backgroundColor: isAdding ? 'var(--bg-secondary)' : 'var(--text-primary)', color: isAdding ? 'var(--text-primary)' : 'var(--bg-primary)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: isAdding ? '1px solid var(--border-color)' : 'none', transition: 'all 0.2s ease' }}>
+            <AdminPageHeader
+                title="Coupon Management"
+                subtitle={`Create and manage discount promotions (${coupons.length} total coupons)`}
+            >
+                <button
+                    type="button"
+                    onClick={() => setIsAdding(!isAdding)}
+                    className={`admin-btn ${isAdding ? "admin-btn-secondary" : "admin-btn-primary"}`}
+                >
                     {isAdding ? "Cancel" : "+ Add Coupon"}
                 </button>
-            </div>
+            </AdminPageHeader>
 
             {error && (
-                <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', padding: '16px 20px', borderRadius: '12px', marginBottom: '24px', fontSize: '0.9rem', fontWeight: 500, border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                <div style={{ backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", padding: "16px 20px", borderRadius: "16px", marginBottom: "24px", fontSize: "0.9rem", fontWeight: 500, border: "1px solid rgba(239, 68, 68, 0.2)" }}>
                     {error}
                 </div>
             )}
 
+            {/* Create Coupon Form */}
             {isAdding && (
-                <form onSubmit={handleSave} style={{ backgroundColor: 'var(--bg-secondary)', padding: '32px', borderRadius: '24px', border: '1px solid var(--border-color)', marginBottom: '32px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', alignItems: 'end' }}>
-                    <div>
-                        <label style={labelStyle}>Coupon Code</label>
-                        <input type="text" value={code} onChange={e => setCode(e.target.value)} required style={{ ...inputStyle, textTransform: 'uppercase' }} placeholder="e.g. SUMMER10" />
+                <form onSubmit={handleSave} className="admin-form-card" style={{ marginBottom: "28px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
+                        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+                            Create New Promotional Coupon
+                        </h2>
+                        <button
+                            type="button"
+                            onClick={() => setIsAdding(false)}
+                            className="admin-btn admin-btn-secondary admin-btn-sm"
+                        >
+                            Cancel
+                        </button>
                     </div>
-                    <div>
-                        <label style={labelStyle}>Discount Type</label>
-                        <select value={type} onChange={e => setType(e.target.value as any)} style={inputStyle}>
-                            <option value="percentage">Percentage (%)</option>
-                            <option value="flat">Flat Amount (₹)</option>
-                        </select>
+
+                    <div className="admin-form-grid-3">
+                        <div className="admin-form-group">
+                            <label htmlFor="coupon-code">Coupon Code *</label>
+                            <input
+                                id="coupon-code"
+                                type="text"
+                                value={code}
+                                onChange={(e) => setCode(e.target.value)}
+                                required
+                                className="admin-form-input"
+                                style={{ textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}
+                                placeholder="e.g. FESTIVE20"
+                            />
+                        </div>
+
+                        <div className="admin-form-group">
+                            <label htmlFor="coupon-type">Discount Type</label>
+                            <select
+                                id="coupon-type"
+                                value={type}
+                                onChange={(e) => setType(e.target.value as any)}
+                                className="admin-form-select"
+                            >
+                                <option value="percentage">Percentage Off (%)</option>
+                                <option value="flat">Flat Amount Off (₹)</option>
+                            </select>
+                        </div>
+
+                        <div className="admin-form-group">
+                            <label htmlFor="coupon-val">Discount Value *</label>
+                            <input
+                                id="coupon-val"
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                value={value}
+                                onChange={(e) => setValue(Number(e.target.value))}
+                                required
+                                className="admin-form-input"
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label style={labelStyle}>Discount Value</label>
-                        <input type="number" min="1" value={value} onChange={e => setValue(Number(e.target.value))} required style={inputStyle} />
+
+                    <div className="admin-form-grid-2">
+                        <div className="admin-form-group">
+                            <label htmlFor="coupon-expiry">Expiry Date (Optional)</label>
+                            <input
+                                id="coupon-expiry"
+                                type="datetime-local"
+                                value={expiry}
+                                onChange={(e) => setExpiry(e.target.value)}
+                                className="admin-form-input"
+                            />
+                        </div>
+
+                        <div className="admin-form-group">
+                            <label htmlFor="coupon-limit">Total Usage Limit *</label>
+                            <input
+                                id="coupon-limit"
+                                type="number"
+                                inputMode="numeric"
+                                min="1"
+                                value={limit}
+                                onChange={(e) => setLimit(Number(e.target.value))}
+                                required
+                                className="admin-form-input"
+                            />
+                        </div>
                     </div>
-                    <div>
-                        <label style={labelStyle}>Expiry Date (Optional)</label>
-                        <input type="datetime-local" value={expiry} onChange={e => setExpiry(e.target.value)} style={inputStyle} />
+
+                    {/* Desktop Form Actions */}
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsAdding(false)}
+                            className="admin-btn admin-btn-secondary"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="admin-btn admin-btn-primary"
+                        >
+                            Save Coupon
+                        </button>
                     </div>
-                    <div>
-                        <label style={labelStyle}>Usage Limit</label>
-                        <input type="number" min="1" value={limit} onChange={e => setLimit(Number(e.target.value))} required style={inputStyle} />
-                    </div>
-                    <div>
-                        <button type="submit" style={{ width: '100%', padding: '12px 24px', borderRadius: '14px', backgroundColor: 'var(--accent)', color: 'white', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', border: 'none', fontSize: '0.9rem' }}>
+
+                    {/* Mobile Sticky Actions */}
+                    <div className="admin-mobile-sticky-actions">
+                        <button
+                            type="button"
+                            onClick={() => setIsAdding(false)}
+                            className="admin-btn admin-btn-secondary"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            className="admin-btn admin-btn-primary"
+                        >
                             Save Coupon
                         </button>
                     </div>
                 </form>
             )}
 
-            <div style={{ backgroundColor: 'var(--bg-secondary)', borderRadius: '24px', border: '1px solid var(--border-color)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
-                <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                        <thead style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {/* Coupons Card Container */}
+            <div className="admin-card">
+                {/* Desktop View: Table (>= 768px) */}
+                <div className="admin-table-container">
+                    <table className="admin-table">
+                        <thead>
                             <tr>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Code</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Offer</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Usage</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Expiry</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>Status</th>
-                                <th style={{ padding: '16px 24px', fontWeight: 600, borderBottom: '1px solid var(--border-color)', textAlign: 'right' }}>Actions</th>
+                                <th>Coupon Code</th>
+                                <th>Discount Offer</th>
+                                <th>Usage Capacity</th>
+                                <th>Expires On</th>
+                                <th>Active Status</th>
+                                <th style={{ textAlign: "right" }}>Actions</th>
                             </tr>
                         </thead>
-                        <tbody style={{ fontSize: '0.9rem' }}>
-                            {coupons.length === 0 && !error && (
+                        <tbody>
+                            {coupons.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} style={{ padding: '48px', textAlign: 'center', color: 'var(--text-secondary)' }}>No coupons active. Create one to get started!</td>
+                                    <td colSpan={6} style={{ padding: "48px 20px", textAlign: "center", color: "var(--text-secondary)" }}>
+                                        No coupons active. Click &quot;+ Add Coupon&quot; to create one!
+                                    </td>
                                 </tr>
                             )}
-                            {coupons.map(coupon => (
-                                <tr key={coupon.code} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background-color 0.2s ease' }} onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-primary)'} onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}>
-                                    <td style={{ padding: '16px 24px', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>{coupon.code}</td>
-                                    <td style={{ padding: '16px 24px', fontWeight: 600, color: '#16a34a' }}>
-                                        {coupon.discountType === 'percentage' ? `${coupon.discountValue}% OFF` : `₹${coupon.discountValue} OFF`}
-                                    </td>
-                                    <td style={{ padding: '16px 24px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                            <div style={{ flex: 1, backgroundColor: 'var(--border-color)', height: '6px', borderRadius: '999px', overflow: 'hidden', width: '80px' }}>
-                                                <div style={{ backgroundColor: 'var(--accent)', height: '100%', borderRadius: '999px', width: `${Math.min(100, (coupon.timesUsed / coupon.usageLimit) * 100)}%`, transition: 'width 0.3s ease' }}></div>
+                            {coupons.map((coupon) => {
+                                const usagePercent = Math.min(100, Math.round(((coupon.timesUsed || 0) / (coupon.usageLimit || 1)) * 100));
+                                return (
+                                    <tr key={coupon.code}>
+                                        <td style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "0.95rem", color: "var(--text-primary)" }}>
+                                            {coupon.code}
+                                        </td>
+                                        <td style={{ fontWeight: 700, color: "var(--accent)" }}>
+                                            {coupon.discountType === "percentage" ? `${coupon.discountValue}% OFF` : `₹${coupon.discountValue} OFF`}
+                                        </td>
+                                        <td>
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                                <div style={{ width: "90px", height: "8px", borderRadius: "999px", backgroundColor: "var(--border-color)", overflow: "hidden" }}>
+                                                    <div style={{ width: `${usagePercent}%`, height: "100%", backgroundColor: "var(--accent)", borderRadius: "999px", transition: "width 0.3s ease" }} />
+                                                </div>
+                                                <span style={{ fontSize: "0.78rem", color: "var(--text-secondary)", fontWeight: 600 }}>
+                                                    {coupon.timesUsed || 0}/{coupon.usageLimit}
+                                                </span>
                                             </div>
-                                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{coupon.timesUsed}/{coupon.usageLimit}</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ padding: '16px 24px', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-                                        {coupon.expiryDate ? coupon.expiryDate.toDate().toLocaleString() : 'Never'}
-                                    </td>
-                                    <td style={{ padding: '16px 24px' }}>
-                                        <button
-                                            onClick={() => handleToggleStatus(coupon.code, coupon.isActive)}
-                                            style={{
-                                                padding: '4px 14px', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 700,
-                                                backgroundColor: coupon.isActive ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                                                color: coupon.isActive ? '#16a34a' : '#ef4444',
-                                                border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s ease',
-                                            }}
-                                        >
-                                            {coupon.isActive ? 'Active' : 'Disabled'}
-                                        </button>
-                                    </td>
-                                    <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                                        <button onClick={() => handleDelete(coupon.code)} style={{ color: '#ef4444', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'opacity 0.2s ease' }}>
-                                            Delete
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                                        </td>
+                                        <td style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
+                                            {coupon.expiryDate ? (coupon.expiryDate.toDate ? coupon.expiryDate.toDate().toLocaleDateString("en-IN") : new Date(coupon.expiryDate).toLocaleDateString("en-IN")) : "No Expiry"}
+                                        </td>
+                                        <td>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleToggleStatus(coupon.code, coupon.isActive)}
+                                                aria-label={`Toggle status for coupon ${coupon.code}`}
+                                                style={{ cursor: "pointer" }}
+                                            >
+                                                <AdminBadge variant={coupon.isActive ? "visible" : "hidden"}>
+                                                    {coupon.isActive ? "Active" : "Disabled"}
+                                                </AdminBadge>
+                                            </button>
+                                        </td>
+                                        <td style={{ textAlign: "right" }}>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDelete(coupon.code)}
+                                                className="admin-btn admin-btn-danger admin-btn-sm"
+                                            >
+                                                Delete
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile View: Cards (< 768px) */}
+                <div className="admin-mobile-cards-list">
+                    {coupons.length === 0 && (
+                        <div style={{ padding: "36px 16px", textAlign: "center", color: "var(--text-secondary)" }}>
+                            No coupons active. Click &quot;+ Add Coupon&quot; to create one!
+                        </div>
+                    )}
+                    {coupons.map((coupon) => {
+                        const usagePercent = Math.min(100, Math.round(((coupon.timesUsed || 0) / (coupon.usageLimit || 1)) * 100));
+                        return (
+                            <div key={coupon.code} className="admin-mobile-item-card">
+                                <div className="admin-mobile-card-top">
+                                    <div>
+                                        <span style={{ fontFamily: "monospace", fontSize: "1.1rem", fontWeight: 800, color: "var(--text-primary)" }}>
+                                            {coupon.code}
+                                        </span>
+                                        <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--accent)", marginTop: "2px" }}>
+                                            {coupon.discountType === "percentage" ? `${coupon.discountValue}% OFF` : `₹${coupon.discountValue} FLAT OFF`}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleStatus(coupon.code, coupon.isActive)}
+                                        aria-label={`Toggle status for coupon ${coupon.code}`}
+                                    >
+                                        <AdminBadge variant={coupon.isActive ? "visible" : "hidden"}>
+                                            {coupon.isActive ? "Active" : "Disabled"}
+                                        </AdminBadge>
+                                    </button>
+                                </div>
+
+                                {/* Usage Progress Bar */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-secondary)" }}>
+                                        <span>Redemptions</span>
+                                        <span>{coupon.timesUsed || 0} / {coupon.usageLimit} used ({usagePercent}%)</span>
+                                    </div>
+                                    <div style={{ width: "100%", height: "8px", borderRadius: "999px", backgroundColor: "var(--border-color)", overflow: "hidden" }}>
+                                        <div style={{ width: `${usagePercent}%`, height: "100%", backgroundColor: "var(--accent)", borderRadius: "999px", transition: "width 0.3s ease" }} />
+                                    </div>
+                                </div>
+
+                                <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)" }}>
+                                    Expires: {coupon.expiryDate ? (coupon.expiryDate.toDate ? coupon.expiryDate.toDate().toLocaleString("en-IN") : new Date(coupon.expiryDate).toLocaleString("en-IN")) : "Never (Indefinite)"}
+                                </div>
+
+                                <div className="admin-mobile-card-actions">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleToggleStatus(coupon.code, coupon.isActive)}
+                                        className="admin-btn admin-btn-secondary admin-btn-sm"
+                                        style={{ flex: 1 }}
+                                    >
+                                        {coupon.isActive ? "Deactivate" : "Activate"}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDelete(coupon.code)}
+                                        className="admin-btn admin-btn-danger admin-btn-sm"
+                                        style={{ padding: "6px 14px" }}
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
         </div>

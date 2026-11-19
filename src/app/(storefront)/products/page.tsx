@@ -1,9 +1,10 @@
 import { adminDb } from "@/lib/firebase/admin";
 import Link from "next/link";
 import { Metadata } from "next";
+import { ProductCardImage } from "@/components/storefront/ProductCardImage";
 
 export const metadata: Metadata = {
-    title: "Shop All Products | TrendKartz",
+    title: "Shop All Products | Bazaarvilla",
     description: "Browse our premium collection of customizable and ready-to-wear lifestyle products.",
 };
 
@@ -25,6 +26,15 @@ async function getProducts(category?: string) {
             id: doc.id,
             ...doc.data()
         })) as any[];
+
+        // Exclude synthetic test fixtures and non-commercial test products from storefront
+        products = products.filter(p =>
+            !p.id.startsWith("task") &&
+            p.category !== "Testing" &&
+            p.isTestFixture !== true &&
+            p.purchasable !== false &&
+            !p.isArchived
+        );
 
         if (category) {
             products = products.filter(p => p.category === category || (p.categories && p.categories.includes(category)));
@@ -66,7 +76,11 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
                             <Link href={`/products/${product.slug}`} key={product.id} className="product-card">
                                 <div className="product-image-container">
                                     {thumbImage ? (
-                                        <img src={thumbImage} alt={product.name} className="product-image" />
+                                        <ProductCardImage
+                                            src={thumbImage}
+                                            alt={product.name}
+                                            className="product-image"
+                                        />
                                     ) : (
                                         <div className="placeholder-image">No Image</div>
                                     )}

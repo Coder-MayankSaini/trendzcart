@@ -26,6 +26,7 @@ export default function ProductImageGallery({ images, productName }: ProductImag
                             <img
                                 src={img}
                                 alt={`${productName} thumbnail ${idx + 1}`}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
                             />
                         </button>
                     ))}
@@ -38,6 +39,7 @@ export default function ProductImageGallery({ images, productName }: ProductImag
                     src={images[selectedIndex]}
                     alt={`${productName} - Image ${selectedIndex + 1}`}
                     className="pig-main-img"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
                 />
                 {/* Image counter */}
                 <span className="pig-counter">

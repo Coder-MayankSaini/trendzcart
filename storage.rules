@@ -1,0 +1,75 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && ('admin' in request.auth.token) && request.auth.token.admin == true;
+    }
+
+    function isValidImage(maxBytes) {
+      return request.resource.size <= maxBytes
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    function isValidCustomizationImage(maxBytes) {
+      return request.resource.size <= maxBytes
+        && (
+          request.resource.contentType == 'image/jpeg' ||
+          request.resource.contentType == 'image/png' ||
+          request.resource.contentType == 'image/webp'
+        );
+    }
+
+    function isValidFileName(name) {
+      return name.size() < 128 && name.matches('^[a-zA-Z0-9_-]+\\.[a-zA-Z0-9]+$');
+    }
+
+    // 1. Products managed assets: publicly readable, admin writable with size limit
+    match /products/{productId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidImage(10 * 1024 * 1024);
+    }
+
+    // 2. Categories managed assets: publicly readable, admin writable with size limit
+    match /categories/{categoryId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidImage(5 * 1024 * 1024);
+    }
+
+    // 3. Customer review images: publicly readable, authenticated owner upload with UID prefix
+    match /reviews/{productId}/{fileName} {
+      allow read: if true;
+      allow create: if (isAdmin() || (isAuthenticated() && fileName.matches('^' + request.auth.uid + '_.*')))
+        && isValidImage(5 * 1024 * 1024);
+      allow update, delete: if isAdmin()
+        || (isAuthenticated() && fileName.matches('^' + request.auth.uid + '_.*'));
+    }
+
+    // 4. Secure Customer customization uploads: scoped by owner UID, private to owner & admin
+    match /customizations/{ownerUid}/{fileName} {
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.uid == ownerUid);
+      allow create: if resource == null
+        && isAuthenticated()
+        && request.auth.uid == ownerUid
+        && isValidCustomizationImage(10 * 1024 * 1024)
+        && isValidFileName(fileName);
+      allow update: if false;
+      allow delete: if isAdmin() || (isAuthenticated() && request.auth.uid == ownerUid);
+    }
+
+    // 5. Legacy flat customization paths: read-only for admin fulfillment, new writes blocked
+    match /customizations/{fileName} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // 6. Default deny-all fallback
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

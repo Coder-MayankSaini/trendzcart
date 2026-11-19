@@ -2,13 +2,13 @@ import React from 'react';
 import Link from 'next/link';
 
 export const metadata = {
-    title: "Contact Us | TrendKartz",
-    description: "Get in touch with TrendKartz customer support.",
+    title: "Contact Us | Bazaarvilla",
+    description: "Get in touch with Bazaarvilla customer support.",
 };
 
 export default function ContactPage() {
     const phoneNumber = "918278377255";
-    const message = encodeURIComponent("Hello TrendKartz, I have a query about your store.");
+    const message = encodeURIComponent("Hello Bazaarvilla, I have a query about your store.");
     const whatsappUrl = `https://wa.me/${phoneNumber}?text=${message}`;
 
     return (
@@ -31,8 +31,8 @@ export default function ContactPage() {
                     <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', flex: 1 }}>
                         Have a question regarding your order, our products, or anything else? Send us an email and we'll get back to you soon.
                     </p>
-                    <a href="mailto:ofctrendkartz@gmail.com" style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'underline' }}>
-                        ofctrendkartz@gmail.com
+                    <a href="mailto:support@bazaarvilla.com" style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', textDecoration: 'underline' }}>
+                        support@bazaarvilla.com
                     </a>
                 </div>
 

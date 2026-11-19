@@ -13,8 +13,8 @@ import { CartProvider } from "@/context/CartContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 
 export const metadata: Metadata = {
-  title: "TrendKartz - Simplistic E-Commerce",
-  description: "A highly scalable e-commerce platform.",
+  title: "Bazaarvilla - Modern Custom Merchandise & Lifestyle",
+  description: "Curated lifestyle essentials and custom personalized merchandise at Bazaarvilla.",
 };
 
 export default function RootLayout({

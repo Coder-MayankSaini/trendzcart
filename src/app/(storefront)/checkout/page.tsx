@@ -38,6 +38,7 @@ export default function CheckoutPage() {
     const [coupon, setCoupon] = useState<{ code: string; type: string; value: number } | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [razorpayKeyId, setRazorpayKeyId] = useState("");
+    const [isCommercialOpen, setIsCommercialOpen] = useState(true);
 
     useEffect(() => {
         const script = document.createElement("script");
@@ -59,6 +60,9 @@ export default function CheckoutPage() {
                 const data = await response.json();
                 if (data.keyId) {
                     setRazorpayKeyId(data.keyId);
+                }
+                if (typeof data.commercialCheckoutEnabled === "boolean") {
+                    setIsCommercialOpen(data.commercialCheckoutEnabled);
                 }
             } catch (error) {
                 console.error("Failed to load Razorpay config", error);
@@ -87,13 +91,20 @@ export default function CheckoutPage() {
     const totalDiscount = discountFromCoupon;
     const finalTotal = Math.max(0, cartTotal - totalDiscount);
     const ORDER_HISTORY_KEY = "trendkartz_order_ids";
+    const GUEST_TOKENS_KEY = "trendkartz_guest_tokens";
 
-    const rememberOrderLocally = (orderId: string) => {
+    const rememberOrderLocally = (orderId: string, guestToken?: string | null) => {
         if (typeof window === "undefined") return;
         try {
             const existing = JSON.parse(localStorage.getItem(ORDER_HISTORY_KEY) || "[]") as string[];
             const next = [orderId, ...existing.filter((id) => id !== orderId)].slice(0, 25);
             localStorage.setItem(ORDER_HISTORY_KEY, JSON.stringify(next));
+
+            if (guestToken) {
+                const tokenMap = JSON.parse(localStorage.getItem(GUEST_TOKENS_KEY) || "{}") as Record<string, string>;
+                tokenMap[orderId] = guestToken;
+                localStorage.setItem(GUEST_TOKENS_KEY, JSON.stringify(tokenMap));
+            }
         } catch (error) {
             console.error("Could not persist order history locally", error);
         }
@@ -103,37 +114,53 @@ export default function CheckoutPage() {
         orderId: string,
         status: string,
         payStatus: string,
-        rzpOrderId?: string
-    ) => {
+        rzpOrderId?: string,
+        rzpPaymentId?: string,
+        rzpSignature?: string
+    ): Promise<{ id: string; guestAccessToken?: string | null }> => {
         // Clean items to remove undefined values before sending to API.
         const cleanItems = JSON.parse(JSON.stringify(items));
+        const idToken = user ? await user.getIdToken().catch(() => null) : null;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (idToken) {
+            headers["Authorization"] = `Bearer ${idToken}`;
+        }
+
         const response = await fetch("/api/orders/create", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({
-            id: orderId,
-            userId: user?.uid || null,
-            items: cleanItems,
-            subtotal: cartTotal,
-            discount: totalDiscount,
-            couponDiscount: discountFromCoupon,
-            total: finalTotal,
-            couponCode: coupon ? coupon.code : null,
-            paymentMethod,
-            paymentStatus: payStatus,
-            orderStatus: status,
-            razorpayOrderId: rzpOrderId || null,
-            shippingAddress: shipping,
+                id: orderId,
+                userId: user && !user.isAnonymous ? user.uid : null,
+                items: cleanItems,
+                subtotal: cartTotal,
+                discount: totalDiscount,
+                couponDiscount: discountFromCoupon,
+                total: finalTotal,
+                couponCode: coupon ? coupon.code : null,
+                paymentMethod,
+                paymentStatus: payStatus,
+                orderStatus: status,
+                razorpayOrderId: rzpOrderId || null,
+                razorpayPaymentId: rzpPaymentId || null,
+                razorpaySignature: rzpSignature || null,
+                shippingAddress: shipping,
             }),
         });
 
+        const data = await response.json().catch(() => ({}));
         if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
             throw new Error(data?.error || "Failed to save order");
         }
+        return { id: data.id || orderId, guestAccessToken: data.guestAccessToken || null };
     };
 
     const processPayment = async () => {
+        if (!isCommercialOpen) {
+            alert("Ordering will open soon. Bazaarvilla is preparing for commercial launch!");
+            return;
+        }
+
         if (!shipping.fullName || !shipping.email || !shipping.addressLine1 || !shipping.pincode || !shipping.phone) {
             alert("Please fill in all required shipping details including email.");
             return;
@@ -144,14 +171,14 @@ export default function CheckoutPage() {
 
         if (paymentMethod === "COD") {
             try {
-                await saveOrder(orderId, "Processing", "PENDING");
-                rememberOrderLocally(orderId);
+                const orderResult = await saveOrder(orderId, "Processing", "PENDING");
+                rememberOrderLocally(orderResult.id, orderResult.guestAccessToken);
                 clearCart();
                 sessionStorage.removeItem("trendkartz_checkout_coupon");
                 router.push("/orders");
-            } catch (err) {
+            } catch (err: any) {
                 console.error(err);
-                alert("Failed to place order.");
+                alert(err?.message || "Failed to place order.");
                 setIsProcessing(false);
             }
             return;
@@ -164,43 +191,64 @@ export default function CheckoutPage() {
                 return;
             }
 
+            const cleanItems = JSON.parse(JSON.stringify(items));
+            const idToken = user ? await user.getIdToken().catch(() => null) : null;
+            const headers: Record<string, string> = { "Content-Type": "application/json" };
+            if (idToken) {
+                headers["Authorization"] = `Bearer ${idToken}`;
+            }
+
             const res = await fetch("/api/razorpay/create-order", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ amount: finalTotal, receipt: orderId }),
+                headers,
+                body: JSON.stringify({
+                    amount: finalTotal,
+                    receipt: orderId,
+                    items: cleanItems,
+                    couponCode: coupon ? coupon.code : null,
+                    shippingAddress: shipping,
+                    userId: user && !user.isAnonymous ? user.uid : null,
+                }),
             });
-            const { id: rzpOrderId, amount, currency, error } = await res.json();
+            const { id: rzpOrderId, amount, currency, internalOrderId, guestAccessToken, error } = await res.json();
             if (error) throw new Error(error);
+
+            const activeOrderId = internalOrderId || orderId;
+            // Record internal order in local history BEFORE opening payment modal
+            rememberOrderLocally(activeOrderId, guestAccessToken);
 
             const options = {
                 key: razorpayKeyId,
                 amount: amount.toString(),
                 currency: currency,
-                name: "TrendKartz",
+                name: "Bazaarvilla",
                 description: "Payment for your order",
                 order_id: rzpOrderId,
                 handler: async function (response: any) {
-                    const verifyRes = await fetch("/api/razorpay/verify-payment", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            razorpay_order_id: response.razorpay_order_id,
-                            razorpay_payment_id: response.razorpay_payment_id,
-                            razorpay_signature: response.razorpay_signature,
-                        }),
-                    });
-                    const verifyData = await verifyRes.json();
+                    try {
+                        const verifyRes = await fetch("/api/razorpay/verify-payment", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                razorpay_order_id: response.razorpay_order_id,
+                                razorpay_payment_id: response.razorpay_payment_id,
+                                razorpay_signature: response.razorpay_signature,
+                                orderId: activeOrderId,
+                            }),
+                        });
+                        const verifyData = await verifyRes.json();
 
-                    if (verifyData.success) {
-                        await saveOrder(orderId, "Processing", "PAID", rzpOrderId);
-                        rememberOrderLocally(orderId);
-                        clearCart();
-                        sessionStorage.removeItem("trendkartz_checkout_coupon");
-                        router.push("/orders");
-                    } else {
-                        alert("Payment verification failed. Please contact support.");
-                        await saveOrder(orderId, "Payment_Failed", "FAILED", rzpOrderId);
-                        rememberOrderLocally(orderId);
+                        if (verifyData.success) {
+                            clearCart();
+                            sessionStorage.removeItem("trendkartz_checkout_coupon");
+                            router.push("/orders");
+                        } else {
+                            alert(verifyData.message || "Payment verification failed. Please contact support.");
+                            setIsProcessing(false);
+                        }
+                    } catch (verifyErr) {
+                        console.error("Verification error", verifyErr);
+                        alert("Network error during payment verification. Please check your order history.");
                         setIsProcessing(false);
                     }
                 },
@@ -215,12 +263,12 @@ export default function CheckoutPage() {
             const paymentObject = new (window as any).Razorpay(options);
             paymentObject.open();
             paymentObject.on('payment.failed', function (response: any) {
-                alert("Payment failed: " + response.error.description);
+                alert("Payment was not completed: " + (response?.error?.description || "Gateway declined"));
                 setIsProcessing(false);
             });
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            alert("Something went wrong with the payment gateway.");
+            alert(err?.message || "Something went wrong with the payment gateway.");
             setIsProcessing(false);
         }
     };
@@ -337,7 +385,11 @@ export default function CheckoutPage() {
                                 <div key={item.id} className="co-item">
                                     {item.image && (
                                         <div className="co-item-img">
-                                            <img src={item.image} alt={item.name} />
+                                            <img
+                                                src={item.image}
+                                                alt={item.name}
+                                                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/api/media/public'; }}
+                                            />
                                             <span className="co-item-qty">{item.quantity}</span>
                                         </div>
                                     )}
@@ -369,16 +421,35 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
+                        {!isCommercialOpen && (
+                            <div style={{
+                                padding: "12px 14px",
+                                marginTop: "16px",
+                                marginBottom: "16px",
+                                borderRadius: "10px",
+                                backgroundColor: "rgba(234, 179, 8, 0.1)",
+                                border: "1px solid rgba(234, 179, 8, 0.3)",
+                                color: "#ca8a04",
+                                fontSize: "0.82rem",
+                                lineHeight: 1.5,
+                            }}>
+                                <strong>Pre-Launch Notice:</strong> Online and COD ordering will open soon! Bazaarvilla is currently completing pre-launch operational hardening.
+                            </div>
+                        )}
+
                         <button
                             onClick={processPayment}
-                            disabled={isProcessing}
+                            disabled={isProcessing || !isCommercialOpen}
                             className="co-pay-btn"
+                            style={!isCommercialOpen ? { opacity: 0.65, cursor: "not-allowed" } : undefined}
                         >
                             {isProcessing ? (
                                 <>
                                     <span className="co-spinner" />
                                     Processing...
                                 </>
+                            ) : !isCommercialOpen ? (
+                                <>Ordering Will Open Soon (Pre-Launch)</>
                             ) : paymentMethod === "RAZORPAY" ? (
                                 <>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
